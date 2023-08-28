@@ -48,7 +48,7 @@ options(scipen = 999)
 
 #Import Data
 
-AdultADHDDailyData <- read_sav("2023.02.03. DailySummary with earlylut coding.sav")
+AdultADHDDailyData <- read_sav("~/Library/CloudStorage/Box-Box/ENG-CLEARLAB ADHD COLLAB/03_analytic_projects/Jordan codes/02_code_dataedits_output/Affect Paper data set and code/ADHD-affect/2023.02.03. DailySummary with earlylut coding.sav")
 #View(AdultADHDDailyData)
 
 
@@ -315,6 +315,10 @@ for (i in ADHD_varlist) {
 for (i in ADHD_varlist) {
   AdultADHDDailyData <- create.deviation(AdultADHDDailyData, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
 }
+
+
+
+View (AdultADHDDailyData)
 ```
 #Step 3: Plot daily data by phase
 ```{r}
@@ -573,640 +577,6 @@ geom_hline(yintercept = 0, linetype="dashed", col="red")+
 ```
 
 #Step 4: Model Data
-
-##ADHD SYMPTOM MODELS AND GRAPHS
-
-### Inattention models
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_IA_MF <- lmerTest::lmer(IA_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_IA_MF)
-#PeriOv as reference group
-Phase_IA_PO <- lmerTest::lmer(IA_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_IA_PO)
-#EarlyLut as reference group
-Phase_IA_EL <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_IA_EL)
-#Midluteal as reference group
-Phase_IA_ML <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_IA_ML)
-#Perimenstrual as reference group
-Phase_IA_PM <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_IA_PM)
-
-#Hormone effects
-IA_hormones <- lmerTest::lmer(IA_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(IA_hormones)
-
-
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(IA_Count.m=mean(IA_Count.m),
-            IAphase.m = mean(IA_Count, na.rm = TRUE),
-            IAphase.d = IAphase.m - IA_Count.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.IA_Count.d = mean(IAphase.d, na.rm=T),
-            se=sd(IAphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.IA_Count.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.IA_Count.d-se, 
-                    ymax=grand.m.IA_Count.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Inattention")
-#run plot1a in console to see plot
-plot1a
-```
-### Impulsivity models
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_Imp_MF <- lmerTest::lmer(Imp_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Imp_MF)
-#PeriOv as reference group
-Phase_Imp_PO <- lmerTest::lmer(Imp_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Imp_PO)
-#EarlyLut as reference group
-Phase_Imp_EL <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Imp_EL)
-#Midluteal as reference group
-Phase_Imp_ML <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Imp_ML)
-#Perimenstrual as reference group
-Phase_Imp_PM <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Imp_PM)
-
-#Hormone effects
-Imp_hormones <- lmerTest::lmer(Imp_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(Imp_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(Imp_Count.m=mean(Imp_Count.m),
-            Impphase.m = mean(Imp_Count, na.rm = TRUE),
-            Impphase.d = Impphase.m - Imp_Count.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.Imp_Count.d = mean(Impphase.d, na.rm=T),
-            se=sd(Impphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.Imp_Count.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.Imp_Count.d-se, 
-                    ymax=grand.m.Imp_Count.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Impuksivity")
-#run plot1a in console to see plot
-plot1a
-```
-### Hyperactivity models
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_Hyp_MF <- lmerTest::lmer(Hyp_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Hyp_MF)
-#PeriOv as reference group
-Phase_Hyp_PO <- lmerTest::lmer(Hyp_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Hyp_PO)
-#EarlyLut as reference group
-Phase_Hyp_EL <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Hyp_EL)
-#Midluteal as reference group
-Phase_Hyp_ML <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Hyp_ML)
-#Perimenstrual as reference group
-Phase_Hyp_PM <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_Hyp_PM)
-
-#Hormone effects
-Hyp_hormones <- lmerTest::lmer(Hyp_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(Hyp_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(Hyp_Count.m=mean(Hyp_Count.m),
-            Hypphase.m = mean(Hyp_Count, na.rm = TRUE),
-            Hypphase.d = Hypphase.m - Hyp_Count.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.Hyp_Count.d = mean(Hypphase.d, na.rm=T),
-            se=sd(Hypphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.Hyp_Count.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.Hyp_Count.d-se, 
-                    ymax=grand.m.Hyp_Count.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Hyperactivity")
-#run plot1a in console to see plot
-plot1a
-```
-
-
-
-
-##EXECUTIVE FUNCTION MODELS AND GRAPHS
-### Pinball Models (Working Memory)
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_pinball_MF <- lmerTest::lmer(RES_pinball ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_pinball_MF)
-#PeriOv as reference group
-Phase_pinball_PO <- lmerTest::lmer(RES_pinball ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_pinball_PO)
-#EarlyLut as reference group
-Phase_pinball_EL <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_pinball_EL)
-#Midluteal as reference group
-Phase_pinball_ML <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_pinball_ML)
-#Perimenstrual as reference group
-Phase_pinball_PM <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_pinball_PM)
-
-#Hormone effects
-pinball_hormones <- lmerTest::lmer(RES_pinball ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(pinball_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(score_pinball.m=mean(score_pinball.m),
-            pinballphase.m = mean(score_pinball, na.rm = TRUE),
-            pinballphase.d = pinballphase.m - score_pinball.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.score_pinball.d = mean(pinballphase.d, na.rm=T),
-            se=sd(pinballphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.score_pinball.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.score_pinball.d-se, 
-                    ymax=grand.m.score_pinball.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Pinball Score")
-#run plot1a in console to see plot
-plot1a
-```
-### Robot Models (Response Inhibition)
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_robot_MF <- lmerTest::lmer(RES_robot ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_robot_MF)
-#PeriOv as reference group
-Phase_robot_PO <- lmerTest::lmer(RES_robot ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_robot_PO)
-#EarlyLut as reference group
-Phase_robot_EL <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_robot_EL)
-#Midluteal as reference group
-Phase_robot_ML <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_robot_ML)
-#Perimenstrual as reference group
-Phase_robot_PM <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_robot_PM)
-
-#Hormone effects
-robot_hormones <- lmerTest::lmer(RES_robot ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(robot_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(RES_robot.m=mean(RES_robot.m),
-            robotphase.m = mean(RES_robot, na.rm = TRUE),
-            robotphase.d = robotphase.m - RES_robot.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.RES_robot.d = mean(robotphase.d, na.rm=T),
-            se=sd(robotphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.RES_robot.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.RES_robot.d-se, 
-                    ymax=grand.m.RES_robot.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Robot Score")
-#run plot1a in console to see plot
-plot1a
-```
-### BDEFS_RI models
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_RI_MF <- lmerTest::lmer(BDEFS_RI_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_RI_MF)
-#PeriOv as reference group
-Phase_RI_PO <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_RI_PO)
-#EarlyLut as reference group
-Phase_RI_EL <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_RI_EL)
-#Midluteal as reference group
-Phase_RI_ML <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_RI_ML)
-#Perimenstrual as reference group
-Phase_RI_PM <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_RI_PM)
-
-#Hormone effects
-RI_hormones <- lmerTest::lmer(BDEFS_RI_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(RI_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(BDEFS_RI_avg.m=mean(BDEFS_RI_avg.m),
-            BDEFS_RIphase.m = mean(BDEFS_RI_avg, na.rm = TRUE),
-            BDEFS_RIphase.d = BDEFS_RIphase.m - BDEFS_RI_avg.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.BDEFS_RI_avg.d = mean(BDEFS_RIphase.d, na.rm=T),
-            se=sd(BDEFS_RIphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.BDEFS_RI_avg.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.BDEFS_RI_avg.d-se, 
-                    ymax=grand.m.BDEFS_RI_avg.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered BDEFS Response Inhibition")
-#run plot1a in console to see plot
-plot1a
-```
-### BDEFS_WM Models
-```{r}
-#2/2/23 effects of phase on daily symptoms
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_WM_MF <- lmerTest::lmer(BDEFS_WM_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_WM_MF)
-#PeriOv as reference group
-Phase_WM_PO <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_WM_PO)
-#EarlyLut as reference group
-Phase_WM_EL <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_WM_EL)
-#Midluteal as reference group
-Phase_WM_ML <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_WM_ML)
-#Perimenstrual as reference group
-Phase_WM_PM <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_WM_PM)
-
-#Hormone effects
-WM_hormones <- lmerTest::lmer(BDEFS_WM_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(WM_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(BDEFS_WM_avg.m=mean(BDEFS_WM_avg.m),
-            BDEFS_WMphase.m = mean(BDEFS_WM_avg, na.rm = TRUE),
-            BDEFS_WMphase.d = BDEFS_WMphase.m - BDEFS_WM_avg.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.BDEFS_WM_avg.d = mean(BDEFS_WMphase.d, na.rm=T),
-            se=sd(BDEFS_WMphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.BDEFS_WM_avg.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.BDEFS_WM_avg.d-se, 
-                    ymax=grand.m.BDEFS_WM_avg.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered BDEFS Working Memory")
-#run plot1a in console to see plot
-plot1a
-```
-
-
-
-
-## AFFECT AND EATING MODELS AND GRAPHS
-##DEBQ Emotional Eating Models
-```{r}
-#2/2/23 effects of phase on daily symptoms 
-# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
-
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
-
-#Midfol as reference group
-Phase_DEBQ_avg_MF <- lmerTest::lmer(DEBQ_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_DEBQ_avg_MF)
-#PeriOv as reference group
-Phase_DEBQ_avg_PO <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_DEBQ_avg_PO)
-#EarlyLut as reference group
-Phase_DEBQ_avg_EL <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_DEBQ_avg_EL)
-#Midluteal as reference group
-Phase_DEBQ_avg_ML <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_DEBQ_avg_ML)
-#Perimenstrual as reference group
-Phase_DEBQ_avg_PM <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
-                                     +(1|ID),
-                                     data = AdultADHDDailyData) 
-summary(Phase_DEBQ_avg_PM)
-
-#Hormone effects
-DEBQ_avg_hormones <- lmerTest::lmer(DEBQ_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
-                                     +(1 |ID),
-                                     data = AdultADHDDailyData) 
-summary(DEBQ_avg_hormones)
-```
-```{r}
-#Plot Daily Data by Phase
-#set up labels
-AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
-
-#person-mean-center
-data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
-  summarize(DEBQ_avg.m=mean(DEBQ_avg.m),
-            DEBQphase.m = mean(DEBQ_avg, na.rm = TRUE),
-            DEBQphase.d = DEBQphase.m - DEBQ_avg.m)%>%
-filter(!is.na(cyclephase_names))
-
-plot1a <- data_for_plot1a %>% 
-  group_by(cyclephase_names) %>%
-  summarize(grand.m.DEBQ_avg.d = mean(DEBQphase.d, na.rm=T),
-            se=sd(DEBQphase.d, na.rm=T)/sqrt(n())) %>%
-  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
-  ggplot(aes(x=cyclephase_names, y=grand.m.DEBQ_avg.d))+
-  geom_line(group=1)+
-  ##everything from here down is just formatting
-  scale_x_discrete(labels=c("PO" = "Periovulatory",
-                            "EL" = "Earlyluteal",
-                            "ML" = "Midluteal",
-                            "PM" = "Perimenstrual",
-                            "MF" = "Midfollicular" ))+
-  geom_errorbar(aes(ymin=grand.m.DEBQ_avg.d-se, 
-                    ymax=grand.m.DEBQ_avg.d+se), 
-                size=0.5, width=0.5, position=position_dodge())+
-  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
-  theme_bw()+
-  xlab("Cycle Phase")+
-  ylab("Person-Centered Emotional Eating")
-#run plot1a in console to see plot
-plot1a
-```
-
-
-
 
 
 ## Tory Affect Models at OSSD
@@ -4046,4 +3416,639 @@ summary(IA_hormones)
 
 
 ```
+
+##ADHD SYMPTOM MODELS AND GRAPHS
+
+### Inattention models
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_IA_MF <- lmerTest::lmer(IA_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_IA_MF)
+#PeriOv as reference group
+Phase_IA_PO <- lmerTest::lmer(IA_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_IA_PO)
+#EarlyLut as reference group
+Phase_IA_EL <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_IA_EL)
+#Midluteal as reference group
+Phase_IA_ML <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_IA_ML)
+#Perimenstrual as reference group
+Phase_IA_PM <- lmerTest::lmer(IA_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_IA_PM)
+
+#Hormone effects
+IA_hormones <- lmerTest::lmer(IA_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(IA_hormones)
+
+
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(IA_Count.m=mean(IA_Count.m),
+            IAphase.m = mean(IA_Count, na.rm = TRUE),
+            IAphase.d = IAphase.m - IA_Count.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.IA_Count.d = mean(IAphase.d, na.rm=T),
+            se=sd(IAphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.IA_Count.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.IA_Count.d-se, 
+                    ymax=grand.m.IA_Count.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Inattention")
+#run plot1a in console to see plot
+plot1a
+```
+### Impulsivity models
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_Imp_MF <- lmerTest::lmer(Imp_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Imp_MF)
+#PeriOv as reference group
+Phase_Imp_PO <- lmerTest::lmer(Imp_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Imp_PO)
+#EarlyLut as reference group
+Phase_Imp_EL <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Imp_EL)
+#Midluteal as reference group
+Phase_Imp_ML <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Imp_ML)
+#Perimenstrual as reference group
+Phase_Imp_PM <- lmerTest::lmer(Imp_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Imp_PM)
+
+#Hormone effects
+Imp_hormones <- lmerTest::lmer(Imp_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(Imp_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(Imp_Count.m=mean(Imp_Count.m),
+            Impphase.m = mean(Imp_Count, na.rm = TRUE),
+            Impphase.d = Impphase.m - Imp_Count.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.Imp_Count.d = mean(Impphase.d, na.rm=T),
+            se=sd(Impphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.Imp_Count.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.Imp_Count.d-se, 
+                    ymax=grand.m.Imp_Count.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Impuksivity")
+#run plot1a in console to see plot
+plot1a
+```
+### Hyperactivity models
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_Hyp_MF <- lmerTest::lmer(Hyp_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Hyp_MF)
+#PeriOv as reference group
+Phase_Hyp_PO <- lmerTest::lmer(Hyp_Count ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Hyp_PO)
+#EarlyLut as reference group
+Phase_Hyp_EL <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Hyp_EL)
+#Midluteal as reference group
+Phase_Hyp_ML <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Hyp_ML)
+#Perimenstrual as reference group
+Phase_Hyp_PM <- lmerTest::lmer(Hyp_Count ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_Hyp_PM)
+
+#Hormone effects
+Hyp_hormones <- lmerTest::lmer(Hyp_Count ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(Hyp_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(Hyp_Count.m=mean(Hyp_Count.m),
+            Hypphase.m = mean(Hyp_Count, na.rm = TRUE),
+            Hypphase.d = Hypphase.m - Hyp_Count.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.Hyp_Count.d = mean(Hypphase.d, na.rm=T),
+            se=sd(Hypphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.Hyp_Count.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.Hyp_Count.d-se, 
+                    ymax=grand.m.Hyp_Count.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Hyperactivity")
+#run plot1a in console to see plot
+plot1a
+```
+
+
+
+
+##EXECUTIVE FUNCTION MODELS AND GRAPHS
+### Pinball Models (Working Memory)
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_pinball_MF <- lmerTest::lmer(RES_pinball ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_pinball_MF)
+#PeriOv as reference group
+Phase_pinball_PO <- lmerTest::lmer(RES_pinball ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_pinball_PO)
+#EarlyLut as reference group
+Phase_pinball_EL <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_pinball_EL)
+#Midluteal as reference group
+Phase_pinball_ML <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_pinball_ML)
+#Perimenstrual as reference group
+Phase_pinball_PM <- lmerTest::lmer(RES_pinball ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_pinball_PM)
+
+#Hormone effects
+pinball_hormones <- lmerTest::lmer(RES_pinball ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(pinball_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(score_pinball.m=mean(score_pinball.m),
+            pinballphase.m = mean(score_pinball, na.rm = TRUE),
+            pinballphase.d = pinballphase.m - score_pinball.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.score_pinball.d = mean(pinballphase.d, na.rm=T),
+            se=sd(pinballphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.score_pinball.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.score_pinball.d-se, 
+                    ymax=grand.m.score_pinball.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Pinball Score")
+#run plot1a in console to see plot
+plot1a
+```
+### Robot Models (Response Inhibition)
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_robot_MF <- lmerTest::lmer(RES_robot ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_robot_MF)
+#PeriOv as reference group
+Phase_robot_PO <- lmerTest::lmer(RES_robot ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_robot_PO)
+#EarlyLut as reference group
+Phase_robot_EL <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_robot_EL)
+#Midluteal as reference group
+Phase_robot_ML <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_robot_ML)
+#Perimenstrual as reference group
+Phase_robot_PM <- lmerTest::lmer(RES_robot ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_robot_PM)
+
+#Hormone effects
+robot_hormones <- lmerTest::lmer(RES_robot ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(robot_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(RES_robot.m=mean(RES_robot.m),
+            robotphase.m = mean(RES_robot, na.rm = TRUE),
+            robotphase.d = robotphase.m - RES_robot.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.RES_robot.d = mean(robotphase.d, na.rm=T),
+            se=sd(robotphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.RES_robot.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.RES_robot.d-se, 
+                    ymax=grand.m.RES_robot.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Robot Score")
+#run plot1a in console to see plot
+plot1a
+```
+### BDEFS_RI models
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_RI_MF <- lmerTest::lmer(BDEFS_RI_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_RI_MF)
+#PeriOv as reference group
+Phase_RI_PO <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_RI_PO)
+#EarlyLut as reference group
+Phase_RI_EL <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_RI_EL)
+#Midluteal as reference group
+Phase_RI_ML <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_RI_ML)
+#Perimenstrual as reference group
+Phase_RI_PM <- lmerTest::lmer(BDEFS_RI_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_RI_PM)
+
+#Hormone effects
+RI_hormones <- lmerTest::lmer(BDEFS_RI_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(RI_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(BDEFS_RI_avg.m=mean(BDEFS_RI_avg.m),
+            BDEFS_RIphase.m = mean(BDEFS_RI_avg, na.rm = TRUE),
+            BDEFS_RIphase.d = BDEFS_RIphase.m - BDEFS_RI_avg.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.BDEFS_RI_avg.d = mean(BDEFS_RIphase.d, na.rm=T),
+            se=sd(BDEFS_RIphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.BDEFS_RI_avg.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.BDEFS_RI_avg.d-se, 
+                    ymax=grand.m.BDEFS_RI_avg.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered BDEFS Response Inhibition")
+#run plot1a in console to see plot
+plot1a
+```
+### BDEFS_WM Models
+```{r}
+#2/2/23 effects of phase on daily symptoms
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_WM_MF <- lmerTest::lmer(BDEFS_WM_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_WM_MF)
+#PeriOv as reference group
+Phase_WM_PO <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_WM_PO)
+#EarlyLut as reference group
+Phase_WM_EL <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_WM_EL)
+#Midluteal as reference group
+Phase_WM_ML <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_WM_ML)
+#Perimenstrual as reference group
+Phase_WM_PM <- lmerTest::lmer(BDEFS_WM_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_WM_PM)
+
+#Hormone effects
+WM_hormones <- lmerTest::lmer(BDEFS_WM_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(WM_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(BDEFS_WM_avg.m=mean(BDEFS_WM_avg.m),
+            BDEFS_WMphase.m = mean(BDEFS_WM_avg, na.rm = TRUE),
+            BDEFS_WMphase.d = BDEFS_WMphase.m - BDEFS_WM_avg.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.BDEFS_WM_avg.d = mean(BDEFS_WMphase.d, na.rm=T),
+            se=sd(BDEFS_WMphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.BDEFS_WM_avg.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.BDEFS_WM_avg.d-se, 
+                    ymax=grand.m.BDEFS_WM_avg.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered BDEFS Working Memory")
+#run plot1a in console to see plot
+plot1a
+```
+
+
+
+
+## AFFECT AND EATING MODELS AND GRAPHS
+##DEBQ Emotional Eating Models
+```{r}
+#2/2/23 effects of phase on daily symptoms 
+# model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
+#Midfol as reference group
+Phase_DEBQ_avg_MF <- lmerTest::lmer(DEBQ_avg ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_DEBQ_avg_MF)
+#PeriOv as reference group
+Phase_DEBQ_avg_PO <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_DEBQ_avg_PO)
+#EarlyLut as reference group
+Phase_DEBQ_avg_EL <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_DEBQ_avg_EL)
+#Midluteal as reference group
+Phase_DEBQ_avg_ML <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH +earlylut_LH + perimenstrual_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_DEBQ_avg_ML)
+#Perimenstrual as reference group
+Phase_DEBQ_avg_PM <- lmerTest::lmer(DEBQ_avg ~ midfol_LH + periov_LH +earlylut_LH + midluteal_LH
+                                     +(1|ID),
+                                     data = AdultADHDDailyData) 
+summary(Phase_DEBQ_avg_PM)
+
+#Hormone effects
+DEBQ_avg_hormones <- lmerTest::lmer(DEBQ_avg ~ Estradiol.d + Progesterone.d + Estradiol.d*Progesterone.d
+                                     +(1 |ID),
+                                     data = AdultADHDDailyData) 
+summary(DEBQ_avg_hormones)
+```
+```{r}
+#Plot Daily Data by Phase
+#set up labels
+AdultADHDDailyData$cyclephase_names <- factor(AdultADHDDailyData$cyclephase_LH, levels = c(1,2,3,4,5), labels = c("PO", "EL", "ML", "PM", "MF"))
+
+#person-mean-center
+data_for_plot1a <- AdultADHDDailyData %>% group_by(ID, cyclephase_names) %>% 
+  summarize(DEBQ_avg.m=mean(DEBQ_avg.m),
+            DEBQphase.m = mean(DEBQ_avg, na.rm = TRUE),
+            DEBQphase.d = DEBQphase.m - DEBQ_avg.m)%>%
+filter(!is.na(cyclephase_names))
+
+plot1a <- data_for_plot1a %>% 
+  group_by(cyclephase_names) %>%
+  summarize(grand.m.DEBQ_avg.d = mean(DEBQphase.d, na.rm=T),
+            se=sd(DEBQphase.d, na.rm=T)/sqrt(n())) %>%
+  #can save the above code into a separate dataset if preferred (dont have to do it in one line w/ ggplot)
+  ggplot(aes(x=cyclephase_names, y=grand.m.DEBQ_avg.d))+
+  geom_line(group=1)+
+  ##everything from here down is just formatting
+  scale_x_discrete(labels=c("PO" = "Periovulatory",
+                            "EL" = "Earlyluteal",
+                            "ML" = "Midluteal",
+                            "PM" = "Perimenstrual",
+                            "MF" = "Midfollicular" ))+
+  geom_errorbar(aes(ymin=grand.m.DEBQ_avg.d-se, 
+                    ymax=grand.m.DEBQ_avg.d+se), 
+                size=0.5, width=0.5, position=position_dodge())+
+  geom_hline(yintercept=0.0, color="red", linetype="dashed")+
+  theme_bw()+
+  xlab("Cycle Phase")+
+  ylab("Person-Centered Emotional Eating")
+#run plot1a in console to see plot
+plot1a
+```
+
+
+
+
 
