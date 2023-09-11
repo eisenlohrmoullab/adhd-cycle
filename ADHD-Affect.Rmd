@@ -7,6 +7,7 @@ output: html_document
 
 ### Package Import
 ```{r package import, include=FALSE}
+
 library(usethis) #github setup
 library(haven) #for reading files
 library(ggplot2) #for plotting
@@ -27,12 +28,9 @@ library(corrplot) #visualize correlations
 library(lubridate)
 library(visdat)
 library(skimr)
-library(psych)
 library(GPArotation)
 library(broom.mixed)
 library(sjPlot)
-library(lme4)
-library(psych)
 library(haven)
 
 
@@ -618,11 +616,11 @@ hist(residuals)
 
 
 # Extract the random slopes for each level of the categorical variable
-random_slopes <- ranef(model1a)$studyperiod
+random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+##random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -665,7 +663,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -700,7 +698,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -739,10 +737,10 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
-fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
+fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minres")
 
 # Print results
 fa
@@ -762,7 +760,7 @@ tab_model(model1dr)
 
 # FINAL DEPRESSION MODELS: 
 
-tab_model(model1ar, model1b, model1cr, model1dr)
+tab_model(model1ar, model1b, model1c, model1dr)
 
 
 
@@ -792,7 +790,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -806,7 +804,7 @@ tab_model(model1a)
 
 # PERIMENS REF
 model1ar <- lmer(DRSP_2 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
-              (1 + MF_OV_EL + ML  | ID), data = AdultADHDDailyData)
+              (1 + NON_PERI  | ID), data = AdultADHDDailyData)
 
 summary(model1ar)
 ranova(model1ar)
@@ -834,7 +832,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -846,7 +844,7 @@ scree(random_slopes)
 
 # peri separate
 model1br <- lmer(DRSP_2 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
-              (1 + MF_OV_EL+PERI| ID), data = AdultADHDDailyData)
+              (1 + NON_ML| ID), data = AdultADHDDailyData)
 
 summary(model1br)
 tab_model(model1br)
@@ -880,7 +878,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin")
@@ -894,7 +892,7 @@ tab_model(model1c)
 
 # EARLY LUT REF - RANDOM EFFECTS CHANGES
 model1cr <- lmer(DRSP_2 ~ periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + PERI_MF_OV +midluteal_LH | ID), data = AdultADHDDailyData)
+              (1 + NON_EL | ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -903,7 +901,7 @@ tab_model(model1cr)
 
 # PERIOV REF
 model1d <- lmer(DRSP_2 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + NON_OV | ID), data = AdultADHDDailyData)
+              (1 + midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH | ID), data = AdultADHDDailyData)
 
 summary(model1d)
 
@@ -913,9 +911,17 @@ check_outliers(model1d)
 check_heteroscedasticity(model1d)
 check_normality(model1d)
 
+# EARLY LUT REF - RANDOM EFFECTS CHANGES
+model1dr <- lmer(DRSP_2 ~ periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
+              (1 + NON_OV | ID), data = AdultADHDDailyData)
+
+summary(model1dr)
+ranova(model1dr)
+tab_model(model1dr)
+
 # FINAL MODELS: 
 
-tab_model(model list here)
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 
 ```
@@ -924,11 +930,11 @@ tab_model(model list here)
 ```{r}
 
 # PERIMENS REF
-model1a <- lmer(DRSP_3 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
-              (1 + midluteal_LH +earlylut_LH+periov_LH + midfol_LH  | ID), data = AdultADHDDailyData)
+model1ar <- lmer(DRSP_3 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
+              (1 + NON_PERI  | ID), data = AdultADHDDailyData)
 
-summary(model1a)
-ranova(model1a)
+summary(model1ar)
+ranova(model1ar)
 check_outliers(model1a)
 check_heteroscedasticity(model1a)
 check_normality(model1a)
@@ -944,7 +950,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -980,10 +986,10 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
-fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
+fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minres")
 
 # Print results
 fa
@@ -994,7 +1000,7 @@ tab_model(model1b)
 
 # MIDLUTEAL REF - separate random slopes
 model1br <- lmer(DRSP_3 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
-              (1 + perimenstrual_LH + OV_EL + midfol_LH | ID), data = AdultADHDDailyData)
+              (1 | ID), data = AdultADHDDailyData)
 
 summary(model1br)
 ranova(model1br)
@@ -1022,7 +1028,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1036,7 +1042,7 @@ tab_model(model1c)
 
 # EARLY LUT REF - new random slopes
 model1cr <- lmer(DRSP_3 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + ML_PERI_MF | ID), data = AdultADHDDailyData)
+              (1 + NON_EL | ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -1044,13 +1050,17 @@ tab_model(model1cr)
 
 
 # PERIOV REF
-model1d <- lmer(DRSP_3 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH | ID), data = AdultADHDDailyData)
+model1dr <- lmer(DRSP_3 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
+              (1 + NON_OV | ID), data = AdultADHDDailyData)
 
-summary(model1d)
-ranova(model1d)
+summary(model1dr)
+ranova(model1dr)
 
-tab_model(model1d)
+tab_model(model1dr)
+
+#FINAL MODELS FOR WG
+
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 
 ```
@@ -1081,7 +1091,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minres")
@@ -1125,7 +1135,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1167,7 +1177,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1181,7 +1191,7 @@ tab_model(model1c)
 
 # EARLY LUT REF - new random slopes
 model1cr <- lmer(DRSP_4 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + MF_OV + ML_PERI | ID), data = AdultADHDDailyData)
+              (1 + NON_EL | ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -1202,7 +1212,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1214,11 +1224,16 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_4 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + EL_ML_PERI +MF | ID), data = AdultADHDDailyData)
+              (1 + NON_OV | ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr)
+
+#FINAL ANXIETY MODELS
+
+tab_model(model1a, model1b, model1cr, model1dr)
+
 
 
 ```
@@ -1254,7 +1269,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1269,7 +1284,7 @@ tab_model(model1a)
 
 # PERIMENS REF 
 model1ar <- lmer(DRSP_5 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
-              (1 + EL_ML_PERI + MF  | ID), data = AdultADHDDailyData)
+              (1 + NON_PERI  | ID), data = AdultADHDDailyData)
 
 summary(model1ar)
 ranova(model1ar)
@@ -1298,7 +1313,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1340,7 +1355,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1354,7 +1369,7 @@ tab_model(model1c)
 
 # EARLY LUT REF 
 model1cr <- lmer(DRSP_5 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + PERI_MF | ID), data = AdultADHDDailyData)
+              (1 | ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -1375,7 +1390,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1387,12 +1402,16 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_5 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + PERI_MF + EL_ML | ID), data = AdultADHDDailyData)
+              (1 + NON_OV | ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr)
 
+
+# FINAL MOOD SWING MODELS
+
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 ```
 
@@ -1425,7 +1444,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1469,7 +1488,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1484,7 +1503,7 @@ scree(random_slopes)
 
 # MIDLUTEAL REF - separate random slopes
 model1br <- lmer(DRSP_6 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
-              (1 + PERI_OV_EL | ID), data = AdultADHDDailyData)
+              (1 + NON_ML | ID), data = AdultADHDDailyData)
 
 summary(model1br)
 ranova(model1br)
@@ -1512,7 +1531,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minchi")
@@ -1547,7 +1566,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1559,15 +1578,15 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_6 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + midfol_LH+perimenstrual_LH   | ID), data = AdultADHDDailyData)
+              (1 + NON_OV   | ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr)
 
-# FINAL MODELS: 
+# FINAL MODELS for REJ SENS: 
 
-tab_model(model list here)
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 
 ```
@@ -1599,7 +1618,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1643,7 +1662,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1659,7 +1678,7 @@ tab_model(model1b)
 
 # MIDLUTEAL REF - separate random slopes
 model1br <- lmer(DRSP_7 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
-              (1 + MF_EL_ML+ perimenstrual_LH| ID), data = AdultADHDDailyData)
+              (1 + NON_ML| ID), data = AdultADHDDailyData)
 
 summary(model1br)
 ranova(model1br)
@@ -1688,7 +1707,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minchi")
@@ -1723,7 +1742,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1735,7 +1754,7 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_7 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 | ID), data = AdultADHDDailyData)
+              (1 +NON_OV| ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
@@ -1743,7 +1762,7 @@ tab_model(model1dr)
 
 # FINAL MODELS: 
 
-tab_model(model list here)
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 
 ```
@@ -1784,7 +1803,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1828,7 +1847,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1873,7 +1892,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1908,7 +1927,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -1920,7 +1939,7 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_8 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 | ID), data = AdultADHDDailyData)
+              (1 +NON_OV| ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
@@ -1929,7 +1948,7 @@ tab_model(model1dr)
 
 # FINAL MODELS: 
 
-tab_model(model list here)
+tab_model(model1a, model1br, model1cr, model1dr)
 
 
 ```
@@ -1958,7 +1977,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -1973,7 +1992,7 @@ tab_model(model1a) # USE THIS ONE
 
 # PERIMENS REF 
 model1ar <- lmer(DRSP_16 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
-              (1 + EL_ML+ PERI_MF | ID), data = AdultADHDDailyData)
+              (1 + NON_PERI | ID), data = AdultADHDDailyData)
 
 summary(model1ar)
 ranova(model1ar)
@@ -2002,7 +2021,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -2018,7 +2037,7 @@ tab_model(model1b)
 
 # MIDLUTEAL REF - separate random slopes
 model1br <- lmer(DRSP_16 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
-              (1 + PERI_EL+ MF_OV| ID), data = AdultADHDDailyData)
+              (1 + NON_ML| ID), data = AdultADHDDailyData)
 
 summary(model1br)
 ranova(model1br)
@@ -2047,7 +2066,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2061,7 +2080,7 @@ tab_model(model1c)
 
 # EARLY LUT REF 
 model1cr <- lmer(DRSP_16 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1+MF_OV+ ML_PERI| ID), data = AdultADHDDailyData)
+              (1+NON_EL| ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -2082,7 +2101,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2094,7 +2113,7 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_16 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 +PERI_MF + EL_ML| ID), data = AdultADHDDailyData)
+              (1 +NON_OV| ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
@@ -2103,7 +2122,7 @@ tab_model(model1dr) # Use this One
 
 # FINAL MODELS: 
 
-tab_model(model list here)
+tab_model(model1ar, model1br, model1cr, model1dr)
 
 
 ```
@@ -2131,7 +2150,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -2194,7 +2213,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2229,7 +2248,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2241,12 +2260,15 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_17 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 +midfol_LH+EL_ML_PERI| ID), data = AdultADHDDailyData)
+              (1 +NON_OV| ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr) # Use this One
 
+# Final OOC Models
+
+tab_model(model1a, model1b, model1cr, model1dr  )
 
 ```
 
@@ -2286,7 +2308,7 @@ random_slopes <- ranef(model1a)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -2330,7 +2352,7 @@ random_slopes <- ranef(model1b)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minres")
@@ -2374,7 +2396,7 @@ random_slopes <- ranef(model1c)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2410,7 +2432,7 @@ random_slopes <- ranef(model1d)$ID
 
 # Remove Intercept
 
-random_slopes <- random_slopes[, -1]
+#random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
 fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
@@ -2431,7 +2453,7 @@ tab_model(model1dr)
 
 # FINAL MODELS: 
 
-tab_model(model list here)
+tab_model(model1a, model1b, model1c, model1d )
 
 ```
 
