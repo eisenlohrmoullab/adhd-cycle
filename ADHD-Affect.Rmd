@@ -51,6 +51,14 @@ options(scipen = 999)
 AdultADHDDailyData <- read_sav("~/Library/CloudStorage/Box-Box/ENG-CLEARLAB ADHD COLLAB/03_analytic_projects/Jordan codes/02_code_dataedits_output/Affect Paper data set and code/ADHD-affect/2023.02.03. DailySummary with earlylut coding.sav")
 #View(AdultADHDDailyData)
 
+#Remove participants with invalid cycles
+
+badhormones <- c(206, 214, 221, 228)
+
+#save new dataframe without all excluded participants
+AdultADHDDailyData <- AdultADHDDailyData %>% 
+  filter(!ID %in% badhormones) 
+
 
 # NON_OV=1, else=0
 
@@ -145,6 +153,16 @@ AdultADHDDailyData <- AdultADHDDailyData %>%
                                     cyclephase_LH=="5" ~ "1")) #MIDFOL
 
 
+# MF_PERI_OV=1, else=0
+
+AdultADHDDailyData <- AdultADHDDailyData %>%
+  mutate(MF_PERI_OV = case_when(cyclephase_LH=="1" ~ "1", #OV
+                                    cyclephase_LH=="2" ~ "0", #EL
+                                    cyclephase_LH=="3" ~ "0", #ML
+                                    cyclephase_LH=="4" ~ "1", #PERIM
+                                    cyclephase_LH=="5" ~ "1")) #MIDFOL
+
+
 
 # ML_PERI=1, else=0
 
@@ -173,7 +191,7 @@ AdultADHDDailyData <- AdultADHDDailyData %>%
                                     cyclephase_LH=="4" ~ "1", #PERIM
                                     cyclephase_LH=="5" ~ "0")) #MIDFOL
 
-# OV_MF=1, else=0
+# MF_OV=1, else=0
 
 AdultADHDDailyData <- AdultADHDDailyData %>%
   mutate(MF_OV = case_when(cyclephase_LH=="1" ~ "1", #OV
@@ -614,7 +632,15 @@ fa
 
 scree(random_slopes)
 
-tab_model(model1a)
+
+# PERIMENS REF
+model1ar <- lmer(DRSP_1 ~ midluteal_LH +earlylut_LH+periov_LH + midfol_LH + 
+              (1 + NON_PERI  | ID), data = AdultADHDDailyData)
+
+summary(model1ar)
+ranova(model1ar)
+
+tab_model(model1ar)
 
 
 # MIDLUTEAL REF
@@ -684,8 +710,12 @@ fa
 
 scree(random_slopes)
 
-tab_model(model1c)
+model1cr <- lmer(DRSP_1 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
+              (1 + NON_EL | ID), data = AdultADHDDailyData)
 
+summary(model1cr)
+
+ranova(model1cr)
 
 # PERIOV REF
 model1d <- lmer(DRSP_1 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
@@ -719,7 +749,21 @@ fa
 
 scree(random_slopes)
 
-tab_model(model1d)
+# PERIOV REF - combine
+model1dr <- lmer(DRSP_1 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
+              (1 + NON_OV | ID), data = AdultADHDDailyData)
+
+summary(model1dr)
+
+ranova(model1dr)
+
+tab_model(model1dr)
+
+
+# FINAL DEPRESSION MODELS: 
+
+tab_model(model1ar, model1b, model1cr, model1dr)
+
 
 
 ```
@@ -850,7 +894,7 @@ tab_model(model1c)
 
 # EARLY LUT REF - RANDOM EFFECTS CHANGES
 model1cr <- lmer(DRSP_2 ~ periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + OV_MF+ML_PERI | ID), data = AdultADHDDailyData)
+              (1 + PERI_MF_OV +midluteal_LH | ID), data = AdultADHDDailyData)
 
 summary(model1cr)
 ranova(model1cr)
@@ -868,6 +912,10 @@ tab_model(model1d)
 check_outliers(model1d)
 check_heteroscedasticity(model1d)
 check_normality(model1d)
+
+# FINAL MODELS: 
+
+tab_model(model list here)
 
 
 ```
@@ -1433,7 +1481,6 @@ scree(random_slopes)
 
 # NOTE: NEGATIVE FACTOR LOADING! How to deal? 
 
-tab_model(model1b)
 
 # MIDLUTEAL REF - separate random slopes
 model1br <- lmer(DRSP_6 ~ perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH +
@@ -1445,7 +1492,7 @@ tab_model(model1br)
 
 # EARLY LUT REF
 model1c <- lmer(DRSP_6 ~periov_LH+ midfol_LH+perimenstrual_LH + midluteal_LH+
-              (1 + MF_OV +ML_PERI| ID), data = AdultADHDDailyData)
+              (1 + perimenstrual_LH + earlylut_LH+periov_LH+midfol_LH| ID), data = AdultADHDDailyData)
 
 summary(model1c)
 
@@ -1468,7 +1515,7 @@ random_slopes <- ranef(model1c)$ID
 random_slopes <- random_slopes[, -1]
 
 # Apply factor analysis to the correlation matrix
-fa <- fa(r = random_slopes, nfactors = 2, rotate = "oblimin", fm="minchi")
+fa <- fa(r = random_slopes, nfactors = 3, rotate = "oblimin", fm="minchi")
 
 # Print results
 fa
@@ -1512,11 +1559,15 @@ scree(random_slopes)
 
 # PERIOV REF - new random
 model1dr <- lmer(DRSP_6 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
-              (1 + PERI_MF + EL_ML  | ID), data = AdultADHDDailyData)
+              (1 + midfol_LH+perimenstrual_LH   | ID), data = AdultADHDDailyData)
 
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr)
+
+# FINAL MODELS: 
+
+tab_model(model list here)
 
 
 ```
@@ -1689,6 +1740,10 @@ model1dr <- lmer(DRSP_7 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH+
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr)
+
+# FINAL MODELS: 
+
+tab_model(model list here)
 
 
 ```
@@ -1872,6 +1927,11 @@ ranova(model1dr)
 tab_model(model1dr)
 
 
+# FINAL MODELS: 
+
+tab_model(model list here)
+
+
 ```
 
 
@@ -2039,6 +2099,11 @@ model1dr <- lmer(DRSP_16 ~midfol_LH+perimenstrual_LH + midluteal_LH+ earlylut_LH
 summary(model1dr)
 ranova(model1dr)
 tab_model(model1dr) # Use this One
+
+
+# FINAL MODELS: 
+
+tab_model(model list here)
 
 
 ```
@@ -2364,6 +2429,10 @@ ranova(model1dr)
 tab_model(model1dr)
 
 
+# FINAL MODELS: 
+
+tab_model(model list here)
+
 ```
 
 
@@ -2395,11 +2464,7 @@ tab_model(model1dr)
 ```{r}
 #2/2/23 effects of phase on daily symptoms
 # model 2: predicting a linear outcome from one predictor, random intercepts, no cycle vars
-badhormones <- c(206, 214, 221, 228)
 
-#save new dataframe without all excluded participants
-AdultADHDDailyData <- AdultADHDDailyData %>% 
-  filter(!ID %in% badhormones) 
 
 #Midfol as reference group
 Phase_IA_MF <- lmerTest::lmer(IA_Count ~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH
