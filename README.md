@@ -6,7 +6,7 @@ Principal Investigator: Michelle Martel, PhD, Professor of (Clinical) Psychology
 
 Date Initiated: June 20, 2024
 
-Purpose: This repository houses code that processes and analyzes data collected during NIH grant R01-MH-119119, which sought to examine how the menstrual cycle influences daily symptoms in a sample of adult female patients with significant attention deficit/hyperactivity disorder (ADHD) symptoms.  The , with data collected between 2019 and 2024.  
+Purpose: This repository houses code that processes and analyzes data collected during NIH grant R01-MH-119119, which sought to examine how the menstrual cycle influences daily symptoms in a sample of adult female patients with significant attention deficit/hyperactivity disorder (ADHD) symptoms.  Data were collected between 2019 and 2024.  
 
 Original Grant Summary: 
 
