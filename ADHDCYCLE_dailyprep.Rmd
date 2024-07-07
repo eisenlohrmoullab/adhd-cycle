@@ -838,9 +838,21 @@ for (participant_id in id_list) {
 }
 ```
 
+# MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
 
+```{r warning=FALSE}
 
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+
+# Loop through each participant ID and call the function - CSS_Inatt
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Inatt_Count', "CSS Inattentive Criteria (Count)", dailydir)
+}
+```
+
+, CSS_Hyp_Count, CSS_Imp_Count, DEBQ_Total, BDEFS_Total, UPPS_Total
 
 
 ## Include: 205*, 281*
