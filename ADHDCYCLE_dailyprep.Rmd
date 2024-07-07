@@ -869,7 +869,7 @@ for (participant_id in id_list) {
 
 
 
-# Temporary Chunk -- Run quick hormone models for michelle - INATT
+# Temporary Chunk to create the code --INATT example
 ```{r}
 # Check for problematic values in the original variables
 df_clean <- df %>%
@@ -921,14 +921,9 @@ ggplot(grid_df, aes(x = E2zd, y = predicted_loginatt, color = P4zd, group = P4zd
 
 ```
 
-# Temporary Chunk -- Run quick hormone models for michelle 
+# Create a function and run outcomes through
 ```{r}
 
-# Define the function
-library(dplyr)
-library(lme4)
-library(emmeans)
-library(ggplot2)
 
 # Define the function
 plot_interaction <- function(data, outcome) {
@@ -969,7 +964,7 @@ plot_interaction <- function(data, outcome) {
   print(summary(model_derivs))
   
   # Fit the model with cleaned data
-  model <- lmer(log_outcome ~ E2zd * P4zd + (1 + P4zd| id), data = data_clean)
+  model <- lmer(log_outcome ~ E2zd * P4zd + (1 + E2zd + P4zd| id), data = data_clean)
   
   # Print the model summary
   print(summary(model))
@@ -1019,12 +1014,6 @@ plot_interaction(df, "CSS_Imp_Count")
 
 plot_interaction(df, "DEBQ_Total")
 plot_interaction(df, "UPPS_Total")
-
-
-
-
-
-
 
 
 ```
