@@ -4,61 +4,42 @@ output: html_document
 date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 ---
 
+```{r setup}
 
-# ACTIVE REMINDERS
-
-## plot_participant_data(participant_id) is the name of the graphing function you saved in chatgpt. you can refer to it. 
-
-
-# TO DO
-
-## remove participant 210's final observation because date_rated is like a year later. 
-
-# Current Status
-
-- The adhdcyc.py code is the one that's working well in chatgpt to make the figures. 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(dplyr)
-library(tidyr)
-library(haven) #for reading files
-library(ggplot2) #for plotting
-library(tidyverse) #for data management and manipulation
-library(dplyr)
-library(zoo) #rolling averages
-library(readxl) #reading in excel files
-library(lme4) #mlm
-library(lmerTest) #mlm to pull p values
-library(emmeans) #plot interaction using model-implied estimated marginal means
-library(psych) #for describe function
-library(lubridate)
-library(visdat) 
-library(janitor) #nice cleaning functions
-library(psych) #good describe/summary functions
-library(skimr) #useful skimming functions for big datasets
-library(ggdist)
-library(ggforce)
-library(ggplot2)
-library(sjPlot)
-library(grid)
-library(gridExtra)
+
+library(dplyr) # Data manipulation
+library(tidyr) # Tidying data
+library(haven) # Reading files (SPSS, stata, SAS)
+library(ggplot2) # Plotting
+library(tidyverse) # Data management and manipulation
+library(zoo) # Rolling averages
+library(readxl) # Reading Excel files
+library(lme4) # Mixed-effects models
+library(lmerTest) # Mixed-effects models with p-values
+library(emmeans) # Estimated marginal means
+library(psych) # Descriptive statistics
+library(lubridate) # Date and time manipulation
+library(visdat) # Visualizing missing data
+library(janitor) # Cleaning data
+library(skimr) # Skimming data for summary statistics
+library(ggdist) # Visualizing distributions and uncertainty
+library(ggforce) # Extending ggplot2
+library(sjPlot) # Plotting for statistical models
+library(grid) # Base graphics
+library(gridExtra) # Arranging grid-based graphics
+library(usethis) # Setting up GitHub and other project tools
+library(nlme) # Linear and nonlinear mixed-effects models
+library(performance) # Model performance metrics
+library(rmcorr) # Repeated measures correlations
+library(gitcreds) # Managing Git credentials
+library(see) # Visualizing model checking functions
+library(corrplot) # Visualizing correlations
+library(GPArotation) # Factor analysis rotations
+library(broom.mixed) # Tidying mixed models
+library(pbkrtest) # Parametric bootstrap and Kenward-Roger methods
+library(ggrepel) # Adding text labels to ggplot2
+
 ```
 
 ## Load raw daily data, merged to include surveys and hormones 
@@ -764,11 +745,8 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
   grid.draw(final_plot)
 }
 
-# Example call to the function
-# plot_participant_data(data, 1, "outcome_var", "outcome_label", "output_dir")
-
 # Example with specific data
-plot_participant_data(df, 205, "CSS_Fx_Total", "CSS Functional Impact", dailydir)
+#plot_participant_data(df, 205, "CSS_Fx_Total", "CSS Functional Impact", dailydir)
 
 
 ```
@@ -795,6 +773,8 @@ cat("There are", unique_id_count, "unique IDs in the dataset. The IDs are:", pas
 
 # MAKE ALL CSS_Fx_Total + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Fx_Total
 
+# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
@@ -811,6 +791,9 @@ for (participant_id in id_list) {
 ```
 
 # MAKE ALL HYPIMP + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_HypImp
+
+# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
+
 ```{r warning=FALSE}
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
@@ -826,6 +809,8 @@ for (participant_id in id_list) {
 
 # MAKE ALL INATT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
 
+# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
+
 ```{r warning=FALSE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
@@ -838,7 +823,7 @@ for (participant_id in id_list) {
 }
 ```
 
-# MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
+# MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
 
 ```{r warning=FALSE}
 
@@ -852,7 +837,211 @@ for (participant_id in id_list) {
 }
 ```
 
-, CSS_Hyp_Count, CSS_Imp_Count, DEBQ_Total, BDEFS_Total, UPPS_Total
+# MAKE ALL HYP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
+
+```{r warning=FALSE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+
+# Loop through each participant ID and call the function
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Hyp_Count', "CSS Hyperactive Criteria (Count)", dailydir)
+}
+```
+
+# MAKE ALL IMP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function 
+
+```{r warning=FALSE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+
+# Loop through each participant ID and call the function
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Imp_Count', "CSS Impulsivity Criteria (Count)", dailydir)
+}
+```
+
+
+
+
+
+# Temporary Chunk -- Run quick hormone models for michelle - INATT
+```{r}
+# Check for problematic values in the original variables
+df_clean <- df %>%
+  filter(!is.na(CSS_Inatt) & !is.nan(CSS_Inatt) & !is.infinite(CSS_Inatt) &
+         !is.na(E2) & !is.nan(E2) & !is.infinite(E2) &
+         !is.na(P4) & !is.nan(P4) & !is.infinite(P4))
+
+# Scale E2 and P4 by id
+df_clean <- df_clean %>%
+  group_by(id) %>%
+  mutate(E2zd = scale(E2), P4zd = scale(P4)) %>%
+  ungroup()
+
+# Create log-transformed CSS_Inatt
+df_clean <- df_clean %>%
+  mutate(loginatt = log(CSS_Inatt))
+
+# Check for problematic values after transformation
+df_clean <- df_clean %>%
+  filter(!is.na(loginatt) & !is.nan(loginatt) & !is.infinite(loginatt) &
+         !is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+         !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd))
+
+
+# Fit the model with cleaned data
+inatt_int <- lmer(loginatt ~ E2zd * P4zd + (1 + E2zd + P4zd | id), data = df_clean)
+
+summary(inatt_int)
+
+# Create a grid of values for E2zd and P4zd
+E2zd_seq <- seq(min(df_clean$E2zd), max(df_clean$E2zd), length.out = 100)
+P4zd_seq <- seq(min(df_clean$P4zd), max(df_clean$P4zd), length.out = 100)
+
+# Create a dataframe with all combinations of E2zd and P4zd
+grid_df <- expand.grid(E2zd = E2zd_seq, P4zd = P4zd_seq)
+
+# Predict loginatt over the grid
+grid_df$predicted_loginatt <- predict(inatt_1, newdata = grid_df, re.form = NA)
+
+# Plot the interaction
+ggplot(grid_df, aes(x = E2zd, y = predicted_loginatt, color = P4zd, group = P4zd)) +
+  geom_line() +
+  labs(title = "Interaction between E2zd and P4zd on (log) Inattentiveness",
+       x = "E2zd",
+       y = "Predicted Inattentiveness (log)",
+       color = "P4zd") +
+  theme_minimal() +
+  scale_color_gradient(low = "blue", high = "red")
+
+```
+
+# Temporary Chunk -- Run quick hormone models for michelle 
+```{r}
+
+# Define the function
+library(dplyr)
+library(lme4)
+library(emmeans)
+library(ggplot2)
+
+# Define the function
+plot_interaction <- function(data, outcome) {
+  # Check for problematic values in the specified variables
+  data_clean <- data %>%
+    filter(!is.na(.data[[outcome]]) & !is.nan(.data[[outcome]]) & !is.infinite(.data[[outcome]]) &
+           !is.na(E2) & !is.nan(E2) & !is.infinite(E2) &
+           !is.na(P4) & !is.nan(P4) & !is.infinite(P4))
+  
+  # Scale predictors by random effect and calculate daily derivatives
+  data_clean <- data_clean %>%
+    group_by(id) %>%
+    mutate(
+      E2zd = scale(E2),
+      P4zd = scale(P4),
+      E2ch = c(NA, diff(E2)),  # Daily derivative for E2
+      P4ch = c(NA, diff(P4))   # Daily derivative for P4
+    ) %>%
+    ungroup()
+  
+  # Create log-transformed outcome
+  data_clean <- data_clean %>%
+    mutate(log_outcome = log(.data[[outcome]]))
+  
+  # Check for problematic values after transformation and calculation of derivatives
+  data_clean <- data_clean %>%
+    filter(!is.na(log_outcome) & !is.nan(log_outcome) & !is.infinite(log_outcome) &
+           !is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+           !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
+           !is.na(E2ch) & !is.nan(E2ch) & !is.infinite(E2ch) &
+           !is.na(P4ch) & !is.nan(P4ch) & !is.infinite(P4ch))
+  
+  
+  # Fit the model with cleaned data - with derivs
+  model_derivs <- lmer(log_outcome ~ E2zd * P4zd + E2ch + P4ch + (1 | id), data = data_clean)
+  
+  # Print the model summary
+  print(summary(model_derivs))
+  
+  # Fit the model with cleaned data
+  model <- lmer(log_outcome ~ E2zd * P4zd + (1 + P4zd| id), data = data_clean)
+  
+  # Print the model summary
+  print(summary(model))
+  
+  # Create a grid of values for predictors
+  E2zd_seq <- seq(min(data_clean$E2zd), max(data_clean$E2zd), length.out = 100)
+  P4zd_seq <- seq(min(data_clean$P4zd), max(data_clean$P4zd), length.out = 100)
+  
+  # Create a dataframe with all combinations of E2zd and P4zd
+  grid_df <- expand.grid(E2zd = E2zd_seq, P4zd = P4zd_seq)
+  
+  # Add the mean values of the derivatives to the grid_df
+  grid_df$E2ch <- mean(data_clean$E2ch, na.rm = TRUE)
+  grid_df$P4ch <- mean(data_clean$P4ch, na.rm = TRUE)
+  
+  # Predict the outcome over the grid
+  grid_df$predicted_log_outcome <- predict(model, newdata = grid_df, re.form = NA)
+  
+  # Exponentiate the predicted values to return them to the original scale
+  grid_df$predicted_outcome <- exp(grid_df$predicted_log_outcome)
+  
+  # Plot the interaction
+  plot <- ggplot(grid_df, aes(x = E2zd, y = predicted_outcome, color = P4zd, group = P4zd)) +
+    geom_line() +
+    labs(title = paste("Interaction between E2zd and P4zd on", outcome),
+         x = "E2zd",
+         y = paste("Predicted", outcome),
+         color = "P4zd") +
+    theme_minimal() +
+    scale_color_gradient(low = "blue", high = "red")
+  
+  # Return the plot
+  return(plot)
+}
+
+
+# Example usage
+plot_interaction(df, "CSS_Inatt")
+
+plot_interaction(df, "CSS_HypImp")
+
+plot_interaction(df, "CSS_Fx_Total")
+
+plot_interaction(df, "CSS_Inatt_Count")
+plot_interaction(df, "CSS_Hyp_Count")
+plot_interaction(df, "CSS_Imp_Count")
+
+plot_interaction(df, "DEBQ_Total")
+plot_interaction(df, "UPPS_Total")
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+# FINISH DATA CLEANING BASED ON DAILY GRAPHS
+
+
+
+
+
+
+
 
 
 ## Include: 205*, 281*
