@@ -48,6 +48,14 @@ library(ggrepel) # Adding text labels to ggplot2
 df <- read.csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv")
 ```
 
+# Change date_rated to be date format
+
+```{r}
+ # Convert date_rated to Date type
+  df$date_rated <- as.Date(mdy(df$date_rated))
+```
+
+
 # Rename Hormones
 
 ```{r RENAME}
@@ -122,8 +130,20 @@ cat(formatted_list)
 # Create dichotomous "mensdayone" to indicate first day of period
 ```{r }
 
+
+str(df$id) #check id format
+str(df$date_rated) #check date_rated format
+
 df <- df %>%
   filter(!is.na(id))
+
+df <- df %>%
+  arrange(id, date_rated)
+
+#Add 208 Menses start date 
+df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
+df %>% filter(id==208) %>% View()
+
 
 df$StartPeriod <- as.numeric(df$StartPeriod)
 
@@ -134,18 +154,19 @@ df <- df %>%
     TRUE ~ 0
   ))
 
-View(df)
 
 # Eliminate all but the first menses onset day in a new variable called "mensdayonefirst"
 
+# Process the data
 df <- df %>%
   arrange(id, date_rated) %>%  # Arrange the data by id and date_rated
   group_by(id) %>%  # Group the data by id
   mutate(
     mensdayonefirst = case_when(
       is.na(mensdayone) ~ NA,
-      mensdayone == 1 & lag(mensdayone, order_by = date_rated) != 1 ~ 1,
-       TRUE ~ 0 #this is like "else = 0"
+      mensdayone == 1 & (lag(mensdayone, order_by = date_rated) != 1 | is.na(lag(mensdayone, order_by = date_rated))) ~ 1,
+      row_number() == 1 & mensdayone == 1 ~ 1,
+      TRUE ~ 0
     )
   ) %>% 
   ungroup() # Remove the grouping
@@ -257,30 +278,26 @@ df %>% select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday
 #how many observations do you have for each cycle day?
 nobs <- df %>% group_by(cycleday) %>% summarize(n=n())
 
-View(nobs)
+#View(nobs)
 
 #do you have any observations that got assigned a cycle day of 0? this is wrong, and you should check who that happened for
 df %>% filter(cycleday==0) %>% pull(id)
 
+# NOTE 2024-07-09: There are 2 people with lots of zeroes (see Jordan's note above in chunk) and it looks to me like they did not report a menses in the daily dataset: 331, 332. They have no menses onset dates
+
 #View in a separate window and manually scroll through
 df %>% select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
 
-```
-
-# NOTE 2024-07-04: Per the chunk above, there are 13 people with lots of zeroes (see Jordan's note above in chunk) and it looks to me like they did not report a menses in the daily dataset: 206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332. 
-
-# I have left a note in the channel but in the meantime I am removing those folks from the dataset. 
-# Note: Urveesha said she would look into this. 7/4/24
-
-```{r}
-
 # List of IDs to remove
-ids_to_remove <- c(206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332)
+ids_to_remove <- c(331, 332)
 
 # Remove rows with specified IDs
 df <- df %>% filter(!(id %in% ids_to_remove))
 
+
 ```
+
+
 
 #step 4b: make daycountLH, based on positive LH test (LH test day = 0)
 ```{r daycountLH}
@@ -309,10 +326,10 @@ df<- df %>% group_by(id) %>%
 df <- df %>% select(!A)
 
 #Check vars
-df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
+#df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
 ```
 
-#review step 4b:
+#View the number of observations for each cycleday
 ```{r daycountLH checking}
 
 #how many daily ratings got assigned each cycle day?
@@ -341,7 +358,7 @@ df <- df %>% mutate(cyclephase_count = case_when(periov_count==1 ~ 1,
                                                      TRUE ~ as.numeric(NA)))
 
 #Check vars
-df %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_count")) %>% View()
+#df %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_count")) %>% View()
 
 ```
 
@@ -407,7 +424,7 @@ df <- df %>% mutate(cyclephase_LH_graph = case_when(midfol_LH==1 ~ 1,
                                                      TRUE ~ as.numeric(NA)))
 
 #Check vars
-df %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_LH")) %>% View()
+#df %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_LH")) %>% View()
 
 
 
@@ -468,11 +485,12 @@ df <- df %>%
 df %>%
   group_by(periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
   summarize(n=n())
-#make note of errors - Tory 6/4/24
-# peri and midfol = 9
-# midlut and peri- 119
-# earlylut and peri = 47
-# periov and perimens = 23
+
+#make note of errors - Tory 7/9/24
+# peri and midfol = 16
+# midlut and peri- 103
+# earlylut and peri = 30
+# periov and perimens = 52
 
 #example code to review midfol_LH and perimenstrual_LH overlaps, if they exist
 
@@ -504,6 +522,10 @@ midfol_peri_overlaps <- df %>% filter(midfol_LH==1 & perimenstrual_LH==1) %>%
   pull(id)
 
 print(midfol_peri_overlaps)
+
+# 7/9/24: 208 216 225 251 264 270 279 281 286 312 331 332
+
+# I will replace all of these such that peri wins
 
 ```
 
@@ -767,23 +789,33 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
 
 dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
-View(df$css_in)
+df <- df %>% arrange(id, date_rated, .na.last = FALSE)
 
-# Example with specific data
-plot_participant_data(df, 206, "CSS_Inatt", "CSS Inattentiveness", dailydir)
+View(df)
+
+     # Example with specific data
+plot_participant_data(df, 208, "CSS_Fx_Total", "CSS Function", dailydir)
+
+
+# Check if filtering returns any rows for this pt
+filtered_df <- df %>% filter(id == 208)
+print(filtered_df)
 
 df %>%
-  filter(id==206) %>%
+  filter(id==208) %>% 
   select(id, date_rated, LHposdayfirst, daycountLH,
-         mensdayonefirst, cycleday,
+         mensdayonefirst, StartPeriod, cycleday,
          midfol_LH, periov_LH, earlylut_LH,
-         midluteal_LH, perimenstrual_LH) %>% View() 
+         midluteal_LH, perimenstrual_LH, cyclephase_LH) %>% View() 
+
 
 
 
 # Participants to Investigate: 
-## - ZEROES: 206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332
-## - MIDFOL and PERI OVERLAP: 216 264 281 286
+
+
+
+## - MIDFOL and PERI OVERLAP: 208 216 225 251 264 270 279 281 286 312 331 332
 
 
 ```
