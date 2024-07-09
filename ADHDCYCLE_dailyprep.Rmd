@@ -73,23 +73,42 @@ colnames(df)[colnames(df) == "Progesterone"] <- "P4"
 #CSS_Fx_Total - ???????
 #CSS_B2_Total - ???????
 
+# Reverse UPPS Items 7 and 8
+df <- df %>%
+  mutate(UPPS_7r=recode(UPPS_7, `1` = 4, `2` = 3, `3` = 2, `4` = 1), UPPS_8r=recode(UPPS_8, `1` = 4, `2` = 3, `3` = 2, `4` = 1))
+
+# Drop original items UPPS_7 and UPPS_8
+
+df <- df %>% select(-UPPS_7)
+df <- df %>% select(-UPPS_8)
+
 df <- df %>%
   mutate(
     # CSS Symptom severity Scores
-    CSS_Fx_Total = rowSums(select(., starts_with("CSS_Function_")), na.rm = TRUE),
-    CSS_B2_Total = rowSums(select(., starts_with("CSS_B2_")), na.rm = TRUE),
-    CSS_Inatt = rowSums(select(., CSS_B_1:CSS_B_9), na.rm = TRUE),
-    CSS_HypImp = rowSums(select(., CSS_B_10:CSS_B_18), na.rm = TRUE),
-    # CSS Count Variables
-    CSS_Inatt_Count = IA_Count, 
-    CSS_Hyp_Count = Hyp_Count, 
-    CSS_Imp_Count = Imp_Count,
+   
+    #Calculate Inattention Severity: 
+    CSS_Inatt = sum(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13,
+    CSS_B_15, CSS_B_17),
+    #Calculate Hyperactivity/Impulsivity Severity: 
+    CSS_HypImp = sum(CSS_B_2 + CSS_B_4 + CSS_B_6 + CSS_B_8 + CSS_B_10 + CSS_B_12 + CSS_B_14 + 
+    CSS_B_16 + CSS_B_18),
     
+     ## Function items 1-10
+    CSS_Fx_Total = rowSums(select(., starts_with("CSS_Function_")), na.rm = TRUE),
+     # NOT SURE WHAT THIS IS STILL (todo)
+    CSS_B2_Total = rowSums(select(., starts_with("CSS_B2_")), na.rm = TRUE),
+  
+     # CSS Count Variables
+    CSS_Inatt_Count = sum(CSS_1_Count, CSS_3_Count, CSS_5_Count, CSS_7_Count, CSS_9_Count, CSS_11_Count, CSS_13_Count, CSS_15_Count, CSS_17_Count),
+    
+    CSS_HypImp_Count = sum(CSS_2_Count, CSS_4_Count, CSS_6_Count, CSS_8_Count, CSS_10_Count, CSS_12_Count, CSS_14_Count, CSS_16_Count, CSS_18_Count),
+
     # Other Daily Scored Scales
 DEBQ_Total = rowSums(select(., starts_with("DEBQ_")), na.rm = TRUE),
 BDEFS_Total = rowSums(select(., starts_with("BDEFS_")), na.rm = TRUE),
 UPPS_Total = rowSums(select(., starts_with("UPPS_")), na.rm = TRUE)
   )
+
 ```
 
 # Print Variable Names
@@ -745,8 +764,26 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
   grid.draw(final_plot)
 }
 
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+View(df$css_in)
+
 # Example with specific data
-#plot_participant_data(df, 205, "CSS_Fx_Total", "CSS Functional Impact", dailydir)
+plot_participant_data(df, 206, "CSS_Inatt", "CSS Inattentiveness", dailydir)
+
+df %>%
+  filter(id==206) %>%
+  select(id, date_rated, LHposdayfirst, daycountLH,
+         mensdayonefirst, cycleday,
+         midfol_LH, periov_LH, earlylut_LH,
+         midluteal_LH, perimenstrual_LH) %>% View() 
+
+
+
+# Participants to Investigate: 
+## - ZEROES: 206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332
+## - MIDFOL and PERI OVERLAP: 216 264 281 286
 
 
 ```
