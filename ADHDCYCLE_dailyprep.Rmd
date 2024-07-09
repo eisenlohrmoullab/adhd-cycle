@@ -39,6 +39,7 @@ library(GPArotation) # Factor analysis rotations
 library(broom.mixed) # Tidying mixed models
 library(pbkrtest) # Parametric bootstrap and Kenward-Roger methods
 library(ggrepel) # Adding text labels to ggplot2
+library(zoo)
 
 ```
 
@@ -53,19 +54,94 @@ df <- read.csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/0
 ```{r}
  # Convert date_rated to Date type
   df$date_rated <- as.Date(mdy(df$date_rated))
+
+```
+
+# Remove NA rows
+```{r}
+#remove rows where all data is NA
+df <- df[rowSums(is.na(df)) != ncol(df), ]
+
+#remove NA ID's from dataset
+df <- df %>% filter(!is.na(id))
+
+#remove NA daterated from dataset 
+df <- df %>% filter(!is.na(date_rated))
+
+# NUMBER OF ROWS
+
+print(nrow(df))
+
+```
+
+# Sort by id and date_rated and save
+```{r}
+df <- df %>% arrange(id, date_rated, .na.last = FALSE)
+
+#View(df)
 ```
 
 
-# Rename Hormones
+#Hard-code changes to issues found later 
+```{r}
 
+#Add 208 Menses start date 
+df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
+#df %>% filter(id==208) %>% View()
+
+df$date_rated[df$id == 210 & df$date_rated == 11/20/2021] <- 11/20/2020
+df$date_rated[df$id == 210 & df$date_rated == 11/21/2021] <- 11/21/2020
+#df %>% filter(id==210) %>% View()
+
+#View(df)
+
+#Template Code to look at one pt's data
+
+#df %>% filter(id==307) %>% View()
+
+#ADDITIONAL DATA REVIEW NEEDED FOR HORMONES: 
+
+# Filtering template: df <- df %>% filter(!is.na(id))
+
+#Note that 307's ovulation might be a little off with their hormones
+#Consider excluding participant 235
+#Review participant 273's progesterone data
+#Review participant 278's progesterone data
+#Review participant 317's estrogen data
+#Review participant 221's hormone data
+#Review participant 243's hormone data
+#Review participant 267's hormone data
+#Review participant 272's hormone data
+#Review participant 283's hormone data
+#Review participant 305's hormone data
+#Review participant 312's hormone data
+
+badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
+
+```
+
+
+# Add row placeholders for missing survey/date_rated's
+```{r}
+
+df <- df %>% group_by(id) %>%
+  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day"))
+
+#View(df)
+
+# NUMBER OF ROWS
+print(nrow(df))
+
+```
+
+# Rename Hormones
 ```{r RENAME}
 # Rename the columns
 colnames(df)[colnames(df) == "Estradiol"] <- "E2"
 colnames(df)[colnames(df) == "Progesterone"] <- "P4"
 ```
 
-## Calculate BAARS ADHD Current Symptom Scale CSS Score
-
+## Calculate BAARS ADHD Current Symptom Scale CSS Scores, UPPS, BDEFS, DEBQ
 ```{r calc CSS UPPS BDEFS DEBQ}
 
 #CSS_Total - Overall total score on the current symptoms scale
@@ -83,39 +159,161 @@ colnames(df)[colnames(df) == "Progesterone"] <- "P4"
 
 # Reverse UPPS Items 7 and 8
 df <- df %>%
-  mutate(UPPS_7r=recode(UPPS_7, `1` = 4, `2` = 3, `3` = 2, `4` = 1), UPPS_8r=recode(UPPS_8, `1` = 4, `2` = 3, `3` = 2, `4` = 1))
+  mutate(UPPS_7r=recode(UPPS_7, '1' = 4, '2' = 3, '3' = 2, '4' = 1), UPPS_8r=recode(UPPS_8, '1' = 4, '2' = 3, '3' = 2, '4' = 1))
 
 # Drop original items UPPS_7 and UPPS_8
 
 df <- df %>% select(-UPPS_7)
 df <- df %>% select(-UPPS_8)
 
+
 df <- df %>%
+  group_by(id) %>%
   mutate(
     # CSS Symptom severity Scores
-   
-    #Calculate Inattention Severity: 
-    CSS_Inatt = sum(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13,
-    CSS_B_15, CSS_B_17),
-    #Calculate Hyperactivity/Impulsivity Severity: 
-    CSS_HypImp = sum(CSS_B_2 + CSS_B_4 + CSS_B_6 + CSS_B_8 + CSS_B_10 + CSS_B_12 + CSS_B_14 + 
-    CSS_B_16 + CSS_B_18),
     
-     ## Function items 1-10
-    CSS_Fx_Total = rowSums(select(., starts_with("CSS_Function_")), na.rm = TRUE),
-     # NOT SURE WHAT THIS IS STILL (todo)
-    CSS_B2_Total = rowSums(select(., starts_with("CSS_B2_")), na.rm = TRUE),
-  
-     # CSS Count Variables
-    CSS_Inatt_Count = sum(CSS_1_Count, CSS_3_Count, CSS_5_Count, CSS_7_Count, CSS_9_Count, CSS_11_Count, CSS_13_Count, CSS_15_Count, CSS_17_Count),
+    # Calculate Inattention Severity: 
+    CSS_Inatt = rowSums(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17)), na.rm = TRUE),
     
-    CSS_HypImp_Count = sum(CSS_2_Count, CSS_4_Count, CSS_6_Count, CSS_8_Count, CSS_10_Count, CSS_12_Count, CSS_14_Count, CSS_16_Count, CSS_18_Count),
-
+    # Calculate Hyperactivity/Impulsivity Severity: 
+    CSS_HypImp = rowSums(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8, CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18)), na.rm = TRUE),
+    
+    # Function items 1-10
+    CSS_Fx_Total = rowSums(across(starts_with("CSS_Function_")), na.rm = TRUE),
+    
+    # Not sure what this is (todo)
+    CSS_B2_Total = rowSums(across(starts_with("CSS_B2_")), na.rm = TRUE),
+    
+    # CSS Count Variables
+    CSS_Inatt_Count = rowSums(across(c(CSS_1_Count, CSS_3_Count, CSS_5_Count, CSS_7_Count, CSS_9_Count, CSS_11_Count, CSS_13_Count, CSS_15_Count, CSS_17_Count)), na.rm = TRUE),
+    
+    CSS_HypImp_Count = rowSums(across(c(CSS_2_Count, CSS_4_Count, CSS_6_Count, CSS_8_Count, CSS_10_Count, CSS_12_Count, CSS_14_Count, CSS_16_Count, CSS_18_Count)), na.rm = TRUE),
+    
     # Other Daily Scored Scales
-DEBQ_Total = rowSums(select(., starts_with("DEBQ_")), na.rm = TRUE),
-BDEFS_Total = rowSums(select(., starts_with("BDEFS_")), na.rm = TRUE),
-UPPS_Total = rowSums(select(., starts_with("UPPS_")), na.rm = TRUE)
-  )
+    DEBQ_Total = rowSums(across(starts_with("DEBQ_")), na.rm = TRUE),
+    BDEFS_Total = rowSums(across(starts_with("BDEFS_")), na.rm = TRUE),
+    UPPS_Total = rowSums(across(starts_with("UPPS_")), na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+```
+
+### functions to create person means and person deviations
+```{r echo=T}
+#function to create person means
+create.person.mean <- function(df, var, ...) {
+  df %>%
+    group_by(...) %>%
+    mutate("{{var}}.m" := mean({{var}}, na.rm=T))
+}
+#function to create person deviations (note, must have person means already made)
+create.deviation <- function(df, var, var.m) {
+  df <- df %>%
+    rowwise() %>%
+    mutate("{{var}}.d" := {{var}} - {{var.m}})
+}
+
+create.3day.rolling.avg <- function(df, var, num) {
+  df %>%
+    group_by(id) %>%
+    mutate("{{var}}.roll" := rollapply({{var}}, 3,  mean, align="center", fill=NA))
+}
+
+
+```
+
+
+## create outcome lists to loop through functions
+```{r echo=T}
+
+#person-centered deviations
+outcomelist <- c("E2",
+           "P4",
+           "LH",
+           "CSS_Fx_Total",
+           "CSS_B2_Total",
+           "CSS_Inatt",
+           "CSS_HypImp",
+           "CSS_Inatt_Count",
+           "CSS_HypImp_Count",
+           "BDEFS_Total", 
+           "UPPS_Total",
+           "DEBQ_Total"
+           ) %>% noquote()
+
+#person-centered deviations
+outcomelist.d <- c("E2.d",
+           "P4.d",
+           "LH.d",
+           "CSS_Fx_Total.d",
+           "CSS_B2_Total.d",
+           "CSS_Inatt.d",
+          "CSS_Inatt_Count.d",
+           "CSS_HypImp.d",
+           "CSS_HypImp_Count.d",
+           "BDEFS_Total.d", 
+           "UPPS_Total.d",
+           "DEBQ_Total.d"
+           ) %>% noquote()
+
+#rolling averages
+outcomelist.roll <- c("E2.roll",
+"P4.roll",
+"LH.roll",
+"CSS_Fx_Total.roll",
+"CSS_B2_Total.roll",
+"CSS_Inatt.roll",
+"CSS_HypImp.roll",
+"CSS_Inatt_Count.roll",
+"CSS_HypImp_Count.roll",
+"BDEFS_Total.roll", 
+           "UPPS_Total.roll",
+           "DEBQ_Total.roll"
+) %>% noquote()
+
+View(df)
+
+
+```
+
+```{r}
+
+#ROLLING AVGS
+
+#create rolling averages on RAW variables
+for (i in outcomelist) {
+  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
+}
+
+#MEANS
+
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in outcomelist.roll) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in outcomelist) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#PERSON-DEVIATIONS
+
+#for raw deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+#for rolling avgs deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist.roll) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+
+#Check 
+df %>% select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
 
 ```
 
@@ -126,8 +324,7 @@ formatted_list <- paste(variable_names, collapse = ", ")
 cat(formatted_list)
 ```
 
-
-# Create dichotomous "mensdayone" to indicate first day of period
+# Create dichotomous mensdayone/mensdayonefirst to indicate first day of period
 ```{r }
 
 
@@ -139,10 +336,6 @@ df <- df %>%
 
 df <- df %>%
   arrange(id, date_rated)
-
-#Add 208 Menses start date 
-df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
-df %>% filter(id==208) %>% View()
 
 
 df$StartPeriod <- as.numeric(df$StartPeriod)
@@ -173,12 +366,12 @@ df <- df %>%
 
 #Check
 
-df %>% select(id, date_rated, mensdayone, mensdayonefirst, PosLHTest) %>% View()
+#df %>% select(id, date_rated, mensdayone, mensdayonefirst, PosLHTest) %>% View()
 
 
 ```
 
-#This chunk creates a new variable called "LHposday" (0/1/NA) that represents the positive LH day.
+# Create "LHposday" (0/1/NA) that represents the positive LH day.
 ```{r }
 
 ##View(df)
@@ -208,12 +401,11 @@ df <- df %>%
   ungroup()  # Remove the grouping
 
 #Check vars
-df %>% select(id, date_rated, mensdayonefirst, LHposdayfirst) %>% View()
+#df %>% select(id, date_rated, mensdayonefirst, LHposdayfirst) %>% View()
 
 ```
 
-
-# filter out based on ids (if using LH-based coding, you want to only include participants who have had a positive LH test, otherwise the code will be weird and give you a million zeroes)
+# Remove people who never had a positive LH test
 ```{r}
 
 # Create a person-level variable
@@ -235,10 +427,10 @@ df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst) %>% hea
 
 ```
 
-# Code Cycle Days
+# Code Cycle Day Forward + Backward count from menses onset
 ```{r cycleday}
 
-#make A the variable where mensdayonefirst starts AND period starts
+#make A as a variable copy of mensdayonefirst
 df$A <- df$mensdayonefirst
 
 cycleCount <- function(x) {
@@ -250,7 +442,7 @@ cycleCount <- function(x) {
     num <- seq_along(x) - i
     #Add 1 to values greater than equal to 0
     num[num >= 0] <- num[num >= 0] + 1
-    num[num < -15 | num > 11] <- NA #jb changed days here 8/24/21
+    num[num < -15 | num > 11] <- NA 
     num
   })
   #Select the first non-NA values from the sequence
@@ -265,11 +457,11 @@ df <- df %>% select(!A)
 ##View(df)
 
 #Check vars
-df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, cycleday) %>% View()
+#df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, cycleday) %>% View()
 
 ```
 
-#ways to view and check that the cycle day code looks right
+# Review Data, looking for cycleday=0 and removing those who never had any menses onsets
 ```{r}
 
 #View in a separate window and manually scroll through
@@ -286,7 +478,7 @@ df %>% filter(cycleday==0) %>% pull(id)
 # NOTE 2024-07-09: There are 2 people with lots of zeroes (see Jordan's note above in chunk) and it looks to me like they did not report a menses in the daily dataset: 331, 332. They have no menses onset dates
 
 #View in a separate window and manually scroll through
-df %>% select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
+#df %>% select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
 
 # List of IDs to remove
 ids_to_remove <- c(331, 332)
@@ -297,9 +489,7 @@ df <- df %>% filter(!(id %in% ids_to_remove))
 
 ```
 
-
-
-#step 4b: make daycountLH, based on positive LH test (LH test day = 0)
+# Make daycountLH, based on positive LH test (LH test day = 0)
 ```{r daycountLH}
 #make A a new temp column where pt received pos ov test
 df$A <- df$LHposdayfirst
@@ -329,7 +519,7 @@ df <- df %>% select(!A)
 #df %>% select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
 ```
 
-#View the number of observations for each cycleday
+# View the number of observations for each cycleday
 ```{r daycountLH checking}
 
 #how many daily ratings got assigned each cycle day?
@@ -339,8 +529,7 @@ View(nobs2)
 
 ```
 
-
-#Cycle Phase Coding - MENSES COUNT PART
+# Cycle Phase Coding - MENSES COUNT PART
 reminder: dummy code comes from Schmalenberger 2021 appendix
 ```{r cyclephase_count}
 
@@ -362,8 +551,7 @@ df <- df %>% mutate(cyclephase_count = case_when(periov_count==1 ~ 1,
 
 ```
 
-#Cycle Phase Coding - LH COUNT PART
-
+# Cycle Phase Coding - LH COUNT PART
 ```{r cyclephase_LH}
 
 #note: the perimenstrual phase is still coded based on menses count variable, but for the purpose of keeping the dummy code labeling clear, we name it *perimenstrual_LH* to indicate that this variable gets included in the dummy code set of LH-based phasing; again, all of this information is from Schmalenberger 2021 appendix
@@ -475,9 +663,8 @@ df <- df %>%
 
 ```
 
-#step 6: review for any days that got double-counted
--when using LH-based phasing for all 4 phases, the most likely possibility for overlap is a day that got labeled midfollicular by LH-count and perimenstrual by menses count. *Perimenstrual_count trumps midfollicular by LH count* in this instance.
--any other overlaps within the dummy code are likely miscoded or an abnormal cycle.
+# REVIEW FOR OVERLAPPING CYCLE PHASE CODING
+-when using LH-based phasing for all 4 phases, the most likely possibility for overlap is a day that got labeled midfollicular by LH-count and perimenstrual by menses count. *Perimenstrual_count trumps midfollicular by LH count* in this instance. any other overlaps within the dummy code are likely miscoded or an abnormal cycle.
 ```{r}
 
 #check overlaps: goal is to only have 6 possible group combinations here (1 row per dummy coded phase, then a row where ALL are NA)
@@ -487,10 +674,10 @@ df %>%
   summarize(n=n())
 
 #make note of errors - Tory 7/9/24
-# peri and midfol = 16
-# midlut and peri- 103
-# earlylut and peri = 30
-# periov and perimens = 52
+# peri and midfol = 9
+# midlut and peri- 87
+# earlylut and peri = 3
+# periov and perimens = 64
 
 #example code to review midfol_LH and perimenstrual_LH overlaps, if they exist
 
@@ -509,7 +696,7 @@ df %>%
 
 ```
 
-# REVIEWING AND FIXING OVERLAPS -- MIFOL AND PERI
+# N=1 - MIFOL AND PERI --> REVIEWING AND FIXING OVERLAPS
 ```{r}
 #View overlapping DAYS Dataset (N=9: )
 
@@ -523,109 +710,201 @@ midfol_peri_overlaps <- df %>% filter(midfol_LH==1 & perimenstrual_LH==1) %>%
 
 print(midfol_peri_overlaps)
 
-# 7/9/24: 208 216 225 251 264 270 279 281 286 312 331 332
+# 7/9/24: 216, 222, 241, 251, 324
 
 # I will replace all of these such that peri wins
 
+df  <- df  %>%
+  mutate(midfol_LH = case_when(perimenstrual_LH==1 ~ 0,
+                                        TRUE ~ midfol_LH)) 
+
+
+# Filter the dataframe to check for leftover overlaps
+filtered_df <- df %>% 
+  filter(midfol_LH == 1 & perimenstrual_LH == 1)
+
+# Output a list of ids that still overlap
+id_list <- filtered_df %>% pull(id)
+id_list
+
+```
+
+# NONE - MIDLUTEAL AND PERI --> REVIEWING AND FIXING OVERLAPS
+```{r}
+#review midlut and perimens overlaps - can override midluteal with perimens IF luteal phase is short but still seems normal (such as 9-11 days)
+
+## make notes of any SUPER short luteal phases (like 4-5 days) that you might want to flag for anovulation
+
+#df %>% filter(midluteal_LH==1 & perimenstrual_LH==1) %>% select(id, date_rated, daycountLH, cycleday, midluteal_LH, perimenstrual_LH) %>% View()
+
+#OVERRIDE MIDLUTEALS WITH PERIs:
+
+df  <- df  %>%
+  #if perimenstrual by firstdayofperiod and midlut by count after LH test are both 1, perimen wins, make midlut=0
+  mutate(midluteal_LH = case_when(perimenstrual_LH==1 ~ 0,
+                                        TRUE ~ midluteal_LH)) 
+
+# Filter the dataframe to check for leftover overlaps
+filtered_df <- df %>% 
+  filter(midfol_LH == 1 & perimenstrual_LH == 1)
+
+# Output a list of ids that still overlap
+id_list <- filtered_df %>% pull(id)
+id_list
+
+```
+
+# NONE - EARLY-LUTEAL AND PERI --> REVIEWING AND FIXING OVERLAPS
+```{r}
+
+df %>% filter(earlylut_LH==1 & perimenstrual_LH==1) %>% 
+  select(id, date_rated, mensdayonefirst, LHposdayfirst, daycountLH, cycleday, earlylut_LH, perimenstrual_LH) %>% View()
+
+#df %>% filter(id==222) %>% View()
+
+#good practice to review again and ensure that dummy code is fixed
+df %>%
+  group_by(periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
+  summarize(n=n())
+```
+
+# SKIP: Identify participants who still have overlapping cycle phases
+```{r eval=FALSE, include=FALSE}
+
+participants_with_multiple_LH <- df %>%
+  rowwise() %>%
+  mutate(sum_LH = sum(c(midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) == 1)) %>%
+  filter(sum_LH > 1) %>%
+  ungroup() %>%
+  distinct(id)
+
+# Filter the original dataset to include all observations of the identified participants so you can view their cycle and count data to see where the errors are
+
+review_these <- df %>%
+  filter(id %in% participants_with_multiple_LH$id)
+
+review_these %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) %>% View()
+
+# NONE
+
+# Extract the list of IDs with overlaps
+id_list <- participants_with_multiple_LH$id
+
+# Print the list of IDs as a comma-separated string
+id_list_string <- paste(id_list, collapse = ", ")
+cat(id_list_string)
+
+```
+ 
+# Count participants and rows
+```{r CountIDs}
+
+# Count how many remaining ids I have in the dataset
+unique_id_count <- length(unique(df$id))
+# Print the number of unique IDs
+print(unique_id_count)
+
+# NUMBER OF ROWS
+print(nrow(df))
+```
+
+# Calculate "Hybrid" CycleDay 
+```{r}
+#create hybrid version of cycle day:
+df <- df %>%
+  mutate(hybridcycleday = case_when((daycountLH >= -7 & daycountLH <= 5) ~ 
+                                      paste(as.character(daycountLH), "L", sep = ""),
+                                 (cycleday >= -9 & cycleday <= 7) ~ 
+                                   paste(as.character(cycleday), "M",  sep = ""),
+                                 TRUE ~ NA_character_))
+
+df <- df %>%
+  filter(!is.na(hybridcycleday)) %>%
+  arrange(id, date_rated)
+
+hybridcycleday_order <- c("-7L",
+                       "-6L",
+                       "-5L",
+                       "-4L",
+                       "-3L",
+                       "-2L",
+                       "-1L",
+                       "0L",
+                       "1L",
+                       "2L",
+                       "3L",
+                       "4L",
+                       "5L",
+                       "-9M",
+                       "-8M",
+                       "-7M",
+                       "-6M",
+                       "-5M",
+                       "-4M",
+                       "-3M",
+                       "-2M",
+                       "-1M",
+                       "1M",
+                       "2M",
+                       "3M",
+                       "4M",
+                       "5M",
+                       "6M",
+                       "7M")
 ```
 
 
-#VIEWING EACH PERSON AS A GRAPH WITH SX AND HORMONES
 
-#FUNCTION TO PLOT BY HORMONES AND OUTCOME_VAR BY ID (plot_participant_data(data, participant_id, outcome_var, output_dir))
-```{r PERSON-PLOT}
-library(tidyverse)
-library(ggplot2)
-library(grid)
-library(gridExtra)
-library(zoo)
-library(lubridate)
+#FUNCTION TO PLOT EACH PERSON AS A GRAPH WITH SX AND HORMONES
+```{r PERSON-PLOT, warning=FALSE}
 
 plot_participant_data <- function(data, participant_id, outcome_var, outcome_label, output_dir) {
-  # Ensure the data is ungrouped
   data <- ungroup(data)
-  
-  # Check and convert id column if necessary
   if (!is.null(data$id)) {
     data$id <- as.numeric(as.character(data$id))
   } else {
     stop("Column 'id' not found in the dataset")
   }
-  
-  # Ensure participant_id is numeric
   participant_id <- as.numeric(participant_id)
-  
-  # Filter data for the given participant_id
-  participant_data <- data %>%
-    filter(id == participant_id)
-  
-  # Check if any data is available for the participant
+  participant_data <- data %>% filter(id == participant_id)
   if (nrow(participant_data) == 0) {
     stop(paste("No data available for participant ID:", participant_id))
   }
-  
-  # Convert date_rated to Date type
-  participant_data$date_rated <- as.Date(mdy(participant_data$date_rated))
-  
-  # Convert dates to numeric (days since the earliest date)
-  participant_data$date_numeric <- as.numeric(participant_data$date_rated - min(participant_data$date_rated))
-  
-  # Summarize non-NA counts and total days
+  participant_data$date_rated <- as.Date(participant_data$date_rated, format = "%m/%d/%Y")
+  if (all(is.na(participant_data$date_rated))) {
+    stop("Error: date_rated column could not be converted to Date type")
+  }
+  participant_data$date_numeric <- as.numeric(participant_data$date_rated - min(participant_data$date_rated, na.rm = TRUE))
   non_na_counts <- participant_data %>%
-    summarise(across(c(E2, P4, LH, !!sym(outcome_var)), ~sum(!is.na(.))),
-              total_days = n())
-  
-  # Function to safely calculate z-scores
+    summarise(across(c(E2, P4, LH, !!sym(outcome_var)), ~sum(!is.na(.))), total_days = n())
   safe_scale <- function(x) {
-    if (all(is.na(x)) || length(unique(x)) == 1) {
-      return(rep(0, length(x)))
-    }
+    if (all(is.na(x)) || length(unique(x)) == 1) return(rep(0, length(x)))
     as.vector(scale(x))
   }
-  
-  # Calculate z-scores and 3-day rolling averages
   participant_data <- participant_data %>%
     mutate(across(c(E2, P4, LH, !!sym(outcome_var)), 
-                  list(z = ~safe_scale(.),
-                       z_roll = ~rollapply(safe_scale(.), 3, mean, fill = NA, align = "center")),
-                  .names = "{.col}_{.fn}"))
-  
-  # Calculate derivatives (rate of change)
-  participant_data <- participant_data %>%
-    mutate(across(ends_with("_z_roll"), 
-                  list(d = ~c(NA, diff(.))),
-                  .names = "{.col}_{.fn}"))
-  
-  # Safe correlation function
+                  list(z = ~safe_scale(.), z_roll = ~rollapply(safe_scale(.), 3, mean, fill = NA, align = "center")),
+                  .names = "{.col}_{.fn}")) %>%
+    mutate(across(ends_with("_z_roll"), list(d = ~c(NA, diff(.))), .names = "{.col}_{.fn}"))
   safe_cor <- function(x, y) {
-    if (all(is.na(x)) || all(is.na(y)) || length(unique(x)) == 1 || length(unique(y)) == 1) {
-      return(NA)
-    }
+    if (all(is.na(x)) || all(is.na(y)) || length(unique(x)) == 1 || length(unique(y)) == 1) return(NA)
     cor(x, y, use = "pairwise.complete.obs")
   }
-  
-  # Calculate correlations
   corr_E2 <- safe_cor(participant_data$E2_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
   corr_P4 <- safe_cor(participant_data$P4_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
   corr_LH <- safe_cor(participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
-  
-  # Calculate correlations of derivatives
   corr_dE2 <- safe_cor(participant_data$E2_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
   corr_dP4 <- safe_cor(participant_data$P4_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
   corr_dLH <- safe_cor(participant_data$LH_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
-  
-  # Identify Mondays
   mondays <- participant_data$date_numeric[wday(participant_data$date_rated) == 2]
-  
-  # Get all y values for setting y-axis limits
   all_y_values <- c(participant_data$P4_z_roll, participant_data$E2_z_roll, 
                     participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
-  
-  # Get the range of dates where data exists
   min_date <- min(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
   max_date <- max(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
-  
-  # Create the plot
+  if (is.infinite(min_date) || is.infinite(max_date) || is.na(min_date) || is.na(max_date)) {
+    stop("Error: 'min_date' or 'max_date' is invalid")
+  }
+
   p <- ggplot(participant_data, aes(x = date_numeric)) +
     geom_line(aes(y = P4_z_roll, color = "P4"), linewidth = 1) +
     geom_point(aes(y = P4_z_roll), color = "#D62728", size = 3) +
@@ -638,46 +917,30 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
     geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
     scale_color_manual(values = c("P4" = "#D62728", "E2" = "#1F77B4", "LH" = "#2CA02C", "Clinical Outcome" = "black")) +
     labs(title = paste("Menstrual Cycle Hormones and", outcome_label,"for Participant", participant_id),
-         x = "Date",
-         y = paste(outcome_label, "\nZ-scored, 3d Rolling Avg"),
-         color = "Legend") +
+         x = "Date", y = paste(outcome_label, "\nZ-scored, 3d Rolling Avg"), color = "Legend") +
     theme_minimal() +
-    theme(
-      plot.title = element_text(size = 14, face = "bold"),
-      axis.title = element_text(size = 12),
-      axis.text = element_text(size = 10),
-      legend.title = element_blank(),
-      legend.text = element_text(size = 10),
-      legend.position = "right",
-      legend.box = "horizontal",
-      legend.margin = margin(0, 0, 10, 0),
-      plot.margin = margin(10, 10, 30, 10)
-    ) +
+    theme(plot.title = element_text(size = 14, face = "bold"), axis.title = element_text(size = 12),
+          axis.text = element_text(size = 10), legend.title = element_blank(), legend.text = element_text(size = 10),
+          legend.position = "right", legend.box = "horizontal", legend.margin = margin(0, 0, 10, 0),
+          plot.margin = margin(10, 10, 30, 10)) +
     scale_x_continuous(breaks = seq(min_date, max_date, by = 3),
                        labels = format(min(participant_data$date_rated) + seq(min_date, max_date, by = 3), "%b %d"),
-                       limits = c(min_date, max_date),
-                       expand = c(0.02, 0)) +
+                       limits = c(min_date, max_date), expand = c(0.02, 0)) +
     scale_y_continuous(limits = c(min(all_y_values[is.finite(all_y_values)], na.rm = TRUE) - 1,
-                                  max(all_y_values[is.finite(all_y_values)], na.rm = TRUE) + 1),
-                       expand = c(0.1, 0.1))
+                                  max(all_y_values[is.finite(all_y_values)], na.rm = TRUE) + 1), expand = c(0.1, 0.1))
 
-  # Add shading for menstruation and LH surge
   mens_dates <- participant_data$date_numeric[participant_data$mensdayonefirst == 1]
   LH_dates <- participant_data$date_numeric[participant_data$LHposdayfirst == 1]
 
   for (date in mens_dates) {
-    p <- p + annotate("rect", xmin = date, xmax = date + 4, 
-                      ymin = -Inf, ymax = Inf, fill = "pink", alpha = 0.3)
+    p <- p + annotate("rect", xmin = date, xmax = date + 4, ymin = -Inf, ymax = Inf, fill = "pink", alpha = 0.3)
   }
-
   for (date in LH_dates) {
-    p <- p + annotate("rect", xmin = date, xmax = date + 1, 
-                      ymin = -Inf, ymax = Inf, fill = "#2CA02C", alpha = 0.3)
+    p <- p + annotate("rect", xmin = date, xmax = date + 1, ymin = -Inf, ymax = Inf, fill = "#2CA02C", alpha = 0.3)
   }
 
-  # Add annotations for mensdayonefirst and LHposdayfirst
   min_y <- min(all_y_values[is.finite(all_y_values)], na.rm = TRUE)
-  if (is.infinite(min_y) || is.na(min_y)) min_y <- -1  # Default value if all are infinite or NA
+  if (is.infinite(min_y) || is.na(min_y)) min_y <- -1
   min_y <- min_y - 0.5
 
   p <- p +
@@ -686,7 +949,6 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
     geom_point(data = data.frame(x = LH_dates, y = rep(min_y, length(LH_dates))),
                aes(x = x, y = y), color = "#2CA02C", shape = 17, size = 4)
 
-  # Create correlation text
   format_corr <- function(corr) {
     if (is.na(corr)) return("N/A")
     return(sprintf("%.2f", corr))
@@ -698,129 +960,71 @@ plot_participant_data <- function(data, participant_id, outcome_var, outcome_lab
     format_corr(corr_dE2), format_corr(corr_LH), format_corr(corr_dLH)
   )
 
-  # Append non-missing counts to the correlation text
   nonmissing_text <- sprintf(
     "Available Data for this Participant:\nP4=%d, E2=%d, LH=%d, %s=%d out of %d days.",
     non_na_counts$P4, non_na_counts$E2, non_na_counts$LH, outcome_label, 
     non_na_counts[[outcome_var]], non_na_counts$total_days
   )
 
-  # Check which predictors have sufficient non-NA values and variability
   predictors <- c("P4_z_roll", "P4_z_roll_d", "E2_z_roll", "E2_z_roll_d")
   valid_predictors <- predictors[sapply(predictors, function(var) {
     sum(!is.na(participant_data[[var]])) > 1 && sd(participant_data[[var]], na.rm = TRUE) > 0
   })]
 
-  # Map predictors to desired labels
   predictor_labels <- c("P4_z_roll" = "levP4", "P4_z_roll_d" = "derP4",
                         "E2_z_roll" = "levE2", "E2_z_roll_d" = "derE2")
 
-  # Perform multiple regression if there are valid predictors
   reg_text <- "Regression results: Not enough valid data for regression."
   if (length(valid_predictors) > 0) {
     formula_str <- paste(outcome_var, "~", paste(valid_predictors, collapse = " + "))
     model <- lm(as.formula(formula_str), data = participant_data)
     model_summary <- summary(model)
-    
-    # Check if the model has valid coefficients
     if (!is.null(model_summary$coefficients) && nrow(model_summary$coefficients) > 0) {
-      # Extract regression coefficients and p-values
       coef_info <- model_summary$coefficients
-
       format_coef <- function(coef, p_val) {
-        if (p_val < 0.001) {
-          return(sprintf("%.2f***", coef))
-        } else if (p_val < 0.01) {
-          return(sprintf("%.2f**", coef))
-        } else if (p_val < 0.05) {
-          return(sprintf("%.2f*", coef))
-        } else if (p_val < 0.15) {
-          return(sprintf("%.2f+", coef))
-        } else {
-          return(sprintf("%.2f", coef))
-        }
+        if (is.na(p_val)) return(sprintf("%.2f (NA)", coef))
+        if (p_val < 0.001) return(sprintf("%.2f***", coef))
+        if (p_val < 0.01) return(sprintf("%.2f**", coef))
+        if (p_val < 0.05) return(sprintf("%.2f*", coef))
+        if (p_val < 0.15) return(sprintf("%.2f+", coef))
+        return(sprintf("%.2f", coef))
       }
       reg_text <- paste(
         "Regression results:",
-        paste(
-          sapply(valid_predictors, function(var) {
-            label <- predictor_labels[[var]]
-            if (var %in% rownames(coef_info)) {
-              sprintf("%s: %s", label, format_coef(coef_info[var, "Estimate"], coef_info[var, "Pr(>|t|)"]))
-            } else {
-              sprintf("%s: N/A", label)
-            }
-          }),
-          collapse = ", "
-        ),
+        paste(sapply(valid_predictors, function(var) {
+          label <- predictor_labels[[var]]
+          if (var %in% rownames(coef_info)) {
+            sprintf("%s: %s", label, format_coef(coef_info[var, "Estimate"], coef_info[var, "Pr(>|t|)"]))
+          } else {
+            sprintf("%s: N/A", label)
+          }
+        }), collapse = ", "),
         sep = "\n"
       )
     }
   }
 
   combined_text <- paste(nonmissing_text, correlation_text, reg_text, sep = "\n")
-
-  # Print combined text for debugging
   print(combined_text)
-
-  # Create a separate grob for the combined text
-  text_grob <- textGrob(combined_text, 
-                        x = 0.05, y = 0.5,  
-                        just = "left", 
-                        gp = gpar(fontsize = 9))
-
-  # Arrange the plot and combined text
-  final_plot <- arrangeGrob(p, text_grob, 
-                            ncol = 1, 
-                            heights = c(4, 1))
-  
-  # Display the plot in R console
+  text_grob <- textGrob(combined_text, x = 0.05, y = 0.5, just = "left", gp = gpar(fontsize = 9))
+  final_plot <- arrangeGrob(p, text_grob, ncol = 1, heights = c(4, 1))
   grid.newpage()
   grid.draw(final_plot)
-
-  # Save the plot to the specified output directory
   ggsave(filename = file.path(output_dir, paste0("participant_", participant_id, "_", outcome_var, "_hormplot.png")),
-         plot = final_plot,
-         width = 12, height = 8, units = "in")
-
+         plot = final_plot, width = 12, height = 8, units = "in")
   grid.draw(final_plot)
 }
 
+#TEST
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+#dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
-df <- df %>% arrange(id, date_rated, .na.last = FALSE)
-
-View(df)
-
-     # Example with specific data
-plot_participant_data(df, 208, "CSS_Fx_Total", "CSS Function", dailydir)
-
-
-# Check if filtering returns any rows for this pt
-filtered_df <- df %>% filter(id == 208)
-print(filtered_df)
-
-df %>%
-  filter(id==208) %>% 
-  select(id, date_rated, LHposdayfirst, daycountLH,
-         mensdayonefirst, StartPeriod, cycleday,
-         midfol_LH, periov_LH, earlylut_LH,
-         midluteal_LH, perimenstrual_LH, cyclephase_LH) %>% View() 
-
-
-
-
-# Participants to Investigate: 
-
-
-
-## - MIDFOL and PERI OVERLAP: 208 216 225 251 264 270 279 281 286 312 331 332
+#plot_participant_data(df, 208, 'CSS_Fx_Total', "CSS Functional Impact", dailydir)
 
 
 ```
 
-# Create "id_list": list of all participant IDs to loop through
+# Create "id_list": list of all remaining participant IDs to loop through
 ```{r}
 
 # Load necessary library
@@ -836,19 +1040,54 @@ id_list <- unique(df$id)
 # Print the number of unique IDs and the list of unique IDs in a sentence
 cat("There are", unique_id_count, "unique IDs in the dataset. The IDs are:", paste(id_list, collapse = ", "), ".\n")
 
-#There are 65 unique IDs in the dataset. The IDs are: 203, 205, 210, 213, 214, 216, 218, 219, 221, 222, 223, 224, 225, 227, 228, 230, 232, 233, 235, 237, 238, 239, 240, 241, 242, 243, 245, 246, 248, 249, 250, 251, 252, 254, 256, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 271, 272, 273, 275, 277, 278, 280, 281, 283, 284, 286, 287, 289, 305, 307, 310, 314, 318, 321, 324.
+
+#There are 66 unique IDs in the dataset. The IDs are: 203, 205, 206, 208, 209, 213, 214, 218, 221, 223, 224, 225, 227, 228, 230, 232, 233, 235, 237, 239, 241, 242, 243, 245, 246, 248, 249, 251, 252, 254, 256, 258, 259, 260, 261, 262, 263, 265, 266, 267, 268, 270, 271, 272, 273, 275, 277, 278, 279, 281, 283, 284, 286, 287, 289, 290, 293, 305, 307, 310, 312, 314, 317, 318, 321, 324.
+```
+
+```{r}
+
+# There are 12 people whose hormones should probably be removed for sensitivity analysis
+badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
+#Filtering for sensitivity analyses: 
+# Remove rows with specified IDs
+df_sens <- df %>% filter(!(id %in% badhorm_ids))
+
+```
+
+# Count participants and rows - FULL DATASET
+
+```{r}
+# Count how many remaining ids I have in the dataset
+unique_id_count <- length(unique(df$id))
+# Print the number of unique IDs
+print(unique_id_count)
+
+# NUMBER OF ROWS
+print(nrow(df))
+```
+
+# Count participants and rows - SENSITIVITY SMALLER DATASET
+
+```{r}
+# Count how many remaining ids I have in the dataset
+unique_id_count <- length(unique(df_sens$id))
+# Print the number of unique IDs
+print(unique_id_count)
+
+# NUMBER OF ROWS
+print(nrow(df_sens))
 ```
 
 
-# MAKE ALL CSS_Fx_Total + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Fx_Total
 
-# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
+# CALLING PERSON GRAPHING FUNCTIONS
 
+## 1 - MAKE ALL CSS_Fx_Total + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Fx_Total
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+dailydir <- '~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 # Loop through each participant ID and call the function - CSS_Fx_Total
 for (participant_id in id_list) {
@@ -856,17 +1095,13 @@ for (participant_id in id_list) {
 }
 
 
-
 ```
 
-# MAKE ALL HYPIMP + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_HypImp
-
-# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
-
+## 2 - MAKE ALL HYPIMP + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_HypImp
 ```{r warning=FALSE}
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 
 # Loop through each participant ID and call the function - CSS_HypImp
@@ -876,15 +1111,12 @@ for (participant_id in id_list) {
 
 ```
 
-# MAKE ALL INATT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
-
-# DONE - see output here: https://uofi.box.com/s/oj3cbkz08qtrcsgvfn3fa6on9b384o1r
-
+## 3 - MAKE ALL INATT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
 ```{r warning=FALSE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 # Loop through each participant ID and call the function - CSS_Inatt
 for (participant_id in id_list) {
@@ -892,13 +1124,12 @@ for (participant_id in id_list) {
 }
 ```
 
-# MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
-
+## 4 - MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
 ```{r warning=FALSE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 # Loop through each participant ID and call the function - CSS_Inatt
 for (participant_id in id_list) {
@@ -906,39 +1137,21 @@ for (participant_id in id_list) {
 }
 ```
 
-# MAKE ALL HYP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
-
+## 5 - MAKE ALL HYPIMP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
 ```{r warning=FALSE}
 
 # Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
 
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 # Loop through each participant ID and call the function
 for (participant_id in id_list) {
-  plot_participant_data(df, participant_id, 'CSS_Hyp_Count', "CSS Hyperactive Criteria (Count)", dailydir)
-}
-```
-
-# MAKE ALL IMP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function 
-
-```{r warning=FALSE}
-
-# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
-
-dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_06'
-
-# Loop through each participant ID and call the function
-for (participant_id in id_list) {
-  plot_participant_data(df, participant_id, 'CSS_Imp_Count', "CSS Impulsivity Criteria (Count)", dailydir)
+  plot_participant_data(df, participant_id, 'CSS_HypImp_Count', "CSS Hyperactive/Impulsive Criteria (Count)", dailydir)
 }
 ```
 
 
-
-
-
-# Temporary Chunk to create the code --INATT example
+# Temporary Chunk to create the modeling code --INATT example
 ```{r}
 # Check for problematic values in the original variables
 df_clean <- df %>%
@@ -993,9 +1206,8 @@ ggplot(grid_df, aes(x = E2zd, y = predicted_loginatt, color = P4zd, group = P4zd
 # Create a function and run outcomes through
 ```{r}
 
-
 # Define the function
-plot_interaction <- function(data, outcome) {
+plot_interaction <- function(data, outcome, dailydir) {
   # Check for problematic values in the specified variables
   data_clean <- data %>%
     filter(!is.na(.data[[outcome]]) & !is.nan(.data[[outcome]]) & !is.infinite(.data[[outcome]]) &
@@ -1011,32 +1223,44 @@ plot_interaction <- function(data, outcome) {
       E2ch = c(NA, diff(E2)),  # Daily derivative for E2
       P4ch = c(NA, diff(P4))   # Daily derivative for P4
     ) %>%
+    filter(!is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+           !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
+           !is.na(E2ch) & !is.nan(E2ch) & !is.infinite(E2ch) &
+           !is.na(P4ch) & !is.nan(P4ch) & !is.infinite(P4ch)) %>%
     ungroup()
   
   # Create log-transformed outcome
   data_clean <- data_clean %>%
-    mutate(log_outcome = log(.data[[outcome]]))
+    mutate(log_outcome = log(.data[[outcome]])) %>%
+    filter(!is.na(log_outcome) & !is.nan(log_outcome) & !is.infinite(log_outcome))
   
-  # Check for problematic values after transformation and calculation of derivatives
-  data_clean <- data_clean %>%
-    filter(!is.na(log_outcome) & !is.nan(log_outcome) & !is.infinite(log_outcome) &
-           !is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
-           !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
-           !is.na(E2ch) & !is.nan(E2ch) & !is.infinite(E2ch) &
-           !is.na(P4ch) & !is.nan(P4ch) & !is.infinite(P4ch))
-  
-  
-  # Fit the model with cleaned data - with derivs
+  # Fit the models with cleaned data
+  rawmodel <- lmer(as.formula(paste(outcome, "~ E2zd * P4zd + (1 | id)")), data = data_clean)
+  logmodel <- lmer(log_outcome ~ E2zd * P4zd + (1 | id), data = data_clean)
+  model_prand <- lmer(log_outcome ~ E2zd * P4zd + (1 + P4zd | id), data = data_clean)
+  model_erand <- lmer(log_outcome ~ E2zd * P4zd + (1 + E2zd | id), data = data_clean)
   model_derivs <- lmer(log_outcome ~ E2zd * P4zd + E2ch + P4ch + (1 | id), data = data_clean)
   
-  # Print the model summary
-  print(summary(model_derivs))
+  # Print the model summaries
+  # print(summary(rawmodel))
+  # print(summary(logmodel))
+  # print(summary(model_prand))
+  # print(summary(model_erand))
+  # print(summary(model_derivs))
   
-  # Fit the model with cleaned data
-  model <- lmer(log_outcome ~ E2zd * P4zd + (1 + E2zd + P4zd| id), data = data_clean)
+  # Specify the file path for the HTML output - primary model of E2 * P4
+  output_file <- file.path(dailydir, paste(outcome, "horm_tabmodel_output.html", sep = ""))
+  cat("Output file path:", output_file, "\n")
   
-  # Print the model summary
-  print(summary(model))
+  # Generate the HTML output from tab_model without saving to a file
+  tab_model(rawmodel, logmodel, model_prand, model_erand, model_derivs)
+  tab_model_output <- tab_model(rawmodel, logmodel, model_prand, model_erand, model_derivs)
+  
+  # Capture the HTML output as a string
+  html_output <- as.character(tab_model_output)
+  
+  # Manually write the HTML output to the specified file
+  writeLines(html_output, con = output_file)
   
   # Create a grid of values for predictors
   E2zd_seq <- seq(min(data_clean$E2zd), max(data_clean$E2zd), length.out = 100)
@@ -1050,70 +1274,66 @@ plot_interaction <- function(data, outcome) {
   grid_df$P4ch <- mean(data_clean$P4ch, na.rm = TRUE)
   
   # Predict the outcome over the grid
-  grid_df$predicted_log_outcome <- predict(model, newdata = grid_df, re.form = NA)
+  grid_df$predicted_log_outcome <- predict(logmodel, newdata = grid_df, re.form = NA)
   
   # Exponentiate the predicted values to return them to the original scale
   grid_df$predicted_outcome <- exp(grid_df$predicted_log_outcome)
   
   # Plot the interaction
-  plot <- ggplot(grid_df, aes(x = E2zd, y = predicted_outcome, color = P4zd, group = P4zd)) +
+ library(ggplot2)
+
+# Create the interaction plot
+intplot <- ggplot(grid_df, aes(x = E2zd, y = predicted_outcome, color = P4zd, group = P4zd)) +
     geom_line() +
-    labs(title = paste("Interaction between E2zd and P4zd on", outcome),
-         x = "E2zd",
-         y = paste("Predicted", outcome),
-         color = "P4zd") +
-    theme_minimal() +
-    scale_color_gradient(low = "blue", high = "red")
+    labs(
+        title = paste("Interaction between E2zd and P4zd on", outcome),
+        x = "E2zd",
+        y = paste("Predicted", outcome),
+        color = "P4zd"
+    ) +
+    theme_minimal(base_size = 15) +
+    scale_color_gradient(low = "blue", high = "red") +
+    theme(
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        legend.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "white", color = NA), # White background
+        plot.background = element_rect(fill = "white", color = NA),  # White background
+        panel.grid.major = element_line(color = "gray90"), # Light gray major grid lines
+        panel.grid.minor = element_line(color = "gray95")  # Lighter gray minor grid lines
+    )
+
+  # Save and return the plot
+  ggsave(filename = file.path(dailydir, paste0("EPintplot_", outcome, ".tif")), plot = intplot, width = 12, height = 8, units = "in")
   
-  # Return the plot
-  return(plot)
+  return(intplot)
 }
 
+
+```
+
+
+```{r}
+
+dailydir <- '~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
 
 # Example usage
-plot_interaction(df, "CSS_Inatt")
+plot_interaction(df_sens, "CSS_Inatt", dailydir)
+plot_interaction(df_sens, "CSS_Inatt_Count", dailydir) *SIG
 
-plot_interaction(df, "CSS_HypImp")
+plot_interaction(df_sens, "CSS_HypImp", dailydir)
+plot_interaction(df_sens, "CSS_HypImp_Count", dailydir)
 
-plot_interaction(df, "CSS_Fx_Total")
+plot_interaction(df_sens, "CSS_Fx_Total", dailydir)
 
-plot_interaction(df, "CSS_Inatt_Count")
-plot_interaction(df, "CSS_Hyp_Count")
-plot_interaction(df, "CSS_Imp_Count")
+plot_interaction(df_sens, "CSS_B2_Total", dailydir)
 
-plot_interaction(df, "DEBQ_Total")
-plot_interaction(df, "UPPS_Total")
+plot_interaction(df_sens, "UPPS_Total", dailydir)
 
+plot_interaction(df_sens, "BDEFS_Total", dailydir)
 
-```
-
-
-
-
-
-
-# FINISH DATA CLEANING BASED ON DAILY GRAPHS
-
-
-
-
-
-
-
-
-
-## Include: 205*, 281*
-#Exclude: 
-## 264 has only a few days and can be excluded. 
-## 216: does not have any hormone data and does not appear to have menses onset or LH positive test and yet is being coded for cycle phase. I think we need to exclude.
-## 
-```{r}
-
-# List of IDs to remove
-ids_to_remove <- c(216,264)
-
-# Remove rows with specified IDs
-df <- df %>% filter(!(id %in% ids_to_remove))
+ plot_interaction(df_sens, "DEBQ_Total", dailydir)
 
 ```
 
@@ -1121,309 +1341,6 @@ df <- df %>% filter(!(id %in% ids_to_remove))
 
 
 
-#RECODE THE REST: if perimenstrual by firstdayofperiod and midfol by pre-LH count are both 1, perimen wins, make midfol=0
-
-```{r}
-
-df  <- df  %>%
-  mutate(midfol_LH = case_when(perimenstrual_LH==1 ~ 0,
-                                        TRUE ~ midfol_LH)) 
-
-# Filter the dataframe for leftover overlaps
-filtered_df <- df %>% 
-  filter(midfol_LH == 1 & perimenstrual_LH == 1)
-# Output a list of ids that still overlap
-id_list <- filtered_df %>% pull(id)
-id_list
-
-```
-
-```{r}
-
-
-#review midlut and perimens overlaps - can override midluteal with perimens IF luteal phase is short but still seems normal (such as 9-11 days)
-
-## make notes of any SUPER short luteal phases (like 4-5 days) that you might want to flag for anovulation
-
-df %>% filter(midluteal_LH==1 & perimenstrual_LH==1) %>% 
-  select(id, date_rated, daycountLH, cycleday, midluteal_LH, perimenstrual_LH) %>% View()
-
-#code for if you are ready to override midluteals with perimens
-df  <- df  %>%
-  #if perimenstrual by firstdayofperiod and midlut by count after LH test are both 1, perimen wins, make midlut=0
-  mutate(midluteal_LH = case_when(perimenstrual_LH==1 ~ 0,
-                                        TRUE ~ midluteal_LH)) 
-
-## ANY OTHER COMBOS need hand review!!
-
-df %>% filter(earlylut_LH==1 & perimenstrual_LH==1) %>% 
-  select(id, date_rated, mensdayonefirst, LHposdayfirst, daycountLH, cycleday, earlylut_LH, perimenstrual_LH) %>% View()
-
-
-#good practice to review again and ensure that dummy code is fixed
-df %>%
-  group_by(periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
-  summarize(n=n())
-```
-
-# Identify participants who still have more than one of the specified variables having a value of 1 in any observation
-
-```{r}
-
-participants_with_multiple_LH <- df %>%
-  rowwise() %>%
-  mutate(sum_LH = sum(c(midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) == 1)) %>%
-  filter(sum_LH > 1) %>%
-  ungroup() %>%
-  distinct(id)
-
-
-# Filter the original dataset to include all observations of the identified participants so you can view their cycle and count data to see where the errors are
-
-review_these <- df %>%
-  filter(id %in% participants_with_multiple_LH$id)
-
-review_these %>% select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) %>% View()
-
-# Extract the list of IDs with overlaps
-id_list <- participants_with_multiple_LH$id
-
-# Print the list of IDs as a comma-separated string
-id_list_string <- paste(id_list, collapse = ", ")
-cat(id_list_string)
-
-```
- 
- # FOR NOW, eliminate these ids -- we will need to fix later. 
- 
-```{r}
-
-# List of IDs to remove
-ids_to_remove <- c(203, 210, 214, 219, 222, 235, 240, 242, 243, 246, 248, 249, 251, 252, 254, 260, 261, 265, 267, 268, 280, 283, 284, 321)
-
-# Remove rows with specified IDs
-df <- df %>% filter(!(id %in% ids_to_remove))
-
-# Count how many remaining ids I have in the dataset
-unique_id_count <- length(unique(df$id))
-
-# Print the number of unique IDs
-print(unique_id_count)
-
-
-```
-
-
-
-# hybrid cycle day
-```{r}
-#create hybrid version of cycle day:
-df <- df %>%
-  mutate(hybridcycleday = case_when((daycountLH >= -7 & daycountLH <= 5) ~ 
-                                      paste(as.character(daycountLH), "L", sep = ""),
-                                 (cycleday >= -9 & cycleday <= 7) ~ 
-                                   paste(as.character(cycleday), "M",  sep = ""),
-                                 TRUE ~ NA_character_))
-
-df <- df %>%
-  filter(!is.na(hybridcycleday)) %>%
-  arrange(id, date_rated)
-
-hybridcycleday_order <- c("-7L",
-                       "-6L",
-                       "-5L",
-                       "-4L",
-                       "-3L",
-                       "-2L",
-                       "-1L",
-                       "0L",
-                       "1L",
-                       "2L",
-                       "3L",
-                       "4L",
-                       "5L",
-                       "-9M",
-                       "-8M",
-                       "-7M",
-                       "-6M",
-                       "-5M",
-                       "-4M",
-                       "-3M",
-                       "-2M",
-                       "-1M",
-                       "1M",
-                       "2M",
-                       "3M",
-                       "4M",
-                       "5M",
-                       "6M",
-                       "7M")
-```
-
-
-### functions to create person means and person deviations
-```{r echo=T}
-#function to create person means
-create.person.mean <- function(df, var, ...) {
-  df %>%
-    group_by(...) %>%
-    mutate("{{var}}.m" := mean({{var}}, na.rm=T))
-}
-#function to create person deviations (note, must have person means already made)
-create.deviation <- function(df, var, var.m) {
-  df <- df %>%
-    rowwise() %>%
-    mutate("{{var}}.d" := {{var}} - {{var.m}})
-}
-
-create.3day.rolling.avg <- function(df, var, num) {
-  df %>%
-    group_by(id) %>%
-    mutate("{{var}}.roll" := rollapply({{var}}, 3,  mean, align="center", fill=NA))
-}
-
-
-```
-
-## create outcome lists to loop through functions
-```{r echo=T}
-
-#person-centered deviations
-outcomelist <- c("E2",
-           "P4",
-           "LH",
-           "CSS_Fx_Total",
-           "CSS_B2_Total",
-           "CSS_Inatt",
-           "CSS_HypImp",
-           "CSS_Inatt_Count",
-           "CSS_Hyp_Count",
-           "CSS_Imp_Count", 
-           "BDEFS_Total", 
-           "UPPS_Total",
-           "DEBQ_Total"
-           ) %>% noquote()
-
-#person-centered deviations
-outcomelist.d <- c("E2.d",
-           "P4.d",
-           "LH.d",
-           "CSS_Fx_Total.d",
-           "CSS_B2_Total.d",
-           "CSS_Inatt.d",
-           "CSS_HypImp.d",
-           "CSS_Inatt_Count.d",
-           "CSS_Hyp_Count.d",
-           "CSS_Imp_Count.d", 
-           "BDEFS_Total.d", 
-           "UPPS_Total.d",
-           "DEBQ_Total.d"
-           ) %>% noquote()
-
-#rolling averages
-outcomelist.roll <- c("E2.roll",
-"P4.roll",
-"LH.roll",
-"CSS_Fx_Total.roll",
-"CSS_B2_Total.roll",
-"CSS_Inatt.roll",
-"CSS_HypImp.roll",
-"CSS_Inatt_Count.roll",
-"CSS_Hyp_Count.roll",
-"CSS_Imp_Count.roll", 
-"BDEFS_Total.roll", 
-           "UPPS_Total.roll",
-           "DEBQ_Total.roll"
-) %>% noquote()
-
-
-```
-
-```{r}
-
-#ROLLING AVGS
-
-#create rolling averages on RAW variables
-for (i in outcomelist) {
-  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
-}
-
-#MEANS
-
-#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
-for (i in outcomelist.roll) {
-  df <- create.person.mean(df, !!sym({{i}}), id)
-}
-
-#execute for loop: run create.person.mean() on everything in "outcomelist"
-for (i in outcomelist) {
-  df <- create.person.mean(df, !!sym({{i}}), id)
-}
-
-#PERSON-DEVIATIONS
-
-#for raw deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist) {
-  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-#for rolling avgs deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist.roll) {
-  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-
-#Check 
-df %>% select(id, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
-
-
-```
-
-## SAVE DATASET: Save dataset in a new dated folder, with today's date (e.g., "2024_07_04/df_2024_07_04.csv)
-
-```{r}
-
-
-# Get the current date
-today_date <- Sys.Date()
-
-# Format the date as YYYY_MM_DD
-date_string <- format(today_date, "%Y_%m_%d")
-
-# Create the directory path using the formatted date
-dir_path <- file.path("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace", date_string)
-
-# Expand the path to ensure the home directory is correctly referenced
-full_dir_path <- path.expand(dir_path)
-
-# Print the directory path to check
-print(paste("Directory path:", full_dir_path))
-
-# Check if the directory exists and create it if it doesn't
-if (!dir.exists(full_dir_path)) {
-  dir.create(full_dir_path, recursive = TRUE)
-  print(paste("Directory created:", full_dir_path))
-} else {
-  print("Directory already exists.")
-}
-
-# Create the file name using the formatted date
-file_name <- paste0("adhdcyc_daily_", date_string, ".csv")
-
-# Create the full file path
-full_file_path <- file.path(full_dir_path, file_name)
-
-# Print the full file path to check
-print(paste("Full file path:", full_file_path))
-
-# Write the data frame to the dynamically generated file name
-write.csv(df, full_file_path, row.names = FALSE)
-print(paste("File written to:", full_file_path))
-
-
-```
 
 
 # Function to plot by cycle day ("plot_by_cycle_day")
@@ -1643,7 +1560,8 @@ run_and_save_mlms <- function(variable_name, data, output_directory) {
 
 # Run for all Outcomes
 
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+
 df <- df
 
 ```
@@ -1652,16 +1570,16 @@ df <- df
 ```{r}
 
 #E2
-plot_by_cycle_day(df, "E2")
-plot_by_cycle_phase(df, "E2")
+plot_by_cycle_day(df_sens, "E2")
+plot_by_cycle_phase(df_sens, "E2")
 
 #P4
-plot_by_cycle_day(df, "P4")
-plot_by_cycle_phase(df, "P4")
+plot_by_cycle_day(df_sens, "P4")
+plot_by_cycle_phase(df_sens, "P4")
 
 #LH
-plot_by_cycle_day(df, "LH")
-plot_by_cycle_phase(df, "LH")
+plot_by_cycle_day(df_sens, "LH")
+plot_by_cycle_phase(df_sens, "LH")
 
 
 ```
@@ -1681,7 +1599,7 @@ variable_name <- "E2"
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
 run_and_save_plots(variable_name, df, output_directory)
 
@@ -1701,7 +1619,7 @@ variable_name <- "P4"
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
 run_and_save_plots(variable_name, df, output_directory)
 
@@ -1735,7 +1653,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_Inatt", df, output_directory)
+run_and_save_mlms("CSS_Inatt", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1743,10 +1661,9 @@ variable_name <- "CSS_Inatt"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1756,7 +1673,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_HypImp", df, output_directory)
+run_and_save_mlms("CSS_HypImp", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1764,10 +1681,9 @@ variable_name <- "CSS_HypImp"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1777,7 +1693,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_B2_Total", df, output_directory)
+run_and_save_mlms("CSS_B2_Total", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1785,10 +1701,9 @@ variable_name <- "CSS_B2_Total"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1798,7 +1713,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_Fx_Total", df, output_directory)
+run_and_save_mlms("CSS_Fx_Total", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1806,10 +1721,9 @@ variable_name <- "CSS_Fx_Total"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1823,7 +1737,7 @@ CSS_Inatt_Count, CSS_Hyp_Count, CSS_Imp_Count, DEBQ_Total, BDEFS_Total, UPPS_Tot
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_Inatt_Count", df, output_directory)
+run_and_save_mlms("CSS_Inatt_Count", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1831,10 +1745,9 @@ variable_name <- "CSS_Inatt_Count"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1846,42 +1759,22 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("CSS_Imp_Count", df, output_directory)
+run_and_save_mlms("CSS_HypImp_Count", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
-variable_name <- "CSS_Imp_Count"
+variable_name <- "CSS_HypImp_Count"
 
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
 
-# CALL FUNCTIONS: CSS_Hyp_Count
-
-```{r}
-
-#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
-
-run_and_save_mlms("CSS_Hyp_Count", df, output_directory)
-
-# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
-
-variable_name <- "CSS_Hyp_Count"
-
-#### NO NEED TO CHANGE ANYTHING BELOW
-
-df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
-# Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
-
-```
 
 
 # CALL FUNCTIONS: BDEFS_Total
@@ -1890,7 +1783,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("BDEFS_Total", df, output_directory)
+run_and_save_mlms("BDEFS_Total", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1899,9 +1792,9 @@ variable_name <- "BDEFS_Total"
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1913,7 +1806,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("DEBQ_Total", df, output_directory)
+run_and_save_mlms("DEBQ_Total", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1922,9 +1815,9 @@ variable_name <- "DEBQ_Total"
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
@@ -1935,7 +1828,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 #SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
 
-run_and_save_mlms("UPPS_Total", df, output_directory)
+run_and_save_mlms("UPPS_Total", df_sens, output_directory)
 
 # SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
 
@@ -1944,152 +1837,12 @@ variable_name <- "UPPS_Total"
 #### NO NEED TO CHANGE ANYTHING BELOW
 
 df <- df  # Replace with your actual dataframe
-output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
 # Run the plotting function (Phase, Day)
-run_and_save_plots(variable_name, df, output_directory)
+run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
 
 
 
-
-#ARCHIVE: Viewing each person with overlaps as a graph
-#ARCHIVE: this function was working well before and then stopped working :( maybe see if you can find a prior version of it in the chatgpt chat around 7/4/-7/5 2024
-```{r eval=FALSE, include=FALSE}
-
-
-# Function to plot data for a specific participant
-plot_prog_levels <- function(data, participant_id) {
-  # Filter data for the specific participant
-  participant_data <- data %>% filter(id == participant_id)
-  
-  # Check if any data is available for the participant
-  if (nrow(participant_data) == 0) {
-    stop(paste("No data available for participant ID:", participant_id))
-  }
-  
-  # Summarize non-NA counts and total days
-  non_na_counts <- participant_data %>%
-    summarise(
-      non_na_E2 = sum(!is.na(E2)),
-      non_na_P4 = sum(!is.na(P4)),
-      non_na_LH = sum(!is.na(LH)),
-      non_na_CSS_B2_Total = sum(!is.na(CSS_B2_Total)),
-      total_days = n(),
-      .groups = 'drop'
-    )
-  
-  # Print summary of non-NA counts and total days
-  cat(sprintf("Participant %d has %d non-missing P4 values, %d non-missing E2 values, and %d non-missing LH values, and %d non-missing CSS_B2_Total values across %d days of participation.\n", 
-              participant_id, non_na_counts$non_na_P4, non_na_counts$non_na_E2, non_na_counts$non_na_LH, non_na_counts$non_na_CSS_B2_Total, non_na_counts$total_days))
-  
-  # Z-score the relevant variables
-  participant_data <- participant_data %>%
-    mutate(across(c(E2, P4, LH, CSS_B2_Total), scale, .names = "z_{col}"))
-  
-  # Calculate 3-day rolling averages for the z-scored variables
-  participant_data <- participant_data %>%
-    arrange(date_rated) %>%
-    mutate(across(starts_with("z_"), ~ zoo::rollmean(.x, 3, fill = NA)))
-  
-  # Drop rows with NA created by the rolling mean
-  participant_data <- participant_data %>% drop_na(starts_with("z_"))
-  
-  # Calculate the derivatives (differences) of the z-scored variables
-  participant_data <- participant_data %>%
-    mutate(across(starts_with("z_"), ~ c(NA, diff(.x)), .names = "d_{col}"))
-  
-  # Drop rows with NA created by the diff calculation
-  participant_data <- participant_data %>% drop_na(starts_with("d_z_"))
-  
-  # Calculate correlations
-  corr_E2 <- cor(participant_data$z_E2, participant_data$z_CSS_B2_Total)
-  corr_P4 <- cor(participant_data$z_P4, participant_data$z_CSS_B2_Total)
-  corr_LH <- cor(participant_data$z_LH, participant_data$z_CSS_B2_Total)
-  corr_d_E2 <- cor(participant_data$d_z_E2, participant_data$d_z_CSS_B2_Total)
-  corr_d_P4 <- cor(participant_data$d_z_P4, participant_data$d_z_CSS_B2_Total)
-  corr_d_LH <- cor(participant_data$d_z_LH, participant_data$d_z_CSS_B2_Total)
-  
-  # Convert date_rated to Date type
-  participant_data$date_rated <- as.Date(participant_data$date_rated, format="%m/%d/%Y")
-  
-  # Identify Mondays
-  mondays <- seq.Date(from = min(participant_data$date_rated, na.rm = TRUE), 
-                      to = max(participant_data$date_rated, na.rm = TRUE), 
-                      by = "week")
-  mondays <- mondays[weekdays(mondays) == "Monday"]
-  
-  # Identify the dates for first occurrence of 1 for mensdayonefirst and LHposdayfirst
-  mens_dates <- participant_data %>% filter(mensdayonefirst == 1) %>% pull(date_rated)
-  LH_dates <- participant_data %>% filter(LHposdayfirst == 1) %>% pull(date_rated)
-  
-  # Create the plot
-  p <- ggplot(participant_data, aes(x = date_rated)) +
-    geom_line(aes(y = z_P4, color = "P4"), size = 1) +
-    geom_point(aes(y = z_P4, color = "P4"), size = 3) +
-    geom_line(aes(y = z_E2, color = "E2"), size = 1) +
-    geom_point(aes(y = z_E2, color = "E2"), size = 3) +
-    geom_line(aes(y = z_LH, color = "LH"), size = 1) +
-    geom_point(aes(y = z_LH, color = "LH"), size = 3) +
-    geom_line(aes(y = z_CSS_B2_Total, color = "ADHD Symptoms"), size = 1.5, linetype = "dashed") +
-    geom_point(aes(y = z_CSS_B2_Total, color = "ADHD Symptoms"), shape = 18, size = 4) +
-    scale_color_manual(values = c("P4" = "#D62728", "E2" = "#1F77B4", "LH" = "#2CA02C", "ADHD Symptoms" = "#9467BD")) +
-    labs(title = paste("Hormone Levels and ADHD Symptoms for Participant", participant_id),
-         x = "Date Rated",
-         y = "Z-scored Values (3-day Rolling Average)",
-         color = "Legend") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          plot.title = element_text(size = 20, face = "bold"),
-          axis.title = element_text(size = 16),
-          legend.title = element_text(size = 14),
-          legend.text = element_text(size = 12))
-  
-  # Add lighter vertical lines for Mondays
-  p <- p + geom_vline(xintercept = as.numeric(mondays), linetype = "dashed", color = "gray", alpha = 0.5)
-  
-  # Add shading for 5 days starting from mensdayonefirst
-  if (length(mens_dates) > 0) {
-    for (date in mens_dates) {
-      p <- p + annotate("rect", xmin = date, xmax = date + 4, ymin = -Inf, ymax = Inf, alpha = 0.3, fill = "pink")
-    }
-  }
-  
-  # Add shading for the day of LHposdayfirst
-  if (length(LH_dates) > 0) {
-    for (date in LH_dates) {
-      p <- p + annotate("rect", xmin = date, xmax = date, ymin = -Inf, ymax = Inf, alpha = 0.3, fill = "lightgreen")
-    }
-  }
-  
-  # Add annotations for mensdayonefirst and LHposdayfirst
-  if (length(mens_dates) > 0) {
-    p <- p + geom_point(data = data.frame(date_rated = mens_dates, y = min(participant_data$z_P4, na.rm = TRUE) - 0.5),
-                        aes(x = date_rated, y = y), color = "#D62728", shape = 17, size = 4)
-  }
-  if (length(LH_dates) > 0) {
-    p <- p + geom_point(data = data.frame(date_rated = LH_dates, y = min(participant_data$z_P4, na.rm = TRUE) - 0.5),
-                        aes(x = date_rated, y = y), color = "#2CA02C", shape = 17, size = 4)
-  }
-  
-  # Add a dark black line across y = 0
-  p <- p + geom_hline(yintercept = 0, color = "black", size = 1.5)
-  
-  # Display correlations on the graph
-  correlation_text <- sprintf("LH-Sx r=%.2f, E2-Sx r=%.2f, P4-Sx r=%.2f\ndLH-Sx r=%.2f, dE2-Sx r=%.2f, dP4-Sx r=%.2f", 
-                              corr_LH, corr_E2, corr_P4, corr_d_LH, corr_d_E2, corr_d_P4)
-  p <- p + annotate("text", x = Inf, y = Inf, label = correlation_text, hjust = 1, vjust = 1, size = 5, color = "black",
-                    parse = FALSE, fontface = "italic", lineheight = 1.2,
-                    family = "mono", angle = 0)
-  
-  # Print plot
-  print(p)
-}
-
-# Example usage
-plot_prog_levels(df, 205)
-
-
-
-```
