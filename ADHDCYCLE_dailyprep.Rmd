@@ -2221,8 +2221,8 @@ plot_DVs <- function(DV_list, dat) {
   # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
   dat <- dat %>%
     group_by(id) %>%
-    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.66), #changed here
-           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.66)) %>% #changed here
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
     ungroup()
   
   # Indicators for menstrual bleeding
@@ -2277,9 +2277,9 @@ plot_DVs <- function(DV_list, dat) {
       
       p1 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
         geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
-                    fill = "black", alpha = 0.1) +
+                    fill = "black", alpha = 0.3) +
         geom_point(size = 1) +
-        geom_line(size = 1) +
+        geom_line(size = 2) +
         # Thin dotted lines for E2 and P4
         # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
         #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
@@ -2306,9 +2306,9 @@ plot_DVs <- function(DV_list, dat) {
       
       p2 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
         geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
-                    fill = "black", alpha = 0.1) +
+                    fill = "black", alpha = 0.3) +
         geom_point(size = 1) +
-        geom_line(size = 1) +
+        geom_line(size = 2) +
         # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
         #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
         # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
@@ -2336,13 +2336,13 @@ plot_DVs <- function(DV_list, dat) {
       
       p3 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
         geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
-                    fill = "black", alpha = 0.1) +
+                    fill = "black", alpha = 0.3) +
         geom_point(size = 1) +
-        geom_line(size = 1) +
+        geom_line(size = 2) +
         geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
-                  linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
         geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
-                  linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
         ggtitle(paste("Person-standardized", DV, "Plot")) +
         xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
         theme_minimal() +
@@ -2365,9 +2365,9 @@ plot_DVs <- function(DV_list, dat) {
       
       p4 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
         geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
-                    fill = "black", alpha = 0.1) +
+                    fill = "black", alpha = 0.3) +
         geom_point(size = 1) +
-        geom_line(size = 1) +
+        geom_line(size = 2) +
         # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
         #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
         # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
