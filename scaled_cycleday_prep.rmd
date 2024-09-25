@@ -1,0 +1,951 @@
+---
+title: "prepping scaled cycleday"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+library(pdftools)
+library(magick)
+
+#importing data
+dat <- readRDS("C:/Users/Student/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/REVIEW_cycleday_modeling/02_analytic_workspace/07_16_24_bearsdailydaterated.rds")
+
+```
+
+
+# Manually adjusting LH confirm 
+
+Here I am manually changing the date of LH_confirm to reflect peak LH surge. If LH pos test did not align with LH ZRTmax, we adjusted the date of LH_confirm to what would most appropriately reflect LH surge in the context of all of their hormone trajectories. This is documented in a spreadsheet as well. 
+
+```{r}
+dat$LH_confirm = dat$LHposdayfirst
+
+#LH_confirms to manually change: 
+dat %>% filter(ID == 107) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 107 & daterated == "2022-11-27" ~ 0,
+    ID == 107 & daterated == "2022-11-28" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 107) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+
+#change 11/23/22 to 11/24/22 
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 109 & daterated == "2022-11-23" ~ 0,
+    ID == 109 & daterated == "2022-11-24" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 109) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 2/20/23 to 2/18/23 
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 115 & daterated == "2023-02-20" ~ 0,
+    ID == 115 & daterated == "2023-02-18" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 115) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 3/10/23 to 3/9/23
+dat %>% filter(ID == 118) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 118 & daterated == "2023-03-10" ~ 0,
+    ID == 118 & daterated == "2023-03-09" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+
+
+#move 6/10/23 to 6/12/23
+dat %>% filter(ID == 132) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 132 & daterated == "2023-06-10" ~ 0,
+    ID == 132 & daterated == "2023-06-12" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 132) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+
+#move 6/3/23 to 6/4/23
+dat %>% filter(ID == 137) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 137 & daterated == "2023-06-03" ~ 0,
+    ID == 137 & daterated == "2023-06-04" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 137) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 6/4/23 to 6/6/23
+dat %>% filter(ID == 142) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 142 & daterated == "2023-06-04" ~ 0,
+    ID == 142 & daterated == "2023-06-06" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 142) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+
+#move 8/7/23 to 8/8/23 
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 143 & daterated == "2023-08-07" ~ 0,
+    ID == 143 & daterated == "2023-08-08" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 143) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 11/4/23 to 11/5/23
+dat %>% filter(ID == 157) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 157 & daterated == "2023-11-04" ~ 0,
+    ID == 157 & daterated == "2023-11-05" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+
+#move 10/31/23 to 11/03/23
+dat %>% filter(ID == 158) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 158 & daterated == "2023-10-31" ~ 0,
+    ID == 158 & daterated == "2023-11-03" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+
+#move 10/1/23 to 9/30/23
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 161 & daterated == "2023-10-01" ~ 0,
+    ID == 161 & daterated == "2023-09-30" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 161) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 1/8/24 to 1/6/24
+dat %>% filter(ID == 175) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 175 & daterated == "2024-01-08" ~ 0,
+    ID == 175 & daterated == "2024-01-06" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 175) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+#move 2/17/24 to 2/18/24
+dat %>% filter(ID == 178) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 178 & daterated == "2024-02-17" ~ 0,
+    ID == 178 & daterated == "2024-02-18" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+
+#move 2/19/24 to 2/18/24
+dat %>% filter(ID == 184) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 184 & daterated == "2024-02-19" ~ 0,
+    ID == 184 & daterated == "2024-02-18" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+
+dat %>% filter(ID == 184) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 184 & daterated == "2024-03-16" ~ 0,
+    ID == 184 & daterated == "2024-03-15" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+dat %>% filter(ID == 184) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+
+
+#fix 182
+
+dat %>% filter(ID == 182) %>% select(ID, daterated, LHposdayfirst, LH_confirm)
+dat <- dat %>% 
+  mutate(LH_confirm = case_when(
+    ID == 182 & daterated == "2024-01-30" ~ 0,
+    ID == 182 & daterated == "2024-02-17" ~ 0,
+    ID == 182 & daterated == "2024-03-01" ~ 1,
+    TRUE ~ LH_confirm 
+  ))
+# creating ov_est (a bookend of the scaled_cycleday variable), to be LH + 1 
+dat <- dat %>% arrange(ID, daterated) %>%
+  group_by(ID) %>%
+  mutate(ov_est = lag(LH_confirm))
+
+dat %>% select(ID, daterated, LH_confirm, ov_est)
+```
+
+# Manually adding in menses onset dates 
+
+On 8/22/24 Yunshu identified the following menses onset dates that were not available in the original dataset 
+
+143
+- 8/21/23
+
+135
+- 5/13/23
+
+
+```{r}
+
+dat <- dat %>% 
+  mutate(mensdayonefirst = case_when(
+    ID == 143 & daterated == "2023-08-21" ~ 1,
+    ID == 135 & daterated == "2023-05-13" ~ 1,
+    TRUE ~ mensdayonefirst 
+  ))
+```
+
+
+# Scaled cycleday Time Coding
+
+Follicular phase: the length from the 1st day of menses up to and including the estimated  ovulation, that is, from the 1st day of the cycle up to and including the 2nd peak day/nadir day (if using BBT). Ovulation is the two days of the peak and the following day or the nadir and the following day. 
+
+Luteal phase: 1st day after the estimated day of ovulation up to and including the day before the next (menses) menstrual cycle.
+
+## menses to menses cycle length 
+
+```{r}
+calculate_mcyclength <- function(data) {
+  # Calculate m2mcount: This counts from 1 menses onset to the next to give you the length of a menses-to-menses cycle
+  data <- data %>%
+    group_by(ID) %>%
+    arrange(daterated, .by_group = TRUE) %>%
+    mutate(
+      m2mcount = NA,
+      mcyclength = NA,
+      cycle_incomplete = 0
+    )
+  
+  for (i in seq_len(nrow(data))) {
+    if (!is.na(data$A[i]) && data$A[i] == 1) {
+      data$m2mcount[i] <- 1
+      j <- i + 1
+      
+      while (j <= nrow(data) &&
+             data$ID[j] == data$ID[i] && (is.na(data$A[j]) || data$A[j] != 1)) {
+        data$m2mcount[j] <- data$m2mcount[j - 1] + 1
+        j <- j + 1
+      }
+      
+      if (j <= nrow(data) &&
+          data$ID[j] == data$ID[i] && !is.na(data$A[j]) && data$A[j] == 1) {
+        data$m2mcount[j] <- data$m2mcount[j - 1] + 1
+      }
+    }
+  }
+  
+  # Identify incomplete cycles: This identifies instances where a complete menses-to-menses cycle was not captured
+  data <- data %>%
+    mutate(cycle_incomplete = ifelse(!is.na(m2mcount) &
+                                       (is.na(lead(
+                                         m2mcount
+                                       )) & ID != lead(ID)), 1, 0))
+  
+  ##  Propagate cycle_incomplete within each group of m2mcount
+  data <- data %>%
+    group_by(ID) %>%
+    mutate(cycle_group = cumsum(!is.na(m2mcount) & m2mcount == 1)) %>%
+    group_by(ID, cycle_group) %>%
+    mutate(
+      cycle_incomplete = ifelse(any(cycle_incomplete == 1), 1, 0),
+      mcyclength = max(m2mcount, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    select(-cycle_group)
+  data$cycle_incomplete = ifelse(is.na(data$cycle_incomplete), 1, 0)
+  data$cycle_incomplete = ifelse(is.na(data$m2mcount), NA, data$cycle_incomplete)
+  # calculate cyclenum: calculates number of menses-to-menses cycles within a person 
+  data <- data %>%
+    group_by(ID) %>%
+    mutate(cyclenum = cumsum(!is.na(m2mcount) &
+                               m2mcount == 1 & cycle_incomplete == 0)) %>%
+    ungroup()
+  
+  data <- data %>%
+    group_by(ID) %>%
+    mutate(cyclenum = ifelse(
+      cycle_incomplete == 1,
+      NA,
+      cumsum(!is.na(m2mcount) &
+               m2mcount == 1 & cycle_incomplete == 0)
+    )) %>%
+    ungroup()
+  
+  return(data)
+  
+}
+
+#make sure daterated is date-type 
+dat$daterated = as.Date(dat$daterated)
+#fill in missing rows 
+dat <- dat %>% group_by(ID) %>%
+  complete(daterated = seq.Date(min(daterated), max(daterated), by = "day"))
+#assign 'A' as the menses onset 
+dat$A = dat$mensdayonefirst
+#if A is NA, set A = to 0 
+dat$A <- ifelse(is.na(dat$A), 0, dat$A)
+#remove any duplicates (e.g. removing empty rows)
+dat = unique(dat)
+#taking a look at ID = 160
+dat %>% filter(ID == 160 & A ==1) %>% select(ID, daterated, A)
+#apply calculate_mcyclength to dat 
+dat <- calculate_mcyclength(dat)
+#dat <- dat[!(dat$mcyclength < 21 | dat$mcyclength > 35), ]
+#if m2mcount = NA (did not start counting because menses onset did not occur), mcyclength = -Inf. This turns -Inf to NA
+dat$mcyclength = ifelse(dat$mcyclength == -Inf , NA, dat$mcyclength)
+#take a look at the outcomes of the function
+dat %>% select(ID, daterated, A, m2mcount, mcyclength, cycle_incomplete, cyclenum)
+dat %>% select(ID, daterated, A, m2mcount, mcyclength, cycle_incomplete, cyclenum) %>% filter(ID == 143)
+```
+
+## examine menses-to-menses cycle lengths 
+
+```{r}
+#create dataframe of cycle-lengths 
+cyclength = dat %>% select(ID, mcyclength, cyclenum)
+cyclength = unique(cyclength)
+cyclength = cyclength %>% filter(!is.na(cyclenum))
+cyclength = cyclength %>% filter(mcyclength < 42) #some cycles are very long, probably missing a menses onset 
+
+ggplot(cyclength, aes(x = mcyclength)) +
+  geom_histogram(binwidth = 1, fill = "green", color = "darkgreen") +
+  labs(title = "Distribution of Cycle Length", x = "Menses-to-menses cycle length (days)", y = "Frequency") +
+  theme_light() +
+  theme(axis.title = element_text(size = 14), axis.text = element_text(size = 12))
+
+summary(cyclength$mcyclength)
+sd(cyclength$mcyclength)
+```
+
+## Luteal Phase
+
+```{r}
+dat$ov_est <- ifelse(is.na(dat$ov_est), 0, dat$ov_est) #if ov_est (estimated ovulation) = NA, set to 0
+
+#create lutmax variable = length of the luteal phase
+dat <- dat %>%
+  group_by(ID) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(lutmax = NA)
+
+#lutdaycount function (counts the length of the luteal phase)
+#lutday count starts counting 1 day after ov_est and starts at 0 but ends the day of menses onset. Since it starts at 0, the max value of lutdaycount is = to the length of the luteal phase and the day of ov_est and the day of menses onset is not included in the luteal length counting
+
+calculate_lutdaycount <- function(data, ovtoday) {
+  last_id <- NULL
+  lutdaycount1 <- rep(NA, nrow(data))
+  
+  for (i in 1:nrow(data)) {
+    if (is.null(last_id) || last_id != data$ID[i]) {
+      # Restart counting when id changes
+      lutdaycount1[i] <- ifelse(ovtoday[i] == 1, 0, NA)
+    } else if (!is.na(lutdaycount1[i - 1])) {
+      lutdaycount1[i] <- lutdaycount1[i - 1] + 1
+    }
+    
+    if (!is.na(lutdaycount1[i]) &&
+        !is.na(data$A[i]) && data$A[i] == 1) {
+      lutdaycount1[i] <- NA
+    } else if (ovtoday[i] == 1) {
+      lutdaycount1[i] <- 0
+    }
+    
+    last_id <- data$ID[i]
+  }
+  
+  data$lutdaycount1 <- lutdaycount1
+  return(data)
+}
+
+dat <- calculate_lutdaycount(dat, dat$ov_est)
+dat %>% select(ID, daterated, ov_est, A, lutdaycount1)
+
+dat <- dat %>%
+  group_by(ID) %>%
+  mutate(
+    lutdaycount = lag(lutdaycount1),
+    lutdaycount = case_when(is.na(lutdaycount) |
+                              ID != lag(ID) ~ NA, TRUE ~ lutdaycount)
+  )
+
+dat %>% select(ID, daterated, ov_est, A, lutdaycount)
+
+#calculate luteal length from count -> lutmax
+for (i in 1:(nrow(dat) - 1)) {
+  if (is.na(dat$lutdaycount[i + 1] && !is.na(dat$lutdaycount[i]))) {
+    dat$lutmax[(i - (dat$lutdaycount[i])):i] = as.numeric(dat$lutdaycount[i])
+  }
+}
+
+dat %>% select(ID, daterated, LH_confirm, ov_est, A, lutdaycount, lutmax)
+
+#check what luteal phase lengths we have
+dat %>% select(ID, lutmax) %>% unique()
+#check 115, 137 - no menses onset data for these IDs
+
+dat %>% filter(ID == 135) %>% select(ID, daterated, ov_est, mensdayonefirst, A, lutdaycount, lutmax)
+
+#only calculate lutperc when luteal length is <= 18 and >= 7 (Based on 2SD below and above means of luteal phase lengths in 21-24 day cycle and 31-35 day cycle)
+
+dat <- dat %>%
+  mutate(lutperc = ifelse(lutmax <= 18 &
+                            lutmax >= 7, lutdaycount / lutmax, NA))
+#check data
+dat %>% select(ID, daterated, ov_est, A, lutdaycount, lutperc)
+#lutperc1 is the variable that will be included in the scaled_cycleday. It equals -1 the day after ov_est and it equals 0 on the day of menses onset
+dat$lutperc1 = dat$lutperc - 1
+dat %>% select(ID, daterated, ov_est, A, lutdaycount, lutperc, lutperc1)
+
+dat <- dat %>%
+  group_by(ID) %>%
+  mutate(
+    lutdaycount_ov = lead(lutdaycount),
+    lutdaycount_ov = case_when(is.na(lutdaycount_ov) |
+                                 ID != lead(ID) ~ NA, TRUE ~ lutdaycount_ov)
+  )
+
+
+#calculating lutperc_ov. lutperc_ov will be included in the ovulation-centered scaled_cycleday variable
+dat <- dat %>%
+  mutate(lutperc_ov = ifelse(lutmax <= 18 &
+                               lutmax >= 7, lutdaycount_ov / lutmax, NA))
+dat <- dat %>%
+  mutate(lutperc_ov = ifelse(lutdaycount_ov == 0, 0, lutperc_ov))
+dat %>% select(ID,
+               daterated,
+               ov_est,
+               A,
+               lutdaycount,
+               lutdaycount_ov,
+               lutmax,
+               lutperc_ov)
+dat %>% select(ID, daterated, ov_est, A, lutperc1, lutperc_ov)
+```
+## examine luteal lengths 
+
+```{r}
+
+lutlength = dat %>% select(ID, mcyclength, cyclenum, lutmax)
+lutlength = unique(lutlength)
+lutlength = lutlength %>% filter(!is.na(cyclenum))
+lutlength = lutlength %>% filter(mcyclength < 42)
+
+ggplot(lutlength, aes(x = lutmax)) +
+  geom_histogram(binwidth = 1, fill = "green", color = "darkgreen") +
+  labs(title = "Distribution of Luteal Lengths", x = "Luteal Phase length (days)", y = "Frequency") +
+  theme_light() +
+  theme(axis.title = element_text(size = 14), axis.text = element_text(size = 12))
+
+summary(lutlength$lutmax)
+sd(lutlength$lutmax, na.rm = T)
+
+```
+
+
+## Follicular Phase 
+
+folperc = % of follicular phase elapsed 
+
+```{r}
+#group by ID and sort by daterated. Also initialize folmax 
+dat <- dat  %>%
+  group_by(ID) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax = NA)
+#function to calculate foldaycount
+## foldaycount strats counting when menses onset = 1, (starting at 0), and ends the day of ov_est 
+calculate_foldaycount <- function(data, ovtoday) {
+  foldaycount <- NA
+  last_id <- NULL
+  
+  for (i in 1:nrow(data)) {
+    if (is.null(last_id) || last_id != data$ID[i]) {
+      # Restart counting when id changes
+      foldaycount <- ifelse(data$A[i] == 1, 0, NA)
+    } else if (!is.na(foldaycount)) {
+      foldaycount <- foldaycount + 1
+    }
+    
+    if (!is.na(foldaycount) &&
+        i >= 3 && !is.na(ovtoday[i]) && ovtoday[i - 1] == 1) {
+      # Stop counting one row after ovtoday == 1
+      foldaycount <- NA
+    } else if (data$A[i] == 1) {
+      # Start counting when A == 1
+      foldaycount <- 0
+    }
+    # Assign the folday_count value to the current row
+    data$foldaycount[i] <- foldaycount
+    
+    # Update last_id
+    last_id <- data$ID[i]
+  }
+  
+  return(data)
+}
+
+dat <- calculate_foldaycount(dat, dat$ov_est)
+
+dat %>% select(ID, daterated, ov_est, A, foldaycount)
+
+#calculate folmax = follicular phase length from foldaycount 
+
+#make folmax end when foldaycount ends and not the day after it ends 
+for (i in 1:(nrow(dat)-1)) {
+  if (is.na(dat$foldaycount[i + 1] && !is.na(dat$foldaycount[i]))) {
+    dat$folmax[(i-(dat$foldaycount[i])):i] = as.numeric(dat$foldaycount[i])
+  }
+}
+
+#folmax does not actually = the follicular length because folmax does not include menses onset. For this reason I made another variable called follength which is folmax + 1
+#check data 
+dat %>% select(ID, daterated, ov_est, A, foldaycount, folmax)
+#create follength 
+dat$follength = dat$folmax + 1
+
+#only calculate folperc when follicular length is >= 8 and <= 25 (Based on 2SD below and above means of follicular phase lengths in 21-24 day cycle and 31-35 day cycle)
+dat <- dat %>%
+  mutate(folperc = ifelse(follength >= 8 & follength < 26, foldaycount / folmax, NA))
+#check data
+dat %>% select(ID, daterated, LH_confirm, ov_est, A, foldaycount, folmax, follength, folperc, lutperc1)
+#momentarily saving foldaycount and folmax for menses centered as foldaycount_b and folmax_b 
+dat$foldaycount_b = dat$foldaycount
+dat$folmax_b = dat$folmax
+```
+
+# examine follicular lengths 
+
+## imputing estimated ovulation
+
+https://www.researchgate.net/publication/335422962_Real-world_menstrual_cycle_characteristics_of_more_than_600000_menstrual_cycles/fulltext/5d652535a6fdccc32cd48fa0/Real-world-menstrual-cycle-characteristics-of-more-than-600-000-menstrual-cycles.pdf?origin=publication_detail&_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uRG93bmxvYWQiLCJwcmV2aW91c1BhZ2UiOiJwdWJsaWNhdGlvbiJ9fQ
+
+- if mcyclength is between 31-35 days, folphase is 60% of cycle
+  - lutphase is 40%
+- if mcyclength is between 25-30 days, folphase is 55% of cycle 
+  - lutphase is 45%
+- if mcyclength is between 21-24 days, folphase is 53% of cycle 
+  - lutphase is 47%
+  
+  
+UPDATE 8/22/24: 
+We received more granular means!
+
+- if mcyclength is:21 days 
+  - folphase = 11/21, 52.4% of cycle 
+  - lutphase = 10/21, 47.6% of cycle 
+  
+- 22 days 
+  - folphase = 11.2/22, 50.9%
+  - lutphase = 10.8/22, 49.1%
+  
+- 23 days 
+  - folphase = 11.7/23, 50.9%
+  - lutphase = 11.3/23, 49.1%
+
+- 24 days 
+  - folphase = 12.2/24, 50.8%
+  - lutphase = 11.8/24, 49.2%
+  
+- 25 days 
+  - folphase = 12.9/25, 51.6%
+  - lutphase = 12.1/25, 48.4%
+  
+- 26 days 
+  - folphase = 13.5/26, 51.9%
+  - lutphase = 12.5/26, 48.1%
+  
+- 27 days 
+  - folphase = 14.3/27, 53.0%
+  - lutphase = 12.7/27, 47.0%
+  
+- 28 days 
+  - folphase = 15.1/28, 53.9%
+  - lutphase = 12.9/28, 46.1%
+  
+- 29 days 
+  - folphase = 16/29, 55.2%
+  - lutphase = 13/29, 44.8%
+  
+- 30 days 
+  - folphase = 16.9/30, 56.3%
+  - lutphase = 13.1/30, 43.7%
+  
+- 31 days 
+  - folphase = 17.8/31, 57.4%
+  - lutphase = 13.2/31, 42.6%
+  
+- 32 days 
+  - folphase = 18.7/32, 58.4%
+  - lutphase = 13.3/32, 41.6%
+  
+- 33 days 
+  - folphase = 19.8/33, 60.0%
+  - lutphase = 13.2/33, 40.0%
+  
+- 34 days 
+  - folphase = 20.7/34, 60.9%
+  - lutphase = 13.3/34, 39.1%
+  
+- 35 days 
+  - folphase = 21.8/35, 62.3%
+  - lutphase = 13.2/35, 37.7%
+
+
+```{r}
+#impute luteal and follicular phase lengths based on Bull 2019
+
+dat <- dat %>% 
+  mutate(lutlength_impute = case_when(mcyclength == 21 ~ (mcyclength*.476),
+                                      mcyclength == 22 ~ (mcyclength*.491),
+                                      mcyclength == 23 ~ (mcyclength*.491),
+                                      mcyclength == 24 ~ (mcyclength*.492),
+                                      mcyclength == 25 ~ (mcyclength*.484),
+                                      mcyclength == 26 ~ (mcyclength*.481),
+                                      mcyclength == 27 ~ (mcyclength*.470),
+                                      mcyclength == 28 ~ (mcyclength*.461),
+                                      mcyclength == 29 ~ (mcyclength*.448),
+                                      mcyclength == 30 ~ (mcyclength*.437),
+                                      mcyclength == 31 ~ (mcyclength*.426),
+                                      mcyclength == 32 ~ (mcyclength*.416),
+                                      mcyclength == 33 ~ (mcyclength*.40),
+                                      mcyclength == 34 ~ (mcyclength*.391),
+                                      mcyclength == 35 ~ (mcyclength*.377),
+                                      TRUE ~ NA))
+
+dat <- dat %>% 
+  mutate(follength_impute = case_when(mcyclength == 21 ~ (mcyclength*.524),
+                                      mcyclength == 22 ~ (mcyclength*.509),
+                                      mcyclength == 23 ~ (mcyclength*.509),
+                                      mcyclength == 24 ~ (mcyclength*.508),
+                                      mcyclength == 25 ~ (mcyclength*.516),
+                                      mcyclength == 26 ~ (mcyclength*.519),
+                                      mcyclength == 27 ~ (mcyclength*.530),
+                                      mcyclength == 28 ~ (mcyclength*.539),
+                                      mcyclength == 29 ~ (mcyclength*.552),
+                                      mcyclength == 30 ~ (mcyclength*.563),
+                                      mcyclength == 31 ~ (mcyclength*.574),
+                                      mcyclength == 32 ~ (mcyclength*.584),
+                                      mcyclength == 33 ~ (mcyclength*.60),
+                                      mcyclength == 34 ~ (mcyclength*.609),
+                                      mcyclength == 35 ~ (mcyclength*.623),
+                                      TRUE ~ NA))
+#cehck data
+dat %>% select(ID, daterated, A, m2mcount, mcyclength, follength_impute)
+
+#extra check to make sure data is grouped by ID and ordered by date
+dat <- dat %>%
+  group_by(ID) %>%
+  arrange(daterated, .by_group = TRUE) 
+
+#follcount1_impute starts counting on menses onset and stops when it reaches the length of follength_impute 
+dat$follcount1_impute <- NA
+for (i in 1:nrow(dat)) {
+  if (dat$A[i] == 1 & !is.na(dat$follength_impute[i])) {
+    follcount1_impute <- seq_len(round(dat$follength_impute[i]))
+    end_index <- i + length(follcount1_impute) - 1
+    if (end_index <= nrow(dat)) {
+      dat$follcount1_impute[i:end_index] <- follcount1_impute
+    } else {
+      dat$follcount1_impute[i:nrow(dat)] <- follcount1_impute[1:(nrow(dat) - i + 1)]
+    }
+  }
+}
+#check data 
+dat %>% select(ID, A, follength_impute, follcount1_impute)
+#ovtoday_impute = 1, when follength_impute and follcount1_impute are the same (or follcount1_impute rounds to follength_impute)
+dat <- dat %>% 
+  mutate(ovtoday_impute = case_when(round(follength_impute) == follcount1_impute ~ 1,
+                               TRUE ~ NA))
+#check data
+dat %>% select(ID, daterated, A, follength_impute, follcount1_impute, ov_est, ovtoday_impute, cyclenum)
+
+```
+
+### perclut using ovtoday_impute 
+
+- negative 1 starts the day after ov_est = 1 or ovtoday_impute = 1 (which is the 2nd day of ovulation)
+
+```{r}
+#group by ID and make sure sorted by daterated. Also initialize the variable lutmax_impute 
+dat <- dat  %>% 
+  group_by(ID) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(lutmax_impute = NA)
+#if ovtoday_impute is NA, make it 0
+dat$ovtoday_impute <- ifelse(is.na(dat$ovtoday_impute), 0, dat$ovtoday_impute) 
+#applying calculate lutdaycount function 
+dat <- calculate_lutdaycount(dat, dat$ovtoday_impute)
+#check data 
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount1)
+#the function spits out the variable lutdaycount1, so here I am renaming it to lutdaycount1_impute
+dat <- dat %>% rename(lutdaycount1_impute = lutdaycount1)
+#this creates lutdaycount_impute, in which it starts couting the day after ov_est and ends on menses onset 
+dat <- dat %>%
+  group_by(ID) %>%
+  mutate(
+    lutdaycount_impute = lag(lutdaycount1_impute),
+    lutdaycount_impute = case_when(
+      is.na(lutdaycount_impute) | ID != lag(ID) ~ NA, 
+      TRUE ~ lutdaycount_impute
+    )
+  )
+#check data 
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount_impute)
+#lutmax_impute = max value of lutdaycount 
+for (i in 1:(nrow(dat)-1)) {
+  if (is.na(dat$lutdaycount_impute[i + 1] && !is.na(dat$lutdaycount_impute[i]))) {
+    dat$lutmax_impute[(i-(dat$lutdaycount_impute[i])):i] = as.numeric(dat$lutdaycount_impute[i])
+  }
+}
+#lutlength1_impute applies to the same rows as lutelength_impute 
+dat$lutlength1_impute = lag(dat$lutlength_impute)
+
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount_impute, lutmax_impute, lutlength_impute)
+# calculate lutperc_impute only when lutdaycount_impute is >= 6 days
+dat <- dat %>%
+  mutate(lutperc_impute = if_else(is.na(lutlength1_impute) & lutmax_impute < 6,
+                           NA,  
+                           if_else(is.na(lutlength1_impute) & !is.na(lutmax_impute),
+                                   lutdaycount_impute / lutmax_impute,
+                                   lutdaycount_impute / round(lutlength1_impute))))
+#calcualte perclut_impute, which is the variable that will be included in scaled_cycleday 
+dat$perclut_impute = dat$lutperc_impute -1 
+#check data 
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount_impute, lutlength1_impute, lutmax_impute, perclut_impute) 
+
+#calculate lutdaycount_imp_ov, which is imputed lutdaycount but ovulation-centered 
+dat <- dat %>%
+  group_by(ID) %>%
+  mutate(
+    lutdaycount_imp_ov = lead(lutdaycount_impute),
+    lutdaycount_imp_ov = case_when(
+      is.na(lutdaycount_imp_ov) | ID != lead(ID) ~ NA, 
+      TRUE ~ lutdaycount_imp_ov
+    )
+  )
+#check data
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount_imp_ov, lutmax_impute) 
+#calculate lutperc_imp_ov which is the variable that will go into ovulation-centered scaled cycleday 
+dat <- dat %>%
+  mutate(lutperc_imp_ov = ifelse(lutmax_impute <= 18 & lutmax_impute >= 6, lutdaycount_imp_ov / lutmax_impute, NA))
+dat <- dat %>%
+  mutate(lutperc_imp_ov = ifelse(ovtoday_impute == 1, 0, lutperc_imp_ov))
+
+#check data 
+dat %>% select(ID, daterated, ovtoday_impute, A, lutdaycount_impute, lutmax_impute, perclut_impute, lutperc_imp_ov)
+
+
+```
+
+### percfol using ovtoday_impute 
+
+```{r}
+#group by ID and sort daterated 
+#initialize folmax_impute 
+dat <- dat %>%
+  group_by(ID) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax_impute = NA)
+#use function calculate_foldaycount to create foldaycount
+dat <- calculate_foldaycount(dat, dat$ovtoday_impute)
+#check data 
+dat %>% select(ID, daterated, ovtoday_impute, A, foldaycount)
+#rename foldaycount to foldaycount_impute
+dat <- dat %>% rename(foldaycount_impute = foldaycount)
+#create folmax_impute the highest number foldaycount_impute counts up to
+for (i in 1:(nrow(dat)-1)) {
+  if (is.na(dat$foldaycount_impute[i + 1] && !is.na(dat$foldaycount_impute[i]))) {
+    dat$folmax_impute[(i-(dat$foldaycount_impute[i])):i] = as.numeric(dat$foldaycount_impute[i])
+  }
+}
+
+#check data 
+dat %>% select(ID, A, ovtoday_impute, foldaycount_impute, follength_impute, folmax_impute)
+#create percfol_impute, no need to worry about length of follicular phase because imputed variables are based on Bull 2019 norms 
+dat <- dat %>%
+  mutate(percfol_impute = (foldaycount_impute / folmax_impute))
+
+dat %>% select(ID, daterated, ovtoday_impute, A, foldaycount_impute, folmax_impute, percfol_impute, folperc)
+```
+
+## Scaled Cycleday 
+
+```{r}
+#create percfol_ov which will go into scaled_cycleday for ovulation-centered
+dat <- dat %>% 
+  mutate(
+    percfol = case_when(!is.na(lutperc1) & !is.na(folperc) & folperc !=0 ~ NA, TRUE ~ folperc),
+    percfol_ov = percfol - 1
+  )
+#checking 
+dat %>% select(ID, daterated, folperc, lutperc1, percfol_ov)
+
+#creating percentlut and percentfol 
+dat <- dat %>%
+  mutate(
+    percentlut = case_when(
+      !is.na(percfol) ~ 0,
+      TRUE ~ lutperc1
+    ),
+    percentfol = case_when(
+      !is.na(lutperc1) ~ 0,
+      TRUE ~ percfol
+    )
+  )
+#checking 
+dat %>% select(ID, daterated, A, ov_est, percentlut, percentfol)
+#create scaled_cycleday 
+dat <- dat %>%
+  mutate(scaled_cycleday = ifelse(percentlut==0, percentfol, percentlut))
+
+### scaled cycleday ovulation centered 
+dat <- dat %>%
+  mutate(scaled_cycleday_ov = ifelse(is.na(percfol_ov), lutperc_ov, percfol_ov))
+#checking 
+dat %>% select(ID, daterated, A, ov_est, scaled_cycleday, scaled_cycleday_ov)
+
+#creating cycleday_perc for plotting (rounded to the nearest 10th, 5th , and 2nd percent). In my experience, rounded to the nearest 5th has always worked the best 
+dat <- dat %>%
+  mutate(cycleday_perc = (scaled_cycleday + 1) / 2) %>%
+  mutate(cycleday_perc_round = round(cycleday_perc, 1)) %>%
+  mutate(cycleday_5perc = round(cycleday_perc / 0.05) * 0.05) %>%
+  mutate(cycleday_2perc = round(cycleday_perc / 0.02) * 0.02)
+#do the same for ovulation-centered 
+dat <- dat %>%
+  mutate(cycledayov_perc = (scaled_cycleday_ov + 1) / 2) %>%
+  mutate(cycledayov_perc_round = round(cycledayov_perc, 1)) %>%
+  mutate(cycledayov_5perc = round(cycledayov_perc / 0.05) * 0.05) %>%
+  mutate(cycledayov_2perc = round(cycledayov_perc / 0.02) * 0.02)
+
+```
+
+## Scaled Cycleday using imputed ovulation 
+
+
+- ovtoday_impute measures: percfol_impute and perclut_impute 
+- ov_est measures: lutperc1 and percfol
+
+```{r}
+#these functions create_percentlut and create_percentfol prioritize measures created with ov_est over ovtoday_impute for menses centered 
+
+create_percentlut <- function(dat) {
+  dat %>%
+    # Identify stretches of consecutive non-NA perclut values
+    mutate(group = cumsum(is.na(perclut_impute) & lag(is.na(perclut_impute), default = TRUE) != is.na(perclut_impute))) %>%
+    group_by(ID, group) %>%
+    mutate(percentlut_impute = if (any(!is.na(lutperc1))) lutperc1 else lutperc1) %>%
+    ungroup() %>%
+    select(-group)
+}
+
+create_percentfol <- function(dat) {
+  dat %>%
+    # Identify stretches of consecutive non-NA perclut values
+    mutate(group = cumsum(is.na(percfol_impute) & lag(is.na(percfol_impute), default = TRUE) != is.na(percfol_impute))) %>%
+    group_by(ID, group) %>%
+    mutate(percentfol_impute = if (any(!is.na(folperc))) folperc else percfol_impute) %>%
+    ungroup() %>%
+    select(-group)
+}
+
+#prioritizes luteal phase measures created with ov_est over ovtoday_impute for ovulation-centered
+ dat <- dat %>%
+    # Identify stretches of consecutive non-NA perclut values
+    mutate(group = cumsum(is.na(lutperc_imp_ov) & lag(is.na(lutperc_imp_ov), default = TRUE) != is.na(lutperc_imp_ov))) %>%
+    group_by(ID, group) %>%
+    mutate(perclut_ov_imp = if (any(!is.na(lutperc_ov))) lutperc_ov else lutperc_ov) %>%
+    ungroup() %>%
+    select(-group)
+
+#apply functions
+dat <- create_percentlut(dat)
+dat <- create_percentfol(dat)
+#create ovulation-centered percfol_ov_imp from menses-centered percentfol_impute
+dat <- dat %>%
+  mutate(percfol_ov_imp = ifelse(!is.na(percentfol_impute), percentfol_impute-1, NA))
+#created scaled_cycleday_impute from percentlut_impute and from percentfol_impute
+dat <- dat %>%
+  mutate(scaled_cycleday_impute = ifelse(is.na(percentlut_impute), percentfol_impute, percentlut_impute))
+#turn NA to 0 in percentlut_impute and percentfol_impute
+dat$percentlut_impute = ifelse(is.na(dat$percentlut_impute) & !is.na(dat$percentfol_impute), 0, dat$percentlut_impute)
+dat$percentfol_impute = ifelse(is.na(dat$percentfol_impute) & !is.na(dat$percentlut_impute), 0, dat$percentfol_impute)
+#create ovulation_centered scaled_cycleday with imputed measures too 
+dat <- dat %>%
+  mutate(scaled_cycleday_imp_ov = ifelse(is.na(percfol_ov_imp), perclut_ov_imp, percfol_ov_imp))
+#check data 
+dat %>% select(ID, ov_est, A, ovtoday_impute, scaled_cycleday, scaled_cycleday_impute, scaled_cycleday_imp_ov)
+
+
+#percenatge variables for plotting 
+dat <- dat %>%
+  mutate(cycleday_perc_imp = (scaled_cycleday_impute + 1) / 2) %>%
+  mutate(cycleday_perc_imp_round = round(cycleday_perc_imp, 1)) %>%
+  mutate(cycleday_5perc_imp = round(cycleday_perc_imp / 0.05) * 0.05) %>%
+  mutate(cycleday_2perc_imp = round(cycleday_perc_imp / 0.02) * 0.02)
+
+dat <- dat %>%
+  mutate(cycledayov_perc_imp = (scaled_cycleday_imp_ov + 1) / 2) %>%
+  mutate(cycledayov_perc_imp_round = round(cycledayov_perc_imp, 1)) %>%
+  mutate(cycledayov_5perc_imp = round(cycledayov_perc_imp / 0.05) * 0.05) %>%
+  mutate(cycledayov_2perc_imp = round(cycledayov_perc_imp / 0.02) * 0.02)
+```
+
+# how many missing rows in scaled_cycleday vs scaled_cycleday_impute 
+
+```{r}
+sum(is.na(dat$scaled_cycleday)) #1801
+sum(is.na(dat$scaled_cycleday_impute)) ##1395
+sum(is.na(dat$cycleday)) #1191
+
+#how many observations in which scaled_cycleday and hormones are non-NA?
+
+#confirmed menses onsets and LH peaks
+dat %>%
+  summarise(complete_cases = sum(!is.na(scaled_cycleday) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z")))) #3024
+#confirmed menses onsets
+dat %>%
+  summarise(complete_cases = sum(!is.na(cycleday) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z")))) #3634
+
+#confirmed menses onsets, LH peaks, and imputed ovulation
+dat %>%
+  summarise(complete_cases = sum(!is.na(scaled_cycleday_impute) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z")))) #3430
+
+
+dat %>%
+  group_by(ID) %>%
+  summarise(complete_cases = sum(!is.na(scaled_cycleday) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z"))))
+
+dat %>%
+  group_by(ID) %>%
+  summarise(complete_cases = sum(!is.na(cycleday) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z"))))
+
+dat %>%
+  group_by(ID) %>%
+  summarise(complete_cases = sum(!is.na(scaled_cycleday_impute) & (!is.na("E1G_Crtn_z")|!is.na("PDG_Crtn_z"))))
+
+```
+
+```{r}
+saveRDS(dat, file = "C:/Users/Student/Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/BEARS/02_datasets/BEARS_DAILY/03_cleaned_data/BEARS_scaledcycleday.rds")
+```
+
+
+
+
+
