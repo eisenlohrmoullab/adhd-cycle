@@ -2012,6 +2012,12 @@ dat %>% select(id, daterated, A, ovtoday, ovtoday_impute, cyclenum, mcyclength, 
 dat <- dat %>%
   mutate(scaled_cycleday = ifelse(is.na(percentlut), percentfol, percentlut))
 dat %>% select(id, daterated, percentlut, percentfol, scaled_cycleday)
+
+```
+
+# creating scaled_cycleday_ov
+
+```{r}
 dat <- dat %>%
   mutate(scaled_cycleday_ov = ifelse(is.na(percentlut_ov), percentfol_ov, percentlut_ov))
 dat %>% select(id, daterated, percentlut_ov, percentfol_ov, scaled_cycleday_ov)
@@ -2019,31 +2025,7 @@ dat %>% select(id, daterated, percentlut_ov, percentfol_ov, scaled_cycleday_ov)
 ```
 
 
-# Example usage
-
-
-
-# how many non-missing: 1386
-
-```{r}
-dat %>%
-  summarise(complete_cases = sum(!is.na(scaled_cycleday) & (!is.na("CSS_Inatt"))))
-```
-
-
-# plotting 
-
-CSS_Inatt
-CSS_Inatt_Count
-CSS_HypImp
-CSS_HypImp_Count
-CSS_Fx_Total
-CSS_B2_Total
-UPPS_Total
-BDEFS_Total
-DEBQ_Total
-
-## Rounding Percents
+## Rounding Percents for LUTEAL-FOLLICULAR ORDER
 
 ```{r}
 
@@ -2056,11 +2038,25 @@ dat <- dat %>%
 
 ```
 
+
+## Rounding Percents for FOLLICULAR-LUTEAL ORDER
+
+```{r}
+
+dat <- dat %>%
+  mutate(cycledayov_perc = (scaled_cycleday_ov + 1) / 2) %>%
+  mutate(cycledayov_perc_round = round(cycledayov_perc, 1)) %>%
+  mutate(cycledayov_10perc = round(cycledayov_perc / 0.10) * 0.10) %>%
+  mutate(cycledayov_2perc = round(cycledayov_perc / 0.02) * 0.02)
+
+
+```
+
+
 #RE-CALCULATE DEVATIONS AND STD AND ROLLING AVGS
 
 
 ```{r}
-
 
 #create rolling averages on RAW variables
 for (i in outcomelist) {
@@ -2099,106 +2095,7 @@ for (i in outcomelist.roll) {
 
 ```
 
-## Plot All
-
-### TURNED OFF WARNINGS AND MESSAGES
-
-```{r message=FALSE, warning=FALSE}
-library(ggplot2)
-library(dplyr)
-library(rlang)
-
-# Define the function to generate plots for a list of DVs
-plot_DVs <- function(DV_list, dat, bleeding_start = 0.5, bleeding_end = 0.7) {
-  
-  # Indicators for menstrual bleeding using provided start/end
-  bleeding_indicator <- data.frame(xmin = bleeding_start, xmax = bleeding_end, ymin = -Inf, ymax = Inf)
-  
-  for (DV in DV_list) {
-    
-    plot_types <- c("Raw", "Deviations", "Rolling Deviations")
-    suffixes <- c("", ".d", ".roll.d")
-    y_labels <- c(DV, paste(DV, "Deviation"), paste(DV, "Rolling Deviation"))
-    
-    for (i in 1:3) {
-      plot_type <- plot_types[i]
-      suffix <- suffixes[i]
-      y_label <- y_labels[i]
-      
-      var_name <- paste0(DV, suffix)
-      
-      # Check if the variable exists in the data
-      if (var_name %in% names(dat)) {
-        dv <- dat %>%
-          group_by(cycleday_10perc) %>%
-          summarise(mean_value = mean(!!sym(var_name), na.rm = TRUE),
-                    se_value = sd(!!sym(var_name), na.rm = TRUE) / sqrt(n()),
-                    .groups = "drop") # Explicitly drop grouping
-        
-        p <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
-          geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
-                      fill = "blue", alpha = 0.1) +
-          geom_point(size = 1) +
-          geom_line(size = 1) +
-          ggtitle(paste(plot_type, DV, "Plot")) +
-          xlab("Cycle Day (10% bins)") + ylab(paste(y_label, "Mean")) +
-          theme_minimal() +
-          theme(plot.title = element_text(hjust = 0.5, size = 14),
-                plot.margin = margin(15, 5, 50, 5)) +
-          coord_cartesian(clip = "off") +
-          geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
-                    fill = "red", alpha = 0.2, inherit.aes = FALSE)
-        
-        print(p)        
-      } else {
-          warning(paste("Variable", var_name, "not found in dataset."))
-      }
-    }
-  }
-}
-
-
-
-DVs <- c("E2", "P4", "LH", "CSS_Inatt")
-
-
-# Example with custom bleeding window:
-plot_DVs(DVs, dat)
-
-
-
-
-
-```
-
-## ORIGINAL PLOT EXAMPLE
-
-```{r}
-
-dv <- df %>% 
-  group_by(cycleday_10perc) %>% 
-  summarise(mean_dev = mean(P4, na.rm = T))
-
- ggplot(dv, aes(x = cycleday_10perc, y = mean_dev)) +
-  geom_point(size = .2) +
-  geom_line(size=.2) +
-  geom_smooth(se=T, size = 0.3) 
-
-dv <- df %>% 
-  group_by(cycleday_10perc) %>% 
-  summarise(mean_dev = mean(P4.d, na.rm = T))
-
- ggplot(dv, aes(x = cycleday_10perc, y = mean_dev)) +
-  geom_point(size = .2) +
-  geom_line(size=.2) +
-  geom_smooth(se=T, size = 0.3) 
-```
-
-
-
-
-## New Plot with E2 and P4 in the background and person-standardized outcomes
-
+# 2024-09-25 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
 ```{r}
 
 # Define the folder location for saving the plots
@@ -2226,7 +2123,7 @@ plot_DVs <- function(DV_list, dat) {
     ungroup()
   
   # Indicators for menstrual bleeding
-  bleeding_indicator <- data.frame(xmin = 0.5, xmax = 0.7, ymin = -Inf, ymax = Inf)
+  bleeding_indicator <- data.frame(xmin = .5, xmax = 0.7, ymin = -Inf, ymax = Inf)
   
   for (DV in DV_list) {
     
@@ -2395,6 +2292,211 @@ DVs <- c("E2", "P4", "LH", "CSS_Inatt", "CSS_Inatt_Count", "CSS_HypImp", "CSS_Hy
 
 plot_DVs(DVs, dat)
 
+
+
+
+
+```
+
+# 2024-09-25 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
+```{r}
+
+# Define the folder location for saving the plots
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-25"
+
+# Define the function to generate plots for a list of DVs
+plot_DVs_M2M <- function(DV_list, dat) {
+  
+  # Create person-standardized (z-scored within each participant) versions of each DV
+  for (DV in DV_list) {
+    zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
+    
+    # Add the person-standardized columns for each DV
+    dat <- dat %>%
+      group_by(id) %>%
+      mutate(!!zd_var := scale(!!sym(DV), center = TRUE, scale = TRUE)) %>%
+      ungroup()
+  }
+  
+  # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
+  dat <- dat %>%
+    group_by(id) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
+    ungroup()
+  
+  # Indicators for menstrual bleeding
+  bleeding_indicator <- data.frame(xmin = 0, xmax = 0.2, ymin = -Inf, ymax = Inf)
+  
+  for (DV in DV_list) {
+    
+    if (DV %in% c("E2", "P4", "LH")) {
+      # Raw plot for E2, P4, LH
+      dv <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.1) +
+        geom_point(size = 1) +
+        geom_line(size = 1) +
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+    } else {
+      # For DVs that are NOT E2, P4, LH
+      
+      # Raw data points and line for the dependent variable
+      dv <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+    # Person-rescaled E2 and P4 lines (thin dotted)  <- Changed variable names here
+      e2_std <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(E2.rescale, na.rm = TRUE)) #changed here
+
+      p4_std <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(P4.rescale, na.rm = TRUE))  #changed here
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # Thin dotted lines for E2 and P4
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      # Deviations plot
+      dev_var <- paste0(DV, ".d")
+      dv <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p2 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p2)
+      
+            ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_dev", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Person-standardized outcome (zd)
+      zd_var <- paste0(DV, ".zd")
+      dv <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                  se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p3 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
+        geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
+        ggtitle(paste("Person-standardized", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p3)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_zd", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Rolling deviations plot
+      roll_dev_var <- paste0(DV, ".roll.d")
+      dv <- dat %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(roll_dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p4 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Rolling Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Rolling Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p4)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_rolld", ".png"), plot = last_plot(), width = 8, height = 6)
+
+    }
+  }
+}
+
+# Call the function with the list of dependent variables (DVs)
+DVs <- c("E2", "P4", "LH", "CSS_Inatt", "CSS_Inatt_Count", "CSS_HypImp", "CSS_HypImp_Count",
+         "CSS_Fx_Total", "CSS_B2_Total", "UPPS_Total", "BDEFS_Total", "DEBQ_Total")
+
+plot_DVs_M2M(DVs, dat)
+
+
+
 ```
 
 
@@ -2403,13 +2505,7 @@ plot_DVs(DVs, dat)
 
 
 
-
-
-
-
-
-
-# PRIOR ANALYSES/ CODE BEFORE CYCLE SCALING
+# 2024-07-16 - PLOTS and MLMs - IDEOGRAPHIC - BEFORE CYCLE SCALING
 
 ## Changes in careless responding across the menstrual cycle - BY ID
 
@@ -2938,7 +3034,7 @@ run_and_save_plots(variable_name, df, output_directory)
 
 ```
 
-# CALL FUNCTIONS: LH
+## CALL FUNCTIONS: LH
 
 ```{r}
 
@@ -2960,7 +3056,7 @@ run_and_save_plots(variable_name, df, output_directory)
 ```
 
 
-# CALL FUNCTION FOR CARELESS RESPONDING VARS
+## CALL FUNCTION FOR CARELESS RESPONDING VARS
 
 ```{r}
 
@@ -2972,7 +3068,7 @@ run_and_save_plots("longstring", df, output_directory)
 ```
 
 
-# CALL FUNCTIONS: CSS_Inatt
+##CALL FUNCTIONS: CSS_Inatt
 
 ```{r}
 
@@ -2992,7 +3088,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
-# CALL FUNCTIONS: CSS_HypImp
+## CALL FUNCTIONS: CSS_HypImp
 
 ```{r}
 
@@ -3012,7 +3108,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
-# CALL FUNCTIONS: CSS_B2_Total
+## CALL FUNCTIONS: CSS_B2_Total
 
 ```{r}
 
@@ -3032,7 +3128,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 ```
 
-# CALL FUNCTIONS: CSS_Fx_Total
+## CALL FUNCTIONS: CSS_Fx_Total
 
 ```{r}
 
@@ -3053,10 +3149,9 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 ```
 
 
-CSS_Inatt_Count, CSS_Hyp_Count, CSS_Imp_Count, DEBQ_Total, BDEFS_Total, UPPS_Total
 
 
-# CALL FUNCTIONS: CSS_Inatt_Count
+## CALL FUNCTIONS: CSS_Inatt_Count
 
 ```{r}
 
@@ -3078,7 +3173,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 
 
-# CALL FUNCTIONS: CSS_Imp_Count
+## CALL FUNCTIONS: CSS_Imp_Count
 
 ```{r}
 
@@ -3102,7 +3197,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 
 
-# CALL FUNCTIONS: BDEFS_Total
+## CALL FUNCTIONS: BDEFS_Total
 
 ```{r}
 
@@ -3125,7 +3220,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 
 
 
-# CALL FUNCTIONS: DEBQ_Total
+## CALL FUNCTIONS: DEBQ_Total
 
 ```{r}
 
@@ -3147,7 +3242,7 @@ run_and_save_plots(variable_name, df_sens, output_directory)
 ```
 
 
-# CALL FUNCTIONS: UPPS_Total
+## CALL FUNCTIONS: UPPS_Total
 
 ```{r}
 
