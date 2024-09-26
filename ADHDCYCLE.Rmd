@@ -5482,3 +5482,30 @@ P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
 
 P4plot
 ```
+
+
+
+#GAMM Deviation effects of Hormones - Inatt 
+
+```{r}
+
+gamm_hormd_CSS_Inatt <- gam(CSS_Inattlog ~ s(id, bs = "re") + s(E2.d, id, bs = "re") + s(P4.d, id, bs = "re") + s(E2.d, k = 10) + s(P4.d, k = 10) + ti(E2.d, P4.d, k=10), data = dat, method = "REML")
+
+summary(gamm_hormd_CSS_Inatt)
+
+plot.gam(gamm_hormd_CSS_Inatt, select = 6)
+
+```
+
+
+#GAMM Deviation effects of Hormones - Inatt 
+
+```{r}
+
+gamm_horm_CSS_Inatt <- gam(CSS_Inattlog ~ s(id, bs = "re") + s(E2, id, bs = "re") + s(P4, id, bs = "re") + s(E2, k = 10) + s(P4, k = 10) + ti(E2, P4, k=10), data = dat, method = "REML")
+
+summary(gamm_horm_CSS_Inatt)
+
+plot.gam(gamm_horm_CSS_Inatt, select = 6)
+
+```
