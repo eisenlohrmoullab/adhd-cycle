@@ -1,0 +1,24 @@
+
+Family: gaussian 
+Link function: identity 
+
+Formula:
+E2log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re") + 
+    s(scaled_cycleday, k = 20)
+
+Parametric coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.57328    0.05807   9.873   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Approximate significance of smooth terms:
+                           edf Ref.df     F  p-value    
+s(id)                 0.963224  1.000 26.19 4.16e-07 ***
+s(scaled_cycleday,id) 0.000165  1.000  0.00    0.334    
+s(scaled_cycleday)    4.901520  6.108 11.75  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+R-sq.(adj) =  0.0769   Deviance explained = 8.16%
+-REML = -26.578  Scale est. = 0.054587  n = 1144
