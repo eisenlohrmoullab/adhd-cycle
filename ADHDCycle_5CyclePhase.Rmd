@@ -1,0 +1,330 @@
+---
+title: "ADHDCYCLE_5PhaseCoding"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Cycle Phase Coding - MENSES COUNT PART
+reminder: dummy code comes from Schmalenberger 2021 appendix
+```{r cyclephase_count}
+
+df <- df %>% 
+  mutate(midluteal_count = ifelse(cycleday >= -9 & cycleday <= -5, 1, 0),
+         perimenstrual_count = ifelse(cycleday >=-3 & cycleday <=2, 1, 0),
+         midfol_count = ifelse(cycleday >=4 & cycleday <=7, 1, 0),
+         periov_count = ifelse(cycleday >= -15 & cycleday <= -12, 1, 0))
+
+#add a non-dummy coded variable with all of cycle phase info above, which will be useful for future visualizations and summaries
+df <- df %>% mutate(cyclephase_count = case_when(periov_count==1 ~ 1,
+                                                     midluteal_count==1 ~ 2,
+                                                     perimenstrual_count==1 ~ 3,
+                                                     midfol_count==1 ~ 4,
+                                                     TRUE ~ as.numeric(NA)))
+
+#Check vars
+#df %>% dplyr::select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_count")) %>% View()
+
+```
+
+# Cycle Phase Coding - LH COUNT PART
+```{r cyclephase_LH}
+
+#note: the perimenstrual phase is still coded based on menses count variable, but for the purpose of keeping the dummy code labeling clear, we name it *perimenstrual_LH* to indicate that this variable gets included in the dummy code set of LH-based phasing; again, all of this information is from Schmalenberger 2021 appendix
+
+df <- df %>% 
+  mutate(midluteal_LH = ifelse(daycountLH >= 6 & daycountLH <= 11, 1, 0),
+         perimenstrual_LH = ifelse(cycleday >=-3 & cycleday <=2, 1, 0), #note perimenstrual is based on cycleday
+         midfol_LH = ifelse(daycountLH >=-7 & daycountLH <=-3, 1, 0),
+         periov_LH = ifelse(daycountLH >= -2 & daycountLH <= 1, 1, 0),
+         earlylut_LH = ifelse(daycountLH >= 2 & daycountLH <= 5, 1, 0))
+
+#fill out the dummy code, so that if any phase is 1, all others should be 0 (not NA)
+df <- df %>%
+  rowwise() %>%
+  mutate(sumdummy = sum(midfol_LH,
+                        periov_LH,
+                        earlylut_LH,
+                        perimenstrual_LH,
+                        midluteal_LH, na.rm = T)) %>% 
+  #if all phases=0, make the midluteal_LH variable NA instead of 0,
+  #if perimenstrual by menses count = 1, change midluteal_LH to 0 instead of NA to fill out structural set,
+  #otherwise, keep as is
+  mutate(midluteal_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                                  sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                                  TRUE ~ midluteal_LH), 
+         #same for midfol
+         midfol_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                               sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                               TRUE ~ midfol_LH), 
+          #same for periov
+         periov_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                               sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                               TRUE ~ periov_LH),
+         earlylut_LH = case_when(sumdummy==0 ~ as.numeric(NA),
+                                  sumdummy==1 & perimenstrual_LH==1 ~ 0,
+                                  TRUE ~ earlylut_LH), 
+         #if any other phase is 1, fill out perimenstrual to be 0
+         perimenstrual_LH = case_when(sumdummy==0 ~ as.numeric(NA), 
+                                        sumdummy==1 & midfol_LH==1 ~ 0,
+                                        sumdummy==1 & periov_LH==1 ~ 0,
+                                      sumdummy==1 & earlylut_LH==1 ~ 0,
+                                        sumdummy==1 & midluteal_LH==1 ~ 0,
+                                        TRUE ~ perimenstrual_LH))
+
+#add cyclephase_LH, a new categorical variable made from all of the new hybrid cycle phases above, which will be useful for future visualizations and summaries
+df <- df %>% mutate(cyclephase_LH = case_when(periov_LH==1 ~ 1,
+                                                                        earlylut_LH==1 ~ 2,
+                                                     midluteal_LH==1 ~ 3,
+                                                     perimenstrual_LH==1 ~ 4,
+                                                     midfol_LH==1 ~ 5,
+                                                     TRUE ~ as.numeric(NA)))
+
+df <- df %>% mutate(cyclephase_LH_graph = case_when(midfol_LH==1 ~ 1,
+                                                    periov_LH==1 ~ 2,
+                                                    earlylut_LH==1 ~ 3,
+                                                     midluteal_LH==1 ~ 4,
+                                                     perimenstrual_LH==1 ~ 5,
+                                                     TRUE ~ as.numeric(NA)))
+
+#Check vars
+#df %>% dplyr::select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, ends_with("_LH")) %>% View()
+
+
+
+#Coding additional binary variables for use in random effects that contrast each phase with all other phases for simplicity
+
+#nonperi (1) vs. peri (0)
+df <- df %>%
+  mutate(NONPERI = case_when(cyclephase_LH=="1" ~ "1", #periov
+                                    cyclephase_LH=="2" ~ "1", #earlylut
+                                    cyclephase_LH=="3" ~ "1", #midlut
+                                    cyclephase_LH=="4" ~ "0", #perimens
+                                    cyclephase_LH=="5" ~ "1")) #midfol
+
+#nonmid (1) vs. mid (0)
+df <- df %>%
+  mutate(NONMid = case_when(cyclephase_LH=="1" ~ "1", #periov
+                                    cyclephase_LH=="2" ~ "1", #earlylut
+                                    cyclephase_LH=="3" ~ "0", #midlut
+                                    cyclephase_LH=="4" ~ "1", #perimens
+                                    cyclephase_LH=="5" ~ "1")) #midfol
+
+#nonel (1) vs. el (0)
+df <- df %>%
+  mutate(NONEL = case_when(cyclephase_LH=="1" ~ "1", #periov
+                                    cyclephase_LH=="2" ~ "0", #earlylut
+                                    cyclephase_LH=="3" ~ "1", #midlut
+                                    cyclephase_LH=="4" ~ "1", #perimens
+                                    cyclephase_LH=="5" ~ "1")) #midfol
+
+#nonperiov (1) vs. periov (0)
+df <- df %>%
+  mutate(NONPERIOV = case_when(cyclephase_LH=="1" ~ "0", #periov
+                                    cyclephase_LH=="2" ~ "1", #earlylut
+                                    cyclephase_LH=="3" ~ "1", #midlut
+                                    cyclephase_LH=="4" ~ "1", #perimens
+                                    cyclephase_LH=="5" ~ "1")) #midfol
+
+#nonmidfol (1) vs. midfol (0)
+df <- df %>%
+  mutate(NONMidFOL = case_when(cyclephase_LH=="1" ~ "1", #periov
+                                    cyclephase_LH=="2" ~ "1", #earlylut
+                                    cyclephase_LH=="3" ~ "1", #midlut
+                                    cyclephase_LH=="4" ~ "1", #perimens
+                                    cyclephase_LH=="5" ~ "0")) #midfol
+
+
+# New vars = NONPERI, NONMid, NONEL, NONPERIOV, NONMidFOL
+
+```
+
+# REVIEW FOR OVERLAPPING CYCLE PHASE CODING
+-when using LH-based phasing for all 4 phases, the most likely possibility for overlap is a day that got labeled midfollicular by LH-count and perimenstrual by menses count. *Perimenstrual_count trumps midfollicular by LH count* in this instance. any other overlaps within the dummy code are likely miscoded or an abnormal cycle.
+```{r}
+
+#check overlaps: goal is to only have 6 possible group combinations here (1 row per dummy coded phase, then a row where ALL are NA)
+
+df %>%
+  group_by(periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
+  summarize(n=n())
+
+#make note of errors - Tory 7/9/24
+# peri and midfol = 9
+# midlut and peri- 87
+# earlylut and peri = 3
+# periov and perimens = 64
+
+#example code to review midfol_LH and perimenstrual_LH overlaps, if they exist
+
+#BROKEN
+
+df %>%
+  filter(midfol_LH==1) %>%
+  filter(perimenstrual_LH==1) %>%
+  dplyr::select(id, date_rated, LHposdayfirst, daycountLH,
+         mensdayonefirst, cycleday,
+         midfol_LH, periov_LH, earlylut_LH,
+         midluteal_LH, perimenstrual_LH) %>% View()
+
+#in CLEAR studies, we are looking to see if the day in question is at the early end of the follicular phase as estimated by counting the days prior to ovulation
+#example: if the day in question is -7 by LH count and +2 by menses count, this was a short follicular phase, and is probably OK to be included, but needs to be recoded as "perimenstrual" (see below)
+
+
+
+```
+
+# N=1 - MIFOL AND PERI --> REVIEWING AND FIXING OVERLAPS
+```{r}
+#View overlapping DAYS Dataset (N=9: )
+
+df %>% filter(midfol_LH==1 & perimenstrual_LH==1) %>% 
+  dplyr::select(id, date_rated, daycountLH, cycleday, midfol_LH, perimenstrual_LH) %>% View()
+
+# Output a list of IDs with overlap
+midfol_peri_overlaps <- df %>% filter(midfol_LH==1 & perimenstrual_LH==1) %>% 
+  distinct(id) %>% 
+  pull(id)
+
+print(midfol_peri_overlaps)
+
+# 7/9/24: 216, 222, 241, 251, 324
+
+# I will replace all of these such that peri wins
+
+df  <- df  %>%
+  mutate(midfol_LH = case_when(perimenstrual_LH==1 ~ 0,
+                                        TRUE ~ midfol_LH)) 
+
+
+# Filter the dataframe to check for leftover overlaps
+filtered_df <- df %>% 
+  filter(midfol_LH == 1 & perimenstrual_LH == 1)
+
+# Output a list of ids that still overlap
+id_list <- filtered_df %>% pull(id)
+id_list
+
+```
+
+# NONE - MIDLUTEAL AND PERI --> REVIEWING AND FIXING OVERLAPS
+```{r}
+
+#review midlut and perimens overlaps - can override midluteal with perimens IF luteal phase is short but still seems normal (such as 9-11 days)
+
+## make notes of any SUPER short luteal phases (like 4-5 days) that you might want to flag for anovulation
+
+#df %>% filter(midluteal_LH==1 & perimenstrual_LH==1) %>% dplyr::select(id, date_rated, daycountLH, cycleday, midluteal_LH, perimenstrual_LH) %>% View()
+
+#OVERRIDE MIDLUTEALS WITH PERIs:
+
+df  <- df  %>%
+  #if perimenstrual by firstdayofperiod and midlut by count after LH test are both 1, perimen wins, make midlut=0
+  mutate(midluteal_LH = case_when(perimenstrual_LH==1 ~ 0,
+                                        TRUE ~ midluteal_LH)) 
+
+# Filter the dataframe to check for leftover overlaps
+filtered_df <- df %>% 
+  filter(midfol_LH == 1 & perimenstrual_LH == 1)
+
+# Output a list of ids that still overlap
+id_list <- filtered_df %>% pull(id)
+id_list
+
+```
+
+# NONE - EARLY-LUTEAL AND PERI --> REVIEWING AND FIXING OVERLAPS
+```{r}
+
+df %>% filter(earlylut_LH==1 & perimenstrual_LH==1) %>% 
+  dplyr::select(id, date_rated, mensdayonefirst, LHposdayfirst, daycountLH, cycleday, earlylut_LH, perimenstrual_LH) %>% View()
+
+#df %>% filter(id==222) %>% View()
+
+#good practice to review again and ensure that dummy code is fixed
+
+df %>%
+  group_by(periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH, midfol_LH) %>%
+  summarize(n=n())
+```
+
+# Identify participants who still have overlapping cycle phases
+```{r}
+
+
+participants_with_multiple_LH <- df %>%
+  rowwise() %>%
+  mutate(sum_LH = sum(c(midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) == 1)) %>%
+  filter(sum_LH > 1) %>%
+  ungroup() %>%
+  distinct(id)
+
+# Filter the original dataset to include all observations of the identified participants so you can view their cycle and count data to see where the errors are
+
+review_these <- df %>%
+  filter(id %in% participants_with_multiple_LH$id)
+
+review_these %>% dplyr::select(id, mensdayonefirst, LHposdayfirst, cycleday, daycountLH, midfol_LH, periov_LH, earlylut_LH, midluteal_LH, perimenstrual_LH) %>% View()
+
+# NONE
+
+# Extract the list of IDs with overlaps
+id_list <- participants_with_multiple_LH$id
+
+# Print the list of IDs as a comma-separated string
+id_list_string <- paste(id_list, collapse = ", ")
+cat(id_list_string)
+
+```
+ 
+
+# Calculate "Hybrid" CycleDay 
+```{r}
+
+#create hybrid version of cycle day:
+df <- df %>%
+  mutate(hybridcycleday = case_when((daycountLH >= -7 & daycountLH <= 5) ~ 
+                                      paste(as.character(daycountLH), "L", sep = ""),
+                                 (cycleday >= -9 & cycleday <= 7) ~ 
+                                   paste(as.character(cycleday), "M",  sep = ""),
+                                 TRUE ~ NA_character_))
+
+df <- df %>%
+  filter(!is.na(hybridcycleday)) %>%
+  arrange(id, date_rated)
+
+hybridcycleday_order <- c("-7L",
+                       "-6L",
+                       "-5L",
+                       "-4L",
+                       "-3L",
+                       "-2L",
+                       "-1L",
+                       "0L",
+                       "1L",
+                       "2L",
+                       "3L",
+                       "4L",
+                       "5L",
+                       "-9M",
+                       "-8M",
+                       "-7M",
+                       "-6M",
+                       "-5M",
+                       "-4M",
+                       "-3M",
+                       "-2M",
+                       "-1M",
+                       "1M",
+                       "2M",
+                       "3M",
+                       "4M",
+                       "5M",
+                       "6M",
+                       "7M")
+```

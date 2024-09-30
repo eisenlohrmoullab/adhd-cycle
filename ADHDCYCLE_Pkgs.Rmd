@@ -1,0 +1,92 @@
+---
+title: "ADHDCYCLE_Pkgs"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Setup}
+
+
+
+# ---- Data Manipulation and Cleaning ----
+
+# Core tidyverse libraries for data manipulation and visualization
+library(dplyr)       # Data manipulation (part of tidyverse)
+library(tidyr)       # Data tidying (part of tidyverse)
+library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
+library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
+library(skimr)       # Summarize and inspect data quickly
+
+
+# ---- Reading and Working with Files ----
+
+# Libraries for reading various file formats
+library(haven)       # For reading SPSS, Stata, and SAS files
+library(readxl)      # For reading Excel files
+library(readr)       # For reading CSV and other text files
+
+
+# ---- Plotting and Visualization ----
+
+# Core and extended libraries for data visualization
+library(ggplot2)     # Core plotting library
+library(ggdist)      # Visualizing distributions and uncertainty
+library(ggforce)     # Extending ggplot2 functionality with advanced features
+library(ggrepel)     # For adding non-overlapping text labels to ggplot2
+library(visdat)      # Visualizing missing data and data structure
+library(sjPlot)      # Plotting for statistical models (e.g., mixed models)
+library(corrplot)    # For creating correlation matrix visualizations
+library(grid)        # Base R graphics system for visual layout
+library(gridExtra)   # Arranging multiple plots in a grid
+library(see)         # Visualizing model checks and diagnostics
+
+
+# ---- Time Series and Rolling Averages ----
+
+# Libraries for time series data and handling dates
+library(zoo)         # Working with rolling means/averages and time series
+library(lubridate)   # Date and time manipulation
+
+
+# ---- Mixed-Effects Models and Analysis ----
+
+# Libraries for mixed-effects models and related analysis
+library(lme4)        # Fitting mixed-effects models (linear and generalized)
+library(lmerTest)    # Adds p-values for lme4 models
+library(nlme)        # Linear and nonlinear mixed-effects models
+library(emmeans)     # Compute estimated marginal means (EMMs) for model outputs
+library(broom.mixed) # Tidying mixed model results into tidy data frames
+library(performance) # Model performance metrics (e.g., R-squared for mixed models)
+library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed models
+
+# Generalized additive models and marginal effects
+library(mgcv)        # Fitting generalized additive models (GAMs)
+library(marginaleffects) # Tools for calculating marginal effects from regression models
+
+
+# ---- Statistical Tools ----
+
+# Libraries for specific statistical methods
+library(psych)       # Descriptive statistics and psychometrics
+library(GPArotation) # Factor analysis rotations (e.g., Varimax)
+library(rmcorr)      # Repeated measures correlations
+#library(MASS)        # Functions for statistical methods, e.g., Mahalanobis distance
+library(careless)    # Detecting careless responses in surveys
+library(responsePatterns) # Analyzing response patterns in data
+
+
+# ---- GitHub, Project Management, and Reproducibility ----
+
+# Libraries for project and version control management
+library(usethis)     # Simplifies setting up GitHub repositories and managing projects
+library(gitcreds)    # Managing Git credentials for GitHub interactions
+library(renv)        # Manages dependencies for reproducible environments
+library(targets)     # Workflow management for reproducible research pipelines
+
+```

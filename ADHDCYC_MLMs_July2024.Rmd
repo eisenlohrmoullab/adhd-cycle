@@ -1,0 +1,769 @@
+---
+title: "ADHDCYC_MLMs_July2024"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 2024-07-16 - PLOTS and MLMs and IDIOGRAPHIC - BEFORE CYCLE SCALING
+
+## Changes in careless responding across the menstrual cycle - BY ID
+
+```{r}
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-16'
+
+# Loop through each participant ID and call the function - CSS_Fx_Total
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'longstring', "Length of Identical Responding", dailydir)
+}
+```
+
+
+
+## CALLING PERSON GRAPHING FUNCTIONS
+### 1 - MAKE ALL CSS_Fx_Total + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Fx_Total
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+# Loop through each participant ID and call the function - CSS_Fx_Total
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Fx_Total', "CSS Functional Impact", dailydir)
+}
+
+
+```
+
+### 2 - MAKE ALL HYPIMP + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_HypImp
+```{r warning=FALSE}
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+
+# Loop through each participant ID and call the function - CSS_HypImp
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_HypImp', "CSS Hyperactivity/Impulsivity", dailydir)
+}
+
+```
+
+### 3 - MAKE ALL INATT + Hormone GRAPHS - Loop through each participant ID and call the function - CSS_Inatt
+```{r warning=FALSE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+# Loop through each participant ID and call the function - CSS_Inatt
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Inatt', "CSS Inattentiveness", dailydir)
+}
+```
+
+### 4 - MAKE ALL INATT COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
+```{r warning=FALSE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+# Loop through each participant ID and call the function - CSS_Inatt
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_Inatt_Count', "CSS Inattentive Criteria (Count)", dailydir)
+}
+```
+
+### 5 - MAKE ALL HYPIMP COUNT + Hormone GRAPHS - Loop through each participant ID and call the function
+```{r warning=FALSE}
+
+# Define the output directory - DO THIS FOR EACH DAY YOU RUN IT
+
+dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+# Loop through each participant ID and call the function
+for (participant_id in id_list) {
+  plot_participant_data(df, participant_id, 'CSS_HypImp_Count', "CSS Hyperactive/Impulsive Criteria (Count)", dailydir)
+}
+```
+
+
+
+
+## Create plot_interaction function
+```{r}
+
+# Define the function
+plot_interaction <- function(data, outcome, dailydir) {
+  # Check for problematic values in the specified variables
+  data_clean <- data %>%
+    filter(!is.na(.data[[outcome]]) & !is.nan(.data[[outcome]]) & !is.infinite(.data[[outcome]]) &
+           !is.na(E2) & !is.nan(E2) & !is.infinite(E2) &
+           !is.na(P4) & !is.nan(P4) & !is.infinite(P4))
+  
+  # Scale predictors by random effect and calculate daily derivatives
+  data_clean <- data_clean %>%
+    group_by(id) %>%
+    mutate(
+      E2zd = scale(E2),
+      P4zd = scale(P4),
+      E2ch = c(NA, diff(E2)),  # Daily derivative for E2
+      P4ch = c(NA, diff(P4))   # Daily derivative for P4
+    ) %>%
+    filter(!is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+           !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
+           !is.na(E2ch) & !is.nan(E2ch) & !is.infinite(E2ch) &
+           !is.na(P4ch) & !is.nan(P4ch) & !is.infinite(P4ch)) %>%
+    ungroup()
+  
+  # Create log-transformed outcome
+  data_clean <- data_clean %>%
+    mutate(log_outcome = log(.data[[outcome]])) %>%
+    filter(!is.na(log_outcome) & !is.nan(log_outcome) & !is.infinite(log_outcome))
+  
+  # Fit the models with cleaned data
+  rawmodel <- lmer(as.formula(paste(outcome, "~ E2zd * P4zd + (1 | id)")), data = data_clean)
+  logmodel <- lmer(log_outcome ~ E2zd * P4zd + (1 | id), data = data_clean)
+  model_prand <- lmer(log_outcome ~ E2zd * P4zd + (1 + P4zd | id), data = data_clean)
+  model_erand <- lmer(log_outcome ~ E2zd * P4zd + (1 + E2zd | id), data = data_clean)
+  model_derivs <- lmer(log_outcome ~ E2zd * P4zd + E2ch + P4ch + (1 | id), data = data_clean)
+  
+  # Print the model summaries
+  # print(summary(rawmodel))
+  # print(summary(logmodel))
+  # print(summary(model_prand))
+  # print(summary(model_erand))
+  # print(summary(model_derivs))
+  
+  # Specify the file path for the HTML output - primary model of E2 * P4
+  output_file <- file.path(dailydir, paste(outcome, "horm_tabmodel_output.html", sep = ""))
+  cat("Output file path:", output_file, "\n")
+  
+  # Generate the HTML output from tab_model without saving to a file
+  tab_model(rawmodel, logmodel, model_prand, model_erand, model_derivs)
+  tab_model_output <- tab_model(rawmodel, logmodel, model_prand, model_erand, model_derivs)
+  
+  # Capture the HTML output as a string
+  html_output <- as.character(tab_model_output)
+  
+  # Manually write the HTML output to the specified file
+  writeLines(html_output, con = output_file)
+  
+  # Create a grid of values for predictors
+  E2zd_seq <- seq(min(data_clean$E2zd), max(data_clean$E2zd), length.out = 100)
+  P4zd_seq <- seq(min(data_clean$P4zd), max(data_clean$P4zd), length.out = 100)
+  
+  # Create a dataframe with all combinations of E2zd and P4zd
+  grid_df <- expand.grid(E2zd = E2zd_seq, P4zd = P4zd_seq)
+  
+  # Add the mean values of the derivatives to the grid_df
+  grid_df$E2ch <- mean(data_clean$E2ch, na.rm = TRUE)
+  grid_df$P4ch <- mean(data_clean$P4ch, na.rm = TRUE)
+  
+  # Predict the outcome over the grid
+  grid_df$predicted_log_outcome <- predict(logmodel, newdata = grid_df, re.form = NA)
+  
+  # Exponentiate the predicted values to return them to the original scale
+  grid_df$predicted_outcome <- exp(grid_df$predicted_log_outcome)
+
+# Create the interaction plot
+intplot <- ggplot(grid_df, aes(x = E2zd, y = predicted_outcome, color = P4zd, group = P4zd)) +
+    geom_line() +
+    labs(
+        title = paste("Interaction between E2zd and P4zd on", outcome),
+        x = "E2zd",
+        y = paste("Predicted", outcome),
+        color = "P4zd"
+    ) +
+    theme_minimal(base_size = 15) +
+    scale_color_gradient(low = "blue", high = "red") +
+    theme(
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"),
+        legend.title = element_text(face = "bold"),
+        panel.background = element_rect(fill = "white", color = NA), # White background
+        plot.background = element_rect(fill = "white", color = NA),  # White background
+        panel.grid.major = element_line(color = "gray90"), # Light gray major grid lines
+        panel.grid.minor = element_line(color = "gray95")  # Lighter gray minor grid lines
+    )
+
+  # Save and return the plot
+  ggsave(filename = file.path(dailydir, paste0("EPintplot_", outcome, ".tif")), plot = intplot, width = 12, height = 8, units = "in")
+  
+  return(intplot)
+}
+
+
+```
+
+## Interaction Plots (running "plot_interaction")
+
+```{r}
+
+dailydir <- '~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-20'
+
+
+plot_interaction(df_sens, "longstring", dailydir)
+
+
+# Example usage
+plot_interaction(df_sens, "CSS_Inatt", dailydir)
+plot_interaction(df_sens, "CSS_Inatt_Count", dailydir) *SIG
+
+plot_interaction(df_sens, "CSS_HypImp", dailydir)
+plot_interaction(df_sens, "CSS_HypImp_Count", dailydir)
+
+plot_interaction(df_sens, "CSS_Fx_Total", dailydir)
+
+plot_interaction(df_sens, "CSS_B2_Total", dailydir)
+
+plot_interaction(df_sens, "UPPS_Total", dailydir)
+
+plot_interaction(df_sens, "BDEFS_Total", dailydir)
+
+ plot_interaction(df_sens, "DEBQ_Total", dailydir)
+
+```
+
+
+
+
+
+
+
+##  Function to plot by cycle day ("plot_by_cycle_day")
+```{r}
+plot_by_cycle_day <- function(df, var) {
+#Create individual overall means
+
+df <- df %>%
+group_by(id) %>%
+mutate(var.roll.m = mean(.data[[var]], na.rm = TRUE))
+
+dfcycdayplotdata <- df %>%
+group_by(id, hybridcycleday) %>%
+filter(!is.na(hybridcycleday)) %>%
+summarize(
+var.roll.m = mean(var.roll.m, na.rm = TRUE),
+var.day.roll.m = mean(.data[[var]], na.rm = TRUE),
+var.day.roll.d = var.day.roll.m - var.roll.m
+) %>%
+arrange(factor(hybridcycleday, levels = hybridcycleday_order))
+
+#print(dfcycdayplotdata)
+
+cycd_plot <- dfcycdayplotdata %>%
+group_by(hybridcycleday) %>%
+summarize(
+personcentered.dev = mean(var.day.roll.d, na.rm = TRUE),
+se = sd(var.day.roll.d, na.rm = TRUE) / sqrt(n())
+) %>%
+arrange(factor(hybridcycleday, levels = hybridcycleday_order)) %>%
+ggplot(aes(x = factor(hybridcycleday, levels = hybridcycleday_order), y = personcentered.dev)) +
+geom_line(group = 1) +
+#geom_ribbon(aes(ymin = personcentered.dev - se, ymax = personcentered.dev + se), alpha = 0.2) +
+geom_hline(yintercept = 0, linetype = "solid", col = "black") +
+
+geom_errorbar(aes(ymin = personcentered.dev - se, ymax = personcentered.dev + se), size = 0.5, width = 0.5, position = position_dodge()) +
+#scale_y_continuous(expand = c(0, 0.011)) +
+theme_bw() +
+xlab("Cycle Day\n(Relative to LH-surge and Menses Onset)") +
+ylab(paste("Person-Centered", var)) +
+
+  #Midfollicular Label
+annotate("rect", ymin = .35, ymax = .45, xmin = "-7L", xmax = "-3L", alpha = .2) +
+annotate("text", x = "-7L", y = .4, label = "Midfollicular", size = 3, hjust = -0.25) +
+  
+  #Periovulatory Label
+annotate("rect", ymin = .35, ymax = .45, xmin = "-2L", xmax = "1L", alpha = .2) +
+annotate("text", x = "-2L", y = .4, label = "Periovulatory", size = 3, hjust = 0) +
+  
+  #Early Luteal Label
+annotate("rect", ymin = .35, ymax = .45, xmin = "2L", xmax = "5L", alpha = .2) +
+annotate("text", x = "2L", y = .4, label = " Early Luteal", size = 3, hjust = 0) +
+ 
+   #Midluteal Label
+annotate("rect", ymin = .35, ymax = .45, xmin = "-9M", xmax = "-5M", alpha = .2) +
+annotate("text", x = "-9M", y = .4, label = "Midluteal", size = 3, hjust = -0.5) +
+
+  #Perimenstrual Label
+annotate("rect", ymin = .35, ymax = .45, xmin = "-3M", xmax = "2M", alpha = .2) +
+annotate("text", x = "-3M", y = .4, label = "Perimenstrual", size = 3, hjust = -0.15) +
+ 
+   #Annotation of Ovulation
+annotate("text", x = "0L", y = -.25, label = "*", size = 8, color = "forestgreen") +
+ 
+   #Annotation of Menses
+annotate("text", x = "1M", y = -.25, label = "*", size = 8, color = "red")
+print(cycd_plot)
+}
+
+```
+
+##  Function to plot by cycle phase ("plot_by_cycle_phase")
+```{r warning=FALSE}
+
+plot_by_cycle_phase <- function(df, var) {
+  df$cyclephase_LH_graph <- as.factor(df$cyclephase_LH_graph)
+  
+  # Calculate overall mean for each individual
+  df <- df %>%
+    group_by(id) %>%
+    mutate(overall_mean = mean(.data[[var]], na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Print intermediate data for debugging
+  # print(head(df))
+  
+  # Calculate phase-specific deviation
+  dfphaseplotdata <- df %>%
+    filter(!is.na(cyclephase_LH_graph)) %>%
+    group_by(id, cyclephase_LH_graph) %>%
+    summarize(
+      phase_mean = mean(.data[[var]], na.rm = TRUE),
+      overall_mean = first(overall_mean)
+    ) %>%
+    mutate(phase_deviation = phase_mean - overall_mean) %>%
+    ungroup()
+  
+  # Print intermediate data for debugging
+  # print(head(dfphaseplotdata))
+  
+  # Calculate grand mean and standard error
+  phase_plot_data <- dfphaseplotdata %>%
+    group_by(cyclephase_LH_graph) %>%
+    summarize(
+      grand_mean_deviation = mean(phase_deviation, na.rm = TRUE),
+      se = sd(phase_deviation, na.rm = TRUE) / sqrt(n())
+    )
+  
+  # Print summarized data for debugging
+ # print(head(phase_plot_data))
+  
+  # Create the plot
+  phase_plot <- phase_plot_data %>%
+    ggplot(aes(x = cyclephase_LH_graph, y = grand_mean_deviation, group = 1)) +
+    geom_line() + # Add the line
+    scale_x_discrete(labels = c(
+      "1" = "Midfollicular",
+      "2" = "Periovulatory", 
+      "3" = "Early Luteal",
+      "4" = "Midluteal",
+      "5" = "Perimenstrual"
+    )) +
+    geom_ribbon(aes(ymin = grand_mean_deviation - se, ymax = grand_mean_deviation + se), alpha = 0.2) +
+    geom_hline(yintercept = 0.0, color = "black", linetype = "solid") +
+    theme_bw(base_size = 11) +
+    xlab("Cycle Phase") +
+    ylab(paste("Person-Centered", var))
+  
+  print(phase_plot)
+}
+
+
+```
+
+
+##  FUNCTION TO RUN&SAVE PHASE & CYCLEDAY GRAPHS TO BOX
+```{r}
+
+# Define the function
+run_and_save_plots <- function(variable_name, df, output_directory) {
+  
+  # Ensure the output directory exists
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+  
+  # Create and save Cycle Day Plot
+  day_plot <- plot_by_cycle_day(df, paste0(variable_name, ".roll.d"))
+  ggsave(file.path(output_directory, paste0(variable_name, "_DAYPLOT.png")), 
+         plot = day_plot, width = 10, height = 6, dpi = 300)
+  
+  # Create and save Cycle Phase Plot
+  phase_plot <- plot_by_cycle_phase(df, paste0(variable_name, ".roll.d"))
+  ggsave(file.path(output_directory, paste0(variable_name, "_PHSPLOT.png")), 
+         plot = phase_plot, width = 10, height = 6, dpi = 300)
+}
+
+
+```
+
+
+##  Function to run and save MLMs to html in dated Box output folder ("run_and_save_mlms")
+```{r message=TRUE, warning=TRUE}
+
+run_and_save_mlms <- function(variable_name, data, output_directory) {
+  ## peri
+  model_peri <- lmer(as.formula(paste(variable_name, "~ midfol_LH + periov_LH + earlylut_LH + midluteal_LH + (1 | id)")),
+                     data = data)
+  cat("Peri model fitted.\n")
+  
+  ## midfol
+  model_midfol <- lmer(as.formula(paste(variable_name, "~ periov_LH + earlylut_LH + midluteal_LH + perimenstrual_LH + (1 | id)")),
+                       data = data)
+  cat("Midfol model fitted.\n")
+  
+  ## periov
+  model_periov <- lmer(as.formula(paste(variable_name, "~ midfol_LH + earlylut_LH + midluteal_LH + perimenstrual_LH + (1 | id)")),
+                       data = data)
+  cat("Periov model fitted.\n")
+  
+  ## earlylut
+  model_earlylut <- lmer(as.formula(paste(variable_name, "~ midfol_LH + periov_LH + midluteal_LH + perimenstrual_LH + (1 | id)")),
+                         data = data)
+  cat("Earlylut model fitted.\n")
+  
+  ## midlut
+  model_midlut <- lmer(as.formula(paste(variable_name, "~ midfol_LH + periov_LH + earlylut_LH + perimenstrual_LH + (1 | id)")),
+                       data = data)
+  cat("Midlut model fitted.\n")
+  
+  # Create the directory if it doesn't exist
+  if (!dir.exists(output_directory)) {
+    dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+    cat("Directory created:", output_directory, "\n")
+  } else {
+    cat("Directory already exists:", output_directory, "\n")
+  }
+  
+  # Specify the file path for the HTML output
+  output_file <- file.path(output_directory, paste(variable_name, "_PHS_tab_model_output.html", sep = ""))
+  cat("Output file path:", output_file, "\n")
+  
+  # Generate the HTML output from tab_model without saving to a file
+  tab_model_output <- tab_model(model_midfol, model_periov, model_earlylut, model_midlut, model_peri)
+  
+  # Capture the HTML output as a string
+  html_output <- as.character(tab_model_output)
+  
+  # Manually write the HTML output to the specified file
+  writeLines(html_output, con = output_file)
+  
+  # Check if the file was created and has content
+  if (file.exists(output_file)) {
+    cat("HTML output generated and saved to:", output_file, "\n")
+  } else {
+    cat("Failed to save HTML output to:", output_file, "\n")
+  }
+}
+
+# Run for all Outcomes
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+
+df <- df
+
+```
+
+
+
+##  CALL PLOTTING FUNCTIONS FOR CARELESS RESPONDING INDICES
+
+```{r}
+
+plot_by_cycle_day(df_sens, "longstring")
+plot_by_cycle_phase(df_sens, "longstring")
+```
+
+
+
+
+##  CALL PLOTTING FUNCTIONS FOR HORMONES
+```{r}
+
+#E2
+plot_by_cycle_day(df_sens, "E2")
+plot_by_cycle_phase(df_sens, "E2")
+
+#P4
+plot_by_cycle_day(df_sens, "P4")
+plot_by_cycle_phase(df_sens, "P4")
+
+#LH
+plot_by_cycle_day(df_sens, "LH")
+plot_by_cycle_phase(df_sens, "LH")
+
+
+
+```
+
+
+
+##  CALL FUNCTIONS: E2
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("E2", df, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "E2"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df, output_directory)
+
+```
+## # CALL FUNCTIONS: P4
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("P4", df, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "P4"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df, output_directory)
+
+```
+
+## CALL FUNCTIONS: LH
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("LH", df, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "LH"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-04"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df, output_directory)
+
+```
+
+
+## CALL FUNCTION FOR CARELESS RESPONDING VARS
+
+```{r}
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-20"
+
+
+run_and_save_plots("longstring", df, output_directory)
+
+```
+
+
+##CALL FUNCTIONS: CSS_Inatt
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_Inatt", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_Inatt"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+## CALL FUNCTIONS: CSS_HypImp
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_HypImp", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_HypImp"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+## CALL FUNCTIONS: CSS_B2_Total
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_B2_Total", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_B2_Total"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+## CALL FUNCTIONS: CSS_Fx_Total
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_Fx_Total", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_Fx_Total"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+
+
+
+## CALL FUNCTIONS: CSS_Inatt_Count
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_Inatt_Count", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_Inatt_Count"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+
+
+## CALL FUNCTIONS: CSS_Imp_Count
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("CSS_HypImp_Count", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "CSS_HypImp_Count"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+
+
+
+## CALL FUNCTIONS: BDEFS_Total
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("BDEFS_Total", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "BDEFS_Total"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+
+
+## CALL FUNCTIONS: DEBQ_Total
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("DEBQ_Total", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "DEBQ_Total"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+
+
+## CALL FUNCTIONS: UPPS_Total
+
+```{r}
+
+#SPECIFY VARIABLE NAME FOR MODELS FUNCTION 
+
+run_and_save_mlms("UPPS_Total", df_sens, output_directory)
+
+# SPECIFY VARIABLE NAME FOR GRAPHING FUNCTION
+
+variable_name <- "UPPS_Total"
+
+#### NO NEED TO CHANGE ANYTHING BELOW
+
+df <- df  # Replace with your actual dataframe
+output_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-07-09"
+# Run the plotting function (Phase, Day)
+run_and_save_plots(variable_name, df_sens, output_directory)
+
+```
+

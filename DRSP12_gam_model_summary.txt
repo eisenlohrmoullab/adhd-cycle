@@ -1,0 +1,24 @@
+
+Family: gaussian 
+Link function: identity 
+
+Formula:
+DRSP_12log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re") + 
+    s(scaled_cycleday, k = 20)
+
+Parametric coefficients:
+            Estimate Std. Error t value            Pr(>|t|)    
+(Intercept)  1.05160    0.05517   19.06 <0.0000000000000002 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Approximate significance of smooth terms:
+                             edf Ref.df     F p-value   
+s(id)                 0.37734098  1.000 0.606 0.20509   
+s(scaled_cycleday,id) 0.00007773  1.000 0.000 0.89875   
+s(scaled_cycleday)    1.94540924  2.437 4.856 0.00528 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+R-sq.(adj) =  0.00805   Deviance explained = 0.973%
+-REML =  641.3  Scale est. = 0.14746   n = 1373
