@@ -3975,4 +3975,153 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
 create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
+# Simulate data for logE2, logP4, and outcome
+logE2 <- seq(-2, 2, length.out = 100)
+logP4 <- seq(-2, 2, length.out = 100)
+z <- outer(logE2, logP4, function(e2, p4) sin(e2) * cos(p4)) # Replace with actual model estimates
+
+plot_ly(x = ~logE2, y = ~logP4, z = ~z, type = "surface") %>%
+  layout(title = "Interaction Effect of logE2 and logP4 on Outcome",
+         scene = list(
+           xaxis = list(title = "logE2"),
+           yaxis = list(title = "logP4"),
+           zaxis = list(title = "Predicted Outcome")
+         ))
+
+
 ```
+
+# Function for te(raw log E*P) in 85 dataset with 3D html plot output
+```{r}
+# Load required libraries
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(mgcv)
+library(plotly)
+library(htmlwidgets)
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(outcomelist, df_all, save_dir) {
+  for (outcome in outcomelist) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df_all <- df_all %>% mutate(!!outcome_log := log(!!sym(outcome) + 1))
+
+    # Plot histogram for transformed outcome using ggplot2
+    hist_orig <- ggplot(df_all, aes(x = !!sym(outcome))) +
+      geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
+      labs(title = paste("Histogram of", outcome), x = outcome, y = "Count") +
+      theme_minimal()
+
+    hist_log <- ggplot(df_all, aes(x = !!sym(outcome_log))) +
+      geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
+      labs(title = paste("Histogram of Log-transformed", outcome), x = paste0(outcome, " (log)"), y = "Count") +
+      theme_minimal()
+
+    # Arrange the two histograms side by side and save
+    histograms <- grid.arrange(hist_orig, hist_log, ncol = 2)
+    hist_file_path <- file.path(save_dir, paste0(outcome, "_histograms.png"))
+    ggsave(filename = hist_file_path, plot = histograms, width = 12, height = 6)
+    cat("Histograms saved to:", hist_file_path, "\n")
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + te(logE2 , logP4)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df_all,
+      family = gaussian(),
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawlogEP_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ te(logE2 , logP4)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df_all,
+      family = gaussian(),
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand_grid(
+      logE2 = seq(
+        min(df_all$logE2, na.rm = TRUE),
+        max(df_all$logE2, na.rm = TRUE),
+        length.out = 100
+      ),
+      logP4 = seq(
+        min(df_all$logP4, na.rm = TRUE),
+        max(df_all$logP4, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values for contour plot
+    grid <- grid %>%
+      mutate(predicted = predict(gamm_model_simple, newdata = ., type = "response"))
+
+    # Contour plot using ggplot2
+    plot_title <- paste("Predicting", outcome, "from logE2 and logP4")
+    contour_plot <- ggplot(grid, aes(x = logE2, y = logP4, z = predicted)) +
+      geom_tile(aes(fill = predicted)) +
+      geom_contour(color = "black") +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted, na.rm = TRUE)) +
+      labs(x = "logE2", y = "logP4", fill = "Predicted Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "_rawlogEP_te_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+
+    # Create the 3D surface plot using Plotly
+    grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
+    surface_plot <- plot_ly(
+      x = seq(min(df_all$logE2, na.rm = TRUE), max(df_all$logE2, na.rm = TRUE), length.out = 100),
+      y = seq(min(df_all$logP4, na.rm = TRUE), max(df_all$logP4, na.rm = TRUE), length.out = 100),
+      z = ~grid_matrix
+    ) %>%
+      add_surface() %>%
+      layout(
+        title = paste("3D Surface Plot of logE2 and logP4 Interaction for", outcome),
+        scene = list(
+          xaxis = list(title = "logE2"),
+          yaxis = list(title = "logP4"),
+          zaxis = list(title = "Predicted Outcome")
+        )
+      )
+
+    # Save the interactive surface plot as an HTML file
+    surface_plot_file_path <- file.path(save_dir, paste0(outcome, "_3D_surface.html"))
+    saveWidget(surface_plot, surface_plot_file_path)
+    cat("3D surface plot saved to:", surface_plot_file_path, "\n")
+  }
+}
+
+# CALL THE LOOP
+create_gamm_models(outcomelist, df_all, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+
+```
+
