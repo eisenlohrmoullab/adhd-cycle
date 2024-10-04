@@ -1,0 +1,3978 @@
+---
+title: "ADHDCYCLE_daily"
+output: 
+  html_document: 
+    toc: true
+    fig_caption: true
+    number_sections: true
+    df_print: default
+date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+```{r Setup}
+
+# ---- Global Chunk Options and Settings ----
+
+# Setting options for knitr to display R code in output
+knitr::opts_chunk$set(echo = TRUE)
+
+# Prevent scientific notation in outputs
+options(scipen = 999)
+
+
+# ---- Data Manipulation and Cleaning ----
+
+# Core tidyverse libraries for data manipulation and visualization
+library(dplyr)       # Data manipulation (part of tidyverse)
+library(tidyr)       # Data tidying (part of tidyverse)
+library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
+library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
+library(skimr)       # Summarize and inspect data quickly
+
+
+# ---- Reading and Working with Files ----
+
+# Libraries for reading various file formats
+library(haven)       # For reading SPSS, Stata, and SAS files
+library(readxl)      # For reading Excel files
+library(readr)       # For reading CSV and other text files
+
+
+# ---- Plotting and Visualization ----
+
+# Core and extended libraries for data visualization
+library(ggplot2)     # Core plotting library
+library(ggdist)      # Visualizing distributions and uncertainty
+library(ggforce)     # Extending ggplot2 functionality with advanced features
+library(ggrepel)     # For adding non-overlapping text labels to ggplot2
+library(visdat)      # Visualizing missing data and data structure
+library(sjPlot)      # Plotting for statistical models (e.g., mixed models)
+library(corrplot)    # For creating correlation matrix visualizations
+library(grid)        # Base R graphics system for visual layout
+library(gridExtra)   # Arranging multiple plots in a grid
+library(see)         # Visualizing model checks and diagnostics
+
+library(DescTools)
+
+# ---- Time Series and Rolling Averages ----
+
+# Libraries for time series data and handling dates
+library(zoo)         # Working with rolling means/averages and time series
+library(lubridate)   # Date and time manipulation
+
+
+# ---- Mixed-Effects Models and Analysis ----
+
+# Libraries for mixed-effects models and related analysis
+library(lme4)        # Fitting mixed-effects models (linear and generalized)
+library(lmerTest)    # Adds p-values for lme4 models
+library(nlme)        # Linear and nonlinear mixed-effects models
+library(emmeans)     # Compute estimated marginal means (EMMs) for model outputs
+library(broom.mixed) # Tidying mixed model results into tidy data frames
+library(performance) # Model performance metrics (e.g., R-squared for mixed models)
+library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed models
+
+# Generalized additive models and marginal effects
+library(mgcv)        # Fitting generalized additive models (GAMs)
+library(marginaleffects) # Tools for calculating marginal effects from regression models
+
+
+# ---- Statistical Tools ----
+
+# Libraries for specific statistical methods
+library(psych)       # Descriptive statistics and psychometrics
+library(GPArotation) # Factor analysis rotations (e.g., Varimax)
+library(rmcorr)      # Repeated measures correlations
+#library(MASS)        # Functions for statistical methods, e.g., Mahalanobis distance
+library(careless)    # Detecting careless responses in surveys
+library(responsePatterns) # Analyzing response patterns in data
+
+
+# ---- GitHub, Project Management, and Reproducibility ----
+
+# Libraries for project and version control management
+library(usethis)     # Simplifies setting up GitHub repositories and managing projects
+library(gitcreds)    # Managing Git credentials for GitHub interactions
+library(renv)        # Manages dependencies for reproducible environments
+library(targets)     # Workflow management for reproducible research pipelines
+
+```
+           
+           
+
+```{r}
+
+# ---- Load Data ----
+
+# Load your CSV file (adjust the path to your actual file location)
+df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv")
+
+#skim(df)
+#View(df)
+
+
+# Print Variable Names
+
+variable_names <- names(df)
+formatted_list <- paste(variable_names, collapse = ", ")
+cat(formatted_list)
+
+```
+
+
+
+
+```{r}
+
+# ---- Data Preprocessing ----
+# Convert date_rated to Date format using lubridate if necessary (ensure date format matches)
+df <- df %>%
+  mutate(date_rated = as.Date(mdy(date_rated)))  # If in mm/dd/yyyy format
+
+# Remove rows where all values are NA
+df <- df[rowSums(is.na(df)) != ncol(df), ]
+
+# Remove rows with NA in key columns (e.g., id, date_rated)
+df <- df %>%
+  filter(!is.na(id), !is.na(date_rated))
+
+# Display number of rows after cleaning
+cat("Number of rows after cleaning: ", nrow(df), "\n")
+
+# Sort by id and date_rated
+df <- df %>%
+  arrange(id, date_rated)
+
+
+# ---- Hard-Coded Fixes ----
+# Example of hard-coding changes based on manual review
+df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
+
+# Fix date issues for participant 210
+df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
+df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
+
+
+# ---- Placeholder for Missing Dates ----
+df <- df %>%
+  group_by(id) %>%
+  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
+  ungroup()
+
+# Display the number of rows after adding placeholders
+cat("Number of rows after adding placeholders: ", nrow(df), "\n")
+
+
+# ---- Rename Hormone Columns ----
+df <- df %>%
+  rename(
+    E2 = Estradiol,
+    P4 = Progesterone, 
+    CSS_Inatt_Count = IA_Count, 
+    CSS_Hyp_Count = Hyp_Count, 
+    CSS_Imp_Count = Imp_Count)
+
+
+
+
+```
+
+
+# Add in missing menses onset dates from Urveesha
+<!-- Calculated menses onset (although almost all of these are recorded in the tracking sheet? Not sure why missing): -->
+<!-- 206 - 4/25/21 -->
+<!-- 208 - 2/27/21 -->
+<!-- 209 - 2/15/21 -->
+<!-- 255- 7/2/22 -->
+<!-- 258 - 7/11/22 -->
+<!-- 270 - 9/4/22 -->
+<!-- 279 - 10/27/22 -->
+<!-- 290 - 2/21/23 -->
+<!-- 291 - 2/10/23 -->
+<!-- 293 - 2/3/23 -->
+<!-- 312 - 7/4/23 -->
+<!-- 331 - 1/3/24 -->
+<!-- 332 - 1/21/24     -->
+```{r}
+# Convert the dates to Date format
+df[["date_rated"]] <- as.Date(df[["date_rated"]], format = "%m/%d/%y")
+
+# Define a vector of IDs and their corresponding menses onset dates
+menses_onset_data <- data.frame(
+  id = c(206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332),
+  onset_date = as.Date(c("2021-04-25", "2021-02-27", "2021-02-15", "2022-07-02", "2022-07-11", 
+                         "2022-09-04", "2022-10-27", "2023-02-21", "2023-02-10", "2023-02-03", 
+                         "2023-07-04", "2024-01-03", "2024-01-21"))
+)
+
+# Update StartPeriod in df for these ID and date combinations
+for (i in 1:nrow(menses_onset_data)) {
+  df[["StartPeriod"]][df[["id"]] == menses_onset_data$id[i] & df[["date_rated"]] == menses_onset_data$onset_date[i]] <- 1
+}
+
+# Optional: Check the updated data
+df[df[["StartPeriod"]] == 1, c("id", "date_rated", "StartPeriod")]
+
+```
+
+
+#Using IA_Count (as a known measure of more sx) to check direction of variable coding
+
+```{r}
+
+#---- Checking BDEFS WM - Yes, higher is more sx r=.66 ----
+cor(df$CSS_Inatt_Count, df$BDEFS_WM_avg, use="pairwise.complete.obs")
+
+#---- Checking BDEFS RI - Yes, higher is more sx r=.57----
+cor(df$CSS_Inatt_Count, df$BDEFS_RI_avg, use="pairwise.complete.obs")
+
+#---- Checking RAW BDEFS  - Yes, higher is more sx for all ----
+cor(df$CSS_Inatt_Count, df$BDEFS_3, use="pairwise.complete.obs")
+
+#---- Checking UPPS raw variables - Yes, higher is more sx for all UPPS vars (incl 7 and 8) ----
+cor(df$CSS_Inatt_Count, df$UPPS_15, use="pairwise.complete.obs")
+
+#---- Checking DEBQ_avg - Yes, higher is more sx r=.28----
+cor(df$CSS_Inatt_Count, df$DEBQ_avg, use="pairwise.complete.obs")
+
+#---- Checking DRSP - Yes, higher is more sx ----
+cor(df$CSS_Inatt_Count, df$DRSP_1, use="pairwise.complete.obs")
+
+#---- Checking score_robot - NO, higher is lower sx, so we will recode ----
+cor(df$CSS_Inatt_Count, df$score_robot, use="pairwise.complete.obs")
+
+#---- Checking score_pinball - NO, higher is lower sx, so we will recode ----
+cor(df$CSS_Inatt_Count, df$score_pinball, use="pairwise.complete.obs")
+```
+#Notes re: how existing variables were coded --- but I'm not sure this is actually what was used because names don't match up 
+<!-- **************************************. -->
+<!-- Original Syntax by: Ashley Eng. -->
+<!-- **************************************. -->
+<!-- COMPUTE CSS_B_TotalIASymp=CSS_B_1 + CSS_B_3 + CSS_B_5 + CSS_B_7 + CSS_B_9 + CSS_B_11 + CSS_B_13 +  -->
+<!--     CSS_B_15 + CSS_B_17. -->
+<!-- VARIABLE LABELS CSS_B_TotalIASymp 'items 1, 3, 5, 7, 9. 11. 13. 15 .17'.  -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_B_TotalHISymp=CSS_B_2 + CSS_B_4 + CSS_B_6 + CSS_B_8 + CSS_B_10 + CSS_B_12 + CSS_B_14 +  -->
+<!--     CSS_B_16 + CSS_B_18. -->
+<!-- VARIABLE LABELS CSS_B_TotalHISymp 'items 2 4 6 8 10 12 14 16 18'.  -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_TotalFunction=CSS_Function_1 + CSS_Function_2 + CSS_Function_3 + CSS_Function_4 + CSS_Function_5 + CSS_Function_6 + CSS_Function_7 +  -->
+<!--     CSS_Function_8 + CSS_Function_9 + CSS_Function_10. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_B2_Total=CSS_B2_1 + CSS_B2_2 + CSS_B2_3 + CSS_B2_4 + CSS_B2_5 + CSS_B2_6 + CSS_B2_7 +  -->
+<!--     CSS_B2_8. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE DEBQ_Total=DEBQ_1 + DEBQ_2 + DEBQ_3 + DEBQ_4 + DEBQ_5 + DEBQ_6 + DEBQ_7 + DEBQ_8 + DEBQ_9 +  -->
+<!--     DEBQ_10 + DEBQ_11 + DEBQ_12 + DEBQ_13. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE BDEFS_Total=BDEFS_1 + BDEFS_2 + BDEFS_3 + BDEFS_4 + BDEFS_5 + BDEFS_6. -->
+<!-- EXECUTE. -->
+<!-- RECODE UPPS_7 UPPS_8 (1=4) (2=3) (3=2) (4=1). -->
+<!-- EXECUTE. -->
+<!-- COMPUTE UPPS_Total=UPPS_1 + UPPS_2 + UPPS_3 + UPPS_4 + UPPS_5 + UPPS_6 + UPPS_7 + UPPS_8 + UPPS_9 +  -->
+<!--     UPPS_10 + UPPS_11 + UPPS_12 + UPPS_13 + UPPS_14 + UPPS_15. -->
+<!-- VARIABLE LABELS UPPS_Total 'After recoding items 7 and 8'. -->
+<!-- EXECUTE. -->
+
+
+```{r}
+# ---- Calculate ADHD, UPPS, BDEFS, and DEBQ Scores ----
+
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    # Convert columns to numeric to ensure proper summation
+    CSS_Inatt = rowMeans(across(
+      c(
+        CSS_B_1,
+        CSS_B_3,
+        CSS_B_5,
+        CSS_B_7,
+        CSS_B_9,
+        CSS_B_11,
+        CSS_B_13,
+        CSS_B_15,
+        CSS_B_17
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    # Convert each column to numeric, handle missing values with na.rm = TRUE
+    
+    CSS_HypImp = rowMeans(across(
+      c(
+        CSS_B_2,
+        CSS_B_4,
+        CSS_B_6,
+        CSS_B_8,
+        CSS_B_10,
+        CSS_B_12,
+        CSS_B_14,
+        CSS_B_16,
+        CSS_B_18
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    # Same process for CSS_HypImp scores
+    
+    # Adding the counts without needing row-wise summation
+    CSS_HypImp_Count = CSS_Imp_Count + CSS_Hyp_Count,
+    
+    # Direct summation of these variables, assuming they are already numeric
+    
+    # Functional Total Score: Summing specific function-related columns
+    CSS_Fx_Total = rowMeans(across(
+      c(
+        CSS_Function_1,
+        CSS_Function_2,
+        CSS_Function_3,
+        CSS_Function_4,
+        CSS_Function_5,
+        CSS_Function_6,
+        CSS_Function_7,
+        CSS_Function_8,
+        CSS_Function_9,
+        CSS_Function_10
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    
+    # DEBQ Total Score summing all DEBQ columns
+    DEBQ_Total = rowMeans(across(
+      c(
+        DEBQ_1,
+        DEBQ_2,
+        DEBQ_3,
+        DEBQ_4,
+        DEBQ_5,
+        DEBQ_6,
+        DEBQ_7,
+        DEBQ_8,
+        DEBQ_9,
+        DEBQ_10,
+        DEBQ_11,
+        DEBQ_12,
+        DEBQ_13
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    
+    # BDEFS Total Score summing all BDEFS columns
+    BDEFS_Total = rowMeans(across(
+      c(BDEFS_1, BDEFS_2, BDEFS_3, BDEFS_4, BDEFS_5, BDEFS_6),
+      ~ as.numeric(.)
+    ), na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Reverse code pinball and robot
+
+# Step 1: Find the maximum values for both variables
+max_robot <- max(df$score_robot, na.rm = TRUE)
+max_pinball <- max(df$score_pinball, na.rm = TRUE)
+
+# Step 2: Reverse code the variables WITH SAME NAME
+df$score_robot <- max_robot - df$score_robot
+df$score_pinball <- max_pinball - df$score_pinball
+
+
+# Check Histograms - they are all zero inflated
+
+#hist(df$CSS_Inatt, breaks = 10, main = "Histogram of CSS_Inatt", xlab = "CSS_Inatt", col = "lightblue")
+#hist(df$CSS_HypImp, breaks = 10, main = "Histogram of CSS_HypImp", xlab = "CSS_HypImp", col = "lightblue")
+#hist(df$BDEFS_Total, breaks = 10, main = "Histogram of BDEFS_Total", xlab = "BDEFS_Total", col = "lightblue")
+#hist(df$BDEFS_WM_avg, breaks = 10, main = "Histogram of BDEFS_WM_avg", xlab = "BDEFS_WM_avg", col = "lightblue")
+#hist(df$BDEFS_RI_avg)
+
+
+#hist(df$DEBQ_Total, breaks = 10, main = "Histogram of DEBQ_Total", xlab = "DEBQ_Total", col = "lightblue")
+
+# Checking direction - They are all positively correlated
+
+#cor(df$IA_Count, df$DEBQ_Total, use="pairwise.complete.obs")
+#cor(df$BDEFS_Total, df$BDEFS_WM_avg, use="pairwise.complete.obs")
+#cor(df$BDEFS_WM_avg, df$score_pinball, use="pairwise.complete.obs")
+#cor(df$BDEFS_RI_avg, df$score_robot, use="pairwise.complete.obs")
+
+
+# Keeping only the variables I need 
+
+df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", 
+  "DEBQ_avg", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_Imp_Count", "CSS_Hyp_Count", "CSS_HypImp_Count", "CSS_Fx_Total",
+  "BDEFS_WM_avg", "BDEFS_RI_avg", "BDEFS_Total", "UPPS_NU_avg", 
+  "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
+  "DEBQ_Total", "score_pinball", "score_robot", "DRSP_1", "DRSP_2", "DRSP_3", 
+  "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
+  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", 
+  "DRSP_16", "DRSP_17", "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", 
+  "DRSP_22", "DRSP_23")]
+
+
+
+# Print Variable Names
+
+variable_names <- names(df)
+formatted_list <- paste(variable_names, collapse = ", ")
+cat(formatted_list)
+
+```
+
+
+## create outcome lists to loop through functions
+```{r echo=T}
+
+#person-centered deviations
+outcomelist <- c(
+  "E2",
+  "P4",
+  "LH",
+  "CSS_Fx_Total",
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total"
+) %>% noquote()
+
+# person-centered deviations
+outcomelist.d <- c(
+  "E2.d",
+  "P4.d",
+  "LH.d",
+  "CSS_Fx_Total.d",
+  "CSS_Inatt.d",
+  "CSS_HypImp.d",
+  "CSS_Inatt_Count.d",
+  "CSS_HypImp_Count.d",
+    "CSS_Hyp_Count.d",
+  "CSS_Imp_Count.d",
+  "score_pinball.d",
+  "score_robot.d",
+  "BDEFS_Total.d",
+  "BDEFS_WM_avg.d",
+  "BDEFS_RI_avg.d",
+  "UPPS_NU_avg.d",
+  "UPPS_PU_avg.d",
+  "UPPS_Premed_avg.d",
+  "UPPS_Persev_avg.d",
+  "UPPS_Sens_avg.d",
+  "DEBQ_Total.d"
+) %>% noquote()
+
+# rolling averages
+outcomelist.roll <- c(
+  "E2.roll",
+  "P4.roll",
+  "LH.roll",
+  "CSS_Fx_Total.roll",
+  "CSS_Inatt.roll",
+  "CSS_HypImp.roll",
+  "CSS_Inatt_Count.roll",
+  "CSS_HypImp_Count.roll",
+    "CSS_Hyp_Count.roll",
+  "CSS_Imp_Count.roll",
+  "score_pinball.roll",
+  "score_robot.roll",
+  "BDEFS_Total.roll",
+  "BDEFS_WM_avg.roll",
+  "BDEFS_RI_avg.roll",
+  "UPPS_NU_avg.roll",
+  "UPPS_PU_avg.roll",
+  "UPPS_Premed_avg.roll",
+  "UPPS_Persev_avg.roll",
+  "UPPS_Sens_avg.roll",
+  "DEBQ_Total.roll"
+) %>% noquote()
+
+
+#View(df)
+
+
+```
+
+```{r}
+
+#ROLLING AVGS
+
+#create rolling averages on RAW variables
+for (i in outcomelist) {
+  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
+}
+
+#MEANS
+
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in outcomelist.roll) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in outcomelist) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#PERSON-DEVIATIONS
+
+#for raw deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+#for rolling avgs deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist.roll) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+
+#Check 
+
+df %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
+
+```
+
+
+
+# Print Variable Names
+```{r printvars}
+
+variable_names <- names(df)
+formatted_list <- paste(variable_names, collapse = ", ")
+cat(formatted_list)
+```
+
+# Create dichotomous mensdayone/mensdayonefirst to indicate first day of period
+```{r }
+
+
+str(df$id) #check id format
+str(df$date_rated) #check date_rated format
+
+df <- df %>%
+  filter(!is.na(id))
+
+df <- df %>%
+  arrange(id, date_rated)
+
+
+df$StartPeriod <- as.numeric(df$StartPeriod)
+
+df <- df %>%
+  mutate(mensdayone = case_when(
+    is.na(StartPeriod) ~ NA_real_,
+    StartPeriod == 1 ~ 1,
+    TRUE ~ 0
+  ))
+
+
+# Eliminate all but the first menses onset day in a new variable called "mensdayonefirst"
+
+# Process the data
+df <- df %>%
+  arrange(id, date_rated) %>%  # Arrange the data by id and date_rated
+  group_by(id) %>%  # Group the data by id
+  mutate(
+    mensdayonefirst = case_when(
+      is.na(mensdayone) ~ NA,
+      mensdayone == 1 & (lag(mensdayone, order_by = date_rated) != 1 | is.na(lag(mensdayone, order_by = date_rated))) ~ 1,
+      row_number() == 1 & mensdayone == 1 ~ 1,
+      TRUE ~ 0
+    )
+  ) %>% 
+  ungroup() # Remove the grouping
+
+#Check
+
+df %>% dplyr::select(id, date_rated, mensdayone, mensdayonefirst, PosLHTest) %>% View()
+
+
+```
+
+# Create "LHposday" (0/1/NA) that represents the positive LH day.
+```{r }
+
+
+###View(df)
+  
+  df$PosLHTest <- as.numeric(df$PosLHTest)
+
+df <- df %>%
+  mutate(LHposday = case_when(
+    is.na(PosLHTest) ~ NA_real_,
+    PosLHTest == 1 ~ 1,
+    TRUE ~ 0
+  ))
+
+###View(df)
+
+# Eliminate all but the first pos Ov day in a new variable called "LHposdayfirst"
+df <- df %>%
+  arrange(id, date_rated) %>%  # Arrange the data by id and date_rated
+  group_by(id) %>%  # Group the data by id
+  mutate(
+    LHposdayfirst = case_when(
+      is.na(LHposday) ~ NA_real_,
+      LHposday == 1 & lag(LHposday, order_by = date_rated) != 1 ~ 1,
+      TRUE ~ 0
+    )
+  ) %>% 
+  ungroup()  # Remove the grouping
+
+#Check vars
+df %>% dplyr::select(id, date_rated, mensdayonefirst, LHposdayfirst) %>% View()
+
+```
+
+# TURNED OFF - Remove people who never had a positive LH test
+```{r}
+# 
+# # Create a person-level variable
+# idlhpos <- df %>%
+#   group_by(id) %>% 
+#   summarise(LHeverpos = ifelse(sum(LHposdayfirst, na.rm = TRUE) > 0, 1, 0)) %>% 
+#   ungroup()
+# 
+# # Merge it back into df
+# df <- df %>%
+#   left_join(idlhpos, by = "id")
+# 
+# 
+# # Display number of rows before removing those with no pos LH
+# cat("Number of rows before removing those who never had a positive LH test: ", nrow(df), "\n")
+# 
+# # Filter out people with LHids = 0
+# df <- df %>%
+#   filter(LHeverpos == 1)
+# 
+# #Check vars -
+# #df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst) %>% head()
+
+```
+
+# Code Cycle Day Forward + Backward count from menses onset
+```{r cycleday}
+
+
+#make A as a variable copy of mensdayonefirst
+df$A <- df$mensdayonefirst
+
+cycleCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    #Add 1 to values greater than equal to 0
+    num[num >= 0] <- num[num >= 0] + 1
+    num[num < -15 | num > 11] <- NA 
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+df <- df %>% group_by(id) %>% 
+  mutate(cycleday = cycleCount(A))
+
+#df <- df %>% dplyr::select(!A)
+
+###View(df)
+
+#Check vars
+#df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, cycleday) %>% View()
+
+```
+
+# Review Data, looking for cycleday=0 and removing those who never had any menses onsets
+```{r}
+
+#View in a separate window and manually scroll through
+df %>% dplyr::select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
+
+#how many observations do you have for each cycle day?
+nobs <- df %>% group_by(cycleday) %>% summarize(n=n())
+
+View(nobs)
+
+#do you have any observations that got assigned a cycle day of 0? this is wrong, and you should check who that happened for
+df %>% filter(cycleday==0) %>% pull(id)
+
+# NOTE 2024-07-09: There are 2 people with lots of zeroes (see Jordan's note above in chunk) and it looks to me like they did not report a menses in the daily dataset: 331, 332. They have no menses onset dates
+
+#View in a separate window and manually scroll through
+df %>% dplyr::select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
+
+# List of IDs to remove - people with no menses onsets
+ids_to_remove <- c(211, 292, 295, 296, 297, 298, 299, 302, 308, 313, 315, 331, 332, 333, 334, 336)
+
+# Remove rows with specified IDs
+df <- df %>% filter(!(id %in% ids_to_remove))
+
+
+```
+
+# Make daycountLH, based on positive LH test (LH test day = 0)
+```{r daycountLH}
+#make A a new temp column where pt received pos ov test
+df$L <- df$LHposdayfirst
+
+#FUNCTION for calculating the sequence
+LHCount <- function(x) {
+  #Get the index of 1
+  inds <- which(x == 1)
+  if(!length(inds)) return(0) 
+  #Create a sequence with that index as 0
+  num <- lapply(inds, function(i) {
+    num <- seq_along(x) - i
+    num[num < -7 | num > 15] <- NA 
+    num
+  })
+  #Select the first non-NA values from the sequence
+  do.call(coalesce, num)
+}
+
+#run the LHCount function and save it as as a new column called daycountLH
+df<- df %>% group_by(id) %>% 
+  mutate(daycountLH = LHCount(L))
+#remove the temp column L
+df <- df %>% dplyr::select(!L)
+
+#Check vars
+#df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
+```
+
+
+
+
+
+############################################################################# CYCLE SCALING
+
+
+## Using CYCLEDAY SCALING TEMPLATE - from Anisha updated September 14, 2024
+
+
+
+```{r}
+
+# Renaming Variables
+df$ID <-df$id
+df$id <-df$id
+df$daterated <-df$date_rated
+
+
+#df$LHposdayfirst
+#df$mensdayonefirst
+```
+
+
+```{r}
+
+
+df <- df %>%
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax = NA)
+
+#create the variable 'A' which will represent menses onset
+df$A <- ifelse(df$cycleday == 1, 1, 0)
+df$A <- ifelse(is.na(df$A), 0, df$A)
+#ovtoday = LH + 1
+df$ovtoday = lag(df$LHposdayfirst) #changed this from "posovtest"
+#check data
+df %>% dplyr::select(daterated, ovtoday, LHposdayfirst)
+```
+
+
+# Calculate Menses-to-menses cycle lengths 
+
+## m2mcount and cyclelength 
+
+```{r}
+
+#the mcyclength function, this will do forward count to give cycle lengths for menses-to-menses cycles, and count the number of complete cycles within a person 
+
+df <- calculate_mcyclength(df)
+
+#-Inf will occur if the cycle is incomplete (no bookend menses onset date) so we will change to NA
+df$mcyclength = ifelse(df$mcyclength == -Inf , NA, df$mcyclength)
+
+#if cyclenum is NA, set cycle_incomplete to 1 
+df$cycle_incomplete = ifelse(is.na(df$cyclenum), 1, df$cycle_incomplete)
+
+#check data
+df %>% dplyr::select(id, daterated, A, m2mcount, ovtoday, cyclenum, mcyclength, cycle_incomplete) 
+
+```
+
+
+
+Here, I am doing scaling for baseline, washout, and PBO condition
+
+# calculating ovtoday_impute
+ 
+```{r}
+# this is based on NC dataset 
+
+df <- df %>% 
+  mutate(lutlength_impute = case_when(mcyclength == 20 ~ (mcyclength* 0.46),
+                                      mcyclength == 21 ~ (mcyclength*.476),
+                                      mcyclength == 22 ~ (mcyclength*.491),
+                                      mcyclength == 23 ~ (mcyclength*.491),
+                                      mcyclength == 24 ~ (mcyclength*.492),
+                                      mcyclength == 25 ~ (mcyclength*.484),
+                                      mcyclength == 26 ~ (mcyclength*.481),
+                                      mcyclength == 27 ~ (mcyclength*.470),
+                                      mcyclength == 28 ~ (mcyclength*.461),
+                                      mcyclength == 29 ~ (mcyclength*.448),
+                                      mcyclength == 30 ~ (mcyclength*.437),
+                                      mcyclength == 31 ~ (mcyclength*.426),
+                                      mcyclength == 32 ~ (mcyclength*.416),
+                                      mcyclength == 33 ~ (mcyclength*.40),
+                                      mcyclength == 34 ~ (mcyclength*.391),
+                                      mcyclength == 35 ~ (mcyclength*.377),
+                                      mcyclength == 36 ~ (mcyclength*.369),
+                                      mcyclength == 37 ~ (mcyclength*.359),
+                                      TRUE ~ NA))
+
+df <- df %>% 
+  mutate(follength_impute = case_when(mcyclength == 20 ~ (mcyclength*.54),
+                                      mcyclength == 21 ~ (mcyclength*.524),
+                                      mcyclength == 22 ~ (mcyclength*.509),
+                                      mcyclength == 23 ~ (mcyclength*.509),
+                                      mcyclength == 24 ~ (mcyclength*.508),
+                                      mcyclength == 25 ~ (mcyclength*.516),
+                                      mcyclength == 26 ~ (mcyclength*.519),
+                                      mcyclength == 27 ~ (mcyclength*.530),
+                                      mcyclength == 28 ~ (mcyclength*.539),
+                                      mcyclength == 29 ~ (mcyclength*.552),
+                                      mcyclength == 30 ~ (mcyclength*.563),
+                                      mcyclength == 31 ~ (mcyclength*.574),
+                                      mcyclength == 32 ~ (mcyclength*.584),
+                                      mcyclength == 33 ~ (mcyclength*.60),
+                                      mcyclength == 34 ~ (mcyclength*.609),
+                                      mcyclength == 35 ~ (mcyclength*.623),
+                                      mcyclength == 36 ~ (mcyclength*.631),
+                                      mcyclength == 37 ~ (mcyclength*.641),
+                                      TRUE ~ NA))
+#check data
+df %>% dplyr::select(id, daterated, A, m2mcount, mcyclength, follength_impute)
+#group by id, and make sure dates are in order 
+df <- df %>%
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) 
+#initialize new variable- follcount1
+df$follcount1 <- NA
+for (i in 1:nrow(df)) {
+  if (df$A[i] == 1 & !is.na(df$follength_impute[i])) {
+    follcount1 <- seq_len(round(df$follength_impute[i]))
+    df$follcount1[i:(i + length(follcount1) - 1)] <- follcount1
+  }
+}
+#follcount1 forward counts from menses onset based on imputed follength from NC data 
+
+df %>% dplyr::select(id, A, follength_impute, follcount1)
+
+#identify ovtoday_impute based on forward count from follcount1
+df <- df %>% 
+  mutate(ovtoday_impute = case_when(round(follength_impute) == follcount1 ~ 1,
+                               TRUE ~ NA))
+
+#if ovtoday is NA, change to 0 
+df$ovtoday <- ifelse(is.na(df$ovtoday), 0, df$ovtoday) 
+
+#if ovtoday_impute is NA, change to 0 
+df$ovtoday_impute <- ifelse(is.na(df$ovtoday_impute), 0, df$ovtoday_impute) 
+
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday, ovtoday_impute) # Removed cleartrialphase
+```
+
+
+# percentage of luteal phase using ovtoday (LH + 1) 
+
+ - variable is called perclut for menses-centered
+ - variable is called perclut_ov for ovulation-centered 
+ 
+
+```{r}
+#group by id, make sure daterated is in order, initialize the variable lutmax 
+df <- df  %>% 
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(lutmax = NA)
+#apply the calculate_lutdaycount function. which spits out the variable lutdaycount1. lutdaycount1 forward counts from ovtoday = 1 to the next menses onset, indexed at 0 
+df <- calculate_lutdaycount(df, df$ovtoday)
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday, A, lutdaycount1)
+#the below code creates lutdaycount which shifts lutdaycount1, and forward counts starting the day after ovtoday = 1, still indexed at 0 
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    lutdaycount = lag(lutdaycount1),
+    lutdaycount = case_when(
+      is.na(lutdaycount) | id != lag(id) ~ NA, 
+      TRUE ~ lutdaycount
+    )
+  )
+
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    lut_incomplete = lag(lut_incomplete1),
+    lut_incomplete = case_when(
+      is.na(lut_incomplete) | id != lag(id) ~ NA, 
+      TRUE ~ lut_incomplete
+    )
+  )
+
+
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday, A, lutdaycount, lut_incomplete)
+#lutmax corresponds to the length of the luteal phase in a complete menses-to-menses cycle (it is the max value of lutdaycount in a cycle)
+for (i in 1:(nrow(df)-1)) {
+  if (is.na(df$lutdaycount[i + 1] && !is.na(df$lutdaycount[i]))) {
+    df$lutmax[(i-(df$lutdaycount[i])):i] = as.numeric(df$lutdaycount[i])
+  }
+}
+
+df$lut_incomplete = ifelse(df$lutmax > 30, 1, df$lut_incomplete)
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday, A, lutdaycount, lutmax, lut_incomplete)
+
+#calculates lutperc which is luteal phase scaled from 0 to 1, using ovtoday 
+df <- df %>%
+  mutate(lutperc = ifelse(lut_incomplete == 0, (lutdaycount / lutmax), NA))
+
+#calculates perclut_base which is luteal phase scaled from -1 to 0, using ovtoday. This is the variable that will be used in the menses-centered scaled_cycleday 
+df$perclut = df$lutperc -1 
+
+# df <- df %>%
+#   mutate(perclut = ifelse(A == 1, 0, perclut))
+
+#check data
+df %>% dplyr::select(id, daterated, ovtoday, A, lutmax, perclut, lut_incomplete)
+
+#calculate lutdaycount_ov, which is lutdaycount but ovulation-centered 
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    lutdaycount_ov = lead(lutdaycount),
+    lutdaycount_ov = case_when(is.na(lutdaycount_ov) |
+                                 id != lead(id) ~ NA, TRUE ~ lutdaycount_ov)
+  )
+
+df <- df %>%
+  mutate(perclut_ov = ifelse(lut_incomplete == 0, lutdaycount_ov / lutmax, NA))
+
+# df <- df %>%
+#   mutate(perclut_ov = ifelse(lutdaycount_ov == 0, 0, perclut_ov))
+
+
+df %>% dplyr::select(id,
+               daterated,
+               ovtoday,
+               A,
+               lutdaycount,
+               lutdaycount_ov,
+               lutmax,
+               perclut_ov, perclut)
+
+#remove 'helper' variables
+df <- df %>% dplyr::select(-c(lutdaycount1, lutperc, lut_incomplete1))
+
+```
+
+# percentage of luteal phase using ovtoday_impute (based on NC norms)
+
+
+```{r}
+
+#make sure dates are in order for each id, initialize new variable called lutmax_impute
+df <- df  %>% 
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(lutmax_impute = NA)
+#if A is NA, make it 0 (A is menses onset)
+df$A <- ifelse(is.na(df$A), 0, df$A)
+#apply calculate_lutdaycount fxn which spits out the variable lutdaycount1. lutdaycount1 forward counts from ovtoday_impute = 1 to the next menses onset, indexed at 0 
+df <- calculate_lutdaycount(df, df$ovtoday_impute)
+#check data
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, lutdaycount1)
+#the below code creates lutdaycount_impute which shifts lutdaycount1, and forward counts starting the day after ovtoday_impute = 1, still indexed at 0 
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    lutdaycount_impute = lag(lutdaycount1),
+    lutdaycount_impute = case_when(
+      is.na(lutdaycount_impute) | id != lag(id) ~ NA, 
+      TRUE ~ lutdaycount_impute
+    )
+  )
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, lutdaycount_impute)
+
+#lutmax_impute corresponds to the length of the luteal phase in a complete menses-to-menses cycle, using ovtoday_impute (it is the max value of lutdaycount_impute in a cycle)
+for (i in 1:(nrow(df)-1)) {
+  if (is.na(df$lutdaycount_impute[i + 1] && !is.na(df$lutdaycount_impute[i]))) {
+    df$lutmax_impute[(i-(df$lutdaycount_impute[i])):i] = as.numeric(df$lutdaycount_impute[i])
+  }
+}
+#lutlength1_impute is the imputed value of luteal phase based on NC norms, but lagged one day so it does align with any dates in the follicuar phase 
+df$lutlength1_impute = lag(df$lutlength_impute)
+
+#check data
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, lutdaycount_impute, lutmax_impute, lutlength_impute, lutlength1_impute)
+
+#calculate lutperc_impute
+df <- df %>%
+  mutate(lutperc_impute = if_else(
+    is.na(lutlength1_impute),
+    NA,
+    if_else(
+      is.na(lutlength1_impute) &
+        !is.na(lutmax_impute) & cycle_incomplete == 0,
+      lutdaycount_impute / lutmax_impute,
+      lutdaycount_impute / round(lutlength1_impute)
+    )
+  ))
+
+#lutperc is scaled from 0 to 1, so substracting 1 so that it is scaled from -1 to 0 for menses-centered scaled_cycleday 
+df$perclut_impute = df$lutperc_impute -1 
+
+#check data
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, mcyclength, perclut_impute, perclut) 
+
+#calculate lutdaycount_imp_ov, which is imputed lutdaycount but ovulation-centered 
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    lutdaycount_imp_ov = lead(lutdaycount_impute),
+    lutdaycount_imp_ov = case_when(
+      is.na(lutdaycount_imp_ov) | id != lead(id) ~ NA, 
+      TRUE ~ lutdaycount_imp_ov
+    )
+  )
+
+#calculate lutperc_imp_ov which is the variable that will go into ovulation-centered scaled cycleday 
+df <- df %>%
+  mutate(perclut_imp_ov = if_else(
+    is.na(lutlength1_impute) ,
+    NA,
+    if_else(
+      is.na(lutlength1_impute) & !is.na(lutmax) & cycle_incomplete == 0,
+      lutdaycount1 / lutmax_impute,
+      lutdaycount1 / round(lutlength1_impute)
+    )
+  ))
+
+
+#if ovtoday_impute == 1, set lutperc_imp_ov to 0
+# df <- df %>%
+#   mutate(perclut_imp_ov = ifelse(ovtoday_impute == 1, 0, perclut_imp_ov))
+
+#check data 
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, lutdaycount, lutlength1_impute, lutdaycount1, lutmax_impute, perclut_impute, perclut_imp_ov)
+
+#remove helper variables
+df <- df %>% dplyr::select (-c(lutperc_impute, lutdaycount1))
+```
+
+# percentage of follicular phase using ovtoday (LH+1)
+
+```{r}
+# Check for missing values
+table(df$id)
+table(df$ovtoday)
+
+#remove obs with missing id or ovtoday
+df <- df %>%
+  filter(!is.na(id) & !is.na(ovtoday))
+
+# Ensure daterated is in order by id and initialize folmax variable
+df <- df %>%
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax = NA)
+
+#make sure daterated is in order by id, and initialize folmax variable 
+df <- df %>%
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax = NA)
+
+#apply calculate foldaycount function using ovtoday 
+df <- calculate_foldaycount(df, df$ovtoday)
+
+#foldaycount forward counts starting at menses onset and ends at ovtoday 
+df %>% dplyr::select(id, daterated, A, ovtoday, foldaycount)
+
+#assigns folmax as the max value of foldaycount within a cycle 
+for (i in 1:(nrow(df)-1)) {
+  if (is.na(df$foldaycount[i + 1] && !is.na(df$foldaycount[i]))) {
+    df$folmax[(i-(df$foldaycount[i])):i] = as.numeric(df$foldaycount[i])
+  }
+}
+
+#follength is the length of the follicular phase that cycle (since folmax is indexed at 0)
+df$follength = df$folmax + 1 
+
+#check data
+df %>% dplyr::select(id, daterated, ovtoday, A, foldaycount, folmax, follength, fol_incomplete)
+
+df <- df %>%
+  mutate(percfol = ifelse(fol_incomplete != 1, foldaycount / (folmax), NA))
+
+df$percfol_ov = df$percfol - 1
+
+df %>% dplyr::select(id, daterated, ovtoday, A, foldaycount, folmax, percfol, percfol_ov)
+
+#renaming foldaycount based on ovtoday to be called foldaycount_ov. the variable name 'foldaycount' get overwritten in the code chunk below when the calculate_foldaycount() function is run 
+df <- df %>% rename(foldaycount_ov = foldaycount)
+
+```
+
+# percentage of follicular phase using ovtoday_impute (based on NC norms)
+
+```{r}
+
+
+#yes, I'm constantly arranging by daterated because I'm paranoid. Initialize the variable folmax_impute 
+df <- df %>%
+  group_by(id) %>%
+  arrange(daterated, .by_group = TRUE) %>%
+  mutate(folmax_impute = NA)
+#see comment on line 512
+df <- calculate_foldaycount(df, df$ovtoday_impute)
+df <- df %>% rename(foldaycount_impute = foldaycount)
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, foldaycount_impute)
+
+#create folmax_impute which is the max value of foldaycount_impute and matches the imputed follicular length in complete cycles 
+for (i in 1:(nrow(df)-1)) {
+  if (is.na(df$foldaycount_impute[i + 1] && !is.na(df$foldaycount_impute[i]))) {
+    df$folmax_impute[(i-(df$foldaycount_impute[i])):i] = as.numeric(df$foldaycount_impute[i])
+  }
+}
+
+df <- df %>%
+  mutate(percfol_impute = ifelse(cycle_incomplete == 0, foldaycount_impute / (folmax_impute), NA))
+
+# ovulation-centered percfol based on ovtoday_impute 
+df$percfol_imp_ov = df$percfol_impute - 1
+
+
+df %>% dplyr::select(id, daterated, ovtoday_impute, A, percfol_impute, percfol_imp_ov)
+```
+
+
+
+
+# prioritize LH test-based scaled values over imputed values 
+
+```{r}
+
+#functions to prioritize perc_base over perc
+
+create_percent <- function(df, percentvar, percvar, percvar_impute) {
+  percentvar <- ensym(percentvar)
+  percvar <- ensym(percvar)
+  percvar_impute <- ensym(percvar_impute)
+  
+  df %>%
+    group_by(id, cyclenum) %>%
+    mutate(
+      !!percentvar := if (all(is.na(!!percvar) | !!percvar == 0)) {
+        # if percvar contains only NA or 0, use percvar_impute
+        !!percvar_impute
+      } else {
+        # otherwise, use percvar
+        !!percvar
+      }
+    ) %>%
+    ungroup()
+}
+
+
+df = create_percent(df, percentlut, perclut, perclut_impute)
+df = create_percent(df, percentfol, percfol, percfol_impute)
+df = create_percent(df, percentlut_ov, perclut_ov, perclut_imp_ov)
+df = create_percent(df, percentfol_ov, percfol_ov, percfol_imp_ov)
+
+df %>% dplyr::select(id, daterated, A, ovtoday, ovtoday_impute, cyclenum, mcyclength, percfol, percfol_impute, percentlut_ov)
+```
+
+
+# creating scaled_cycleday 
+
+```{r}
+
+
+df <- df %>%
+  mutate(scaled_cycleday = ifelse(is.na(percentlut), percentfol, percentlut))
+df %>% dplyr::select(id, daterated, percentlut, percentfol, scaled_cycleday)
+
+```
+
+# creating scaled_cycleday_ov
+
+```{r}
+df <- df %>%
+  mutate(scaled_cycleday_ov = ifelse(is.na(percentlut_ov), percentfol_ov, percentlut_ov))
+df %>% dplyr::select(id, daterated, percentlut_ov, percentfol_ov, scaled_cycleday_ov)
+
+```
+
+
+## Rounding Percents for LUTEAL-FOLLICULAR ORDER
+
+```{r}
+
+
+df <- df %>%
+  mutate(cycleday_perc = (scaled_cycleday + 1) / 2) %>%
+  mutate(cycleday_perc_round = round(cycleday_perc, 1)) %>%
+  mutate(cycleday_10perc = round(cycleday_perc / 0.10) * 0.10) %>%
+  mutate(cycleday_2perc = round(cycleday_perc / 0.02) * 0.02)
+
+
+```
+
+
+## Rounding Percents for FOLLICULAR-LUTEAL ORDER
+
+```{r}
+
+
+df <- df %>%
+  mutate(cycledayov_perc = (scaled_cycleday_ov + 1) / 2) %>%
+  mutate(cycledayov_perc_round = round(cycledayov_perc, 1)) %>%
+  mutate(cycledayov_10perc = round(cycledayov_perc / 0.10) * 0.10) %>%
+  mutate(cycledayov_2perc = round(cycledayov_perc / 0.02) * 0.02)
+
+
+```
+
+
+#RE-CALCULATE DEVATIONS AND STD AND ROLLING AVGS
+
+
+```{r}
+
+
+#create rolling averages on RAW variables
+for (i in outcomelist) {
+  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
+}
+
+#MEANS
+
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in outcomelist.roll) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in outcomelist) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#PERSON-DEVIATIONS
+
+#for raw deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+#for rolling avgs deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist.roll) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+
+#Check 
+df %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
+
+```
+
+
+
+
+# Count participants and rows - L2N = 97, L1N = 4808
+```{r CountIDs}
+
+# Count how many remaining ids I have in the dataset
+unique_id_count <- length(unique(df$id))
+# Print the number of unique IDs
+print(unique_id_count)
+
+# NUMBER OF ROWS
+print(nrow(df))
+```
+
+
+# Create "id_list": list of all remaining participant IDs to loop through
+```{r}
+
+# Assuming df is your dataframe
+# Count how many remaining ids you have in the dataset
+unique_id_count <- length(unique(df$id))
+
+# Get a list of unique IDs in the dataset
+id_list <- unique(df$id)
+
+# Print the number of unique IDs and the list of unique IDs in a sentence
+cat("There are", unique_id_count, "unique IDs in the dataset. The IDs are:", paste(id_list, collapse = ", "), ".\n")
+
+```
+
+# Remove people with bad hormone IDs (after that, L2N=85, L1N=4194)
+```{r}
+
+
+# There are 12 people whose hormones should probably be removed for sensitivity analysis
+badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
+#Filtering for sensitivity analyses: 
+
+# Create a new dataset removing IDs with bad hormones
+df_all <- df
+
+df <- df %>% filter(!(id %in% badhorm_ids))
+
+```
+
+
+# AFTER: Create "id_list": list of all remaining participant IDs to loop through
+```{r}
+
+# Assuming df is your dataframe
+# Count how many remaining ids you have in the dataset
+unique_id_count <- length(unique(df$id))
+
+# Get a list of unique IDs in the dataset
+id_list <- unique(df$id)
+
+# Print the number of unique IDs and the list of unique IDs in a sentence
+cat("There are", unique_id_count, "unique IDs in the dataset. The IDs are:", paste(id_list, collapse = ", "), ".\n")
+
+
+
+# ---- Placeholder for Missing Dates ----
+
+# Display the number of rows BEFORE adding placeholders
+cat("Number of rows BEFORE adding placeholders: ", nrow(df), "\n")
+
+df <- df %>%
+  group_by(id) %>%
+  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
+  ungroup()
+
+# Display the number of rows after adding placeholders
+cat("Number of rows AFTER adding placeholders: ", nrow(df), "\n")
+
+```
+
+# Count participants and rows - FULL DATASET
+
+```{r}
+# Count how many remaining ids I have in the dataset
+unique_id_count <- length(unique(df$id))
+# Print the number of unique IDs
+print(unique_id_count)
+
+# NUMBER OF ROWS
+print(nrow(df))
+```
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+##### END OF DATA PREP 
+
+
+# Save out Prepped Dataset for Easier Use Later On
+
+## DATASET (L2N=85, L1N=4195)
+
+
+```{r}
+
+write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv", row.names = FALSE)
+
+variable_names <- names(df)
+formatted_list <- paste(variable_names, collapse = ", ")
+cat(formatted_list)
+
+```
+
+
+
+
+# Input dataset
+
+```{r}
+# Load your CSV file (adjust the path to your actual file location)
+df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv")
+```
+
+
+
+
+
+
+# 2024-09-25 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
+```{r}
+
+# Define the function to generate plots for a list of DVs
+plot_DVs <- function(DV_list, df) {
+  
+  # Create person-standardized (z-scored within each participant) versions of each DV
+  for (DV in DV_list) {
+    zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
+    
+    # Add the person-standardized columns for each DV
+    df <- df %>%
+      group_by(id) %>%
+      mutate(!!zd_var := scale(!!sym(DV), center = TRUE, scale = TRUE)) %>%
+      ungroup()
+  }
+  
+  # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
+  df <- df %>%
+    group_by(id) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
+    ungroup()
+  
+  # Indicators for menstrual bleeding
+  bleeding_indicator <- data.frame(xmin = .5, xmax = 0.7, ymin = -Inf, ymax = Inf)
+  
+  for (DV in DV_list) {
+    
+    if (DV %in% c("E2", "P4", "LH")) {
+      # Raw plot for E2, P4, LH
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p1 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.1) +
+        geom_point(size = 1) +
+        geom_line(size = 1) +
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      ggsave(filename = paste0(output_folder, "/", DV, "_", "raw", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+    } else {
+      # For DVs that are NOT E2, P4, LH
+      
+      # Raw data points and line for the dependent variable
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+    # Person-rescaled E2 and P4 lines (thin dotted)  <- Changed variable names here
+      e2_std <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(E2.rescale, na.rm = TRUE)) #changed here
+
+      p4_std <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(P4.rescale, na.rm = TRUE))  #changed here
+      
+      p1 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # Thin dotted lines for E2 and P4
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      # Deviations plot
+      dev_var <- paste0(DV, ".d")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p2 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p2)
+      
+            ggsave(filename = paste0(output_folder, "/", DV, "_", "dev", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Person-standardized outcome (zd)
+      zd_var <- paste0(DV, ".zd")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                  se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p3 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
+        geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
+        ggtitle(paste("Person-standardized", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p3)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "zd", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Rolling deviations plot
+      roll_dev_var <- paste0(DV, ".roll.d")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(roll_dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p4 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Rolling Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Rolling Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p4)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "rolld", ".png"), plot = last_plot(), width = 8, height = 6)
+
+    }
+  }
+}
+
+# Define the folder location for saving the plots
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03"
+
+
+plot_DVs(outcomelist, df)
+
+
+
+
+
+```
+
+# 2024-09-25 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
+
+```{r warning=FALSE}
+
+# Define the folder location for saving the plots
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-30b"
+
+# Define the function to generate plots for a list of DVs
+plot_DVs_M2M <- function(DV_list, df) {
+  
+  # Create person-standardized (z-scored within each participant) versions of each DV
+  for (DV in DV_list) {
+    zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
+    
+    # Add the person-standardized columns for each DV
+    df <- df %>%
+      group_by(id) %>%
+      mutate(!!zd_var := scale(!!sym(DV), center = TRUE, scale = TRUE)) %>%
+      ungroup()
+  }
+  
+  # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
+  df <- df %>%
+    group_by(id) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
+    ungroup()
+  
+  # Indicators for menstrual bleeding
+  bleeding_indicator <- data.frame(xmin = 0, xmax = 0.2, ymin = -Inf, ymax = Inf)
+  
+  for (DV in DV_list) {
+    
+    if (DV %in% c("E2", "P4", "LH")) {
+      # Raw plot for E2, P4, LH
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.1) +
+        geom_point(size = 1) +
+        geom_line(size = 1) +
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+    } else {
+      # For DVs that are NOT E2, P4, LH
+      
+      # Raw data points and line for the dependent variable
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+    # Person-rescaled E2 and P4 lines (thin dotted)  <- Changed variable names here
+      e2_std <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(E2.rescale, na.rm = TRUE)) #changed here
+
+      p4_std <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(P4.rescale, na.rm = TRUE))  #changed here
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # Thin dotted lines for E2 and P4
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      # Deviations plot
+      dev_var <- paste0(DV, ".d")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p2 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p2)
+      
+            ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_dev", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Person-standardized outcome (zd)
+      zd_var <- paste0(DV, ".zd")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                  se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p3 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
+        geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
+        ggtitle(paste("Person-standardized", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p3)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_zd", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Rolling deviations plot
+      roll_dev_var <- paste0(DV, ".roll.d")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(roll_dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p4 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Rolling Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Rolling Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p4)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_rolld", ".png"), plot = last_plot(), width = 8, height = 6)
+
+    }
+  }
+}
+
+
+plot_DVs_M2M(outcomelist, df)
+
+
+
+```
+
+
+
+
+
+# FITTING GAMMs 
+
+
+
+
+# GAMM and initial plot - E2 - Ov to Ov
+```{r}
+
+hist(df$E2)
+df$E2log <- log(df$E2+1)
+hist(df$E2log)
+
+gamm_E2 <- gam(E2log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re") + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_e2)
+
+
+# Save the model summary as a text file
+summary_output <- capture.output(summary(gamm_e2))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/E2model.txt"
+writeLines(summary_output, summary_file_path)
+cat("Model summary saved to:", summary_file_path, "\n")
+
+plot.gam(gamm_e2, select = 3)
+
+```
+
+# Model-Implied Plot - E2 - Ov to Ov
+```{r}
+
+e2dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_e2, newdata = e2dat, type = "response", transform = function(x) exp(x) - 1)
+
+#don't need to include anything for 'transform' if your outcome is not log-transformed. This undoes the logtransform so model-implied values are not on the log scale 
+
+e2dat$estimate = pred$estimate
+e2dat$conf.low = pred$conf.low
+e2dat$conf.high = pred$conf.high
+
+# Plotting
+e2plot <- ggplot(e2dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Salivary Estradiol") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+e2plot
+
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/E2.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+
+```
+
+
+
+# GAMM and initial plot - LH
+```{r}
+hist(df$LH)
+df$LHlog <- log(df$LH+1)
+hist(df$LHlog)
+gamm_LH <- gam(LHlog ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_LH)
+
+
+# Save the model summary as a text file
+summary_output <- capture.output(summary(gamm_LH))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/LHmodel.txt"
+writeLines(summary_output, summary_file_path)
+cat("Model summary saved to:", summary_file_path, "\n")
+
+plot.gam(gamm_LH, select = 3)
+
+hist(df$LH)
+```
+
+
+# Model-Implied Plot - LH
+```{r}
+
+LHdat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_LH, newdata = LHdat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+LHdat$estimate = pred$estimate
+LHdat$conf.low = pred$conf.low
+LHdat$conf.high = pred$conf.high
+
+# Plotting
+LHplot <- ggplot(LHdat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "LH") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+LHplot
+
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/LH.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+
+```
+
+
+# GAMM and initial plot - P4
+```{r}
+hist(df$P4)
+df$P4log <- log(df$P4+1)
+hist(df$P4log)
+
+gamm_P4 <- gam(P4log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 10), data = df, method = "REML")
+
+summary(gamm_P4)
+
+
+# Save the model summary as a text file
+summary_output <- capture.output(summary(gamm_P4))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/gamm_P4.txt"
+writeLines(summary_output, summary_file_path)
+cat("Model summary saved to:", summary_file_path, "\n")
+
+plot.gam(gamm_P4, select = 3)
+
+```
+
+# Model-Implied Plot - P4
+```{r}
+
+P4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_P4, newdata = P4dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+P4dat$estimate = pred$estimate
+P4dat$conf.low = pred$conf.low
+P4dat$conf.high = pred$conf.high
+
+
+# Plotting
+P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Salivary P4") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+P4plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/P4.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+# Function to run the GAMM and generate plots for a given outcome variable
+gamm_model_loop <- function(outcome, df, output_path, plot_path) {
+  
+  # Step 1: Create a histogram for the outcome variable to check its distribution
+  hist(df[[outcome]], main = paste("Histogram of", outcome), xlab = outcome)
+  
+  # Step 2: Log-transform the outcome variable to deal with skewness
+  # Add 1 to avoid log(0) issues, which is undefined
+  log_outcome <- paste0(outcome, "log")  # Create a name for the log-transformed variable
+  df[[log_outcome]] <- log(df[[outcome]] + 1)  # Apply log transformation and store in a new column
+  hist(df[[log_outcome]], main = paste("Histogram of Log-Transformed", outcome), xlab = log_outcome)  # Create a histogram for the transformed data
+  
+  # Step 3: Fit a Generalized Additive Mixed Model (GAMM)
+  # The formula includes smooth terms for the id (random effect) and scaled_cycleday
+  gamm_model <- gam(as.formula(paste0(log_outcome, " ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 30)")),
+                    data = df, method = "REML")  # REML method is recommended for smoother estimation
+  
+  # Step 4: Display the summary of the model
+ summary(gamm_model)
+  
+  
+  # Step 5: Save the model summary to a text file
+  summary_output <- capture.output(summary(gamm_model))  # Capture the summary output as a character vector
+  summary_file_path <- file.path(output_path, paste0("gamm_", outcome, ".txt"))  # Define the path to save the summary
+  writeLines(summary_output, summary_file_path)  # Write the summary to the file
+  cat("Model summary saved to:", summary_file_path, "\n")  # Print confirmation
+  
+  # Step 6: Create a dataset for making predictions from the model
+  # We create a grid of values for scaled_cycleday ranging from -1 to 1
+  pred_data <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),  # Values of scaled_cycleday for prediction
+                           id = 0)  # We use id = 0 (population-level prediction)
+  
+  # Step 7: Make predictions using the `marginaleffects` package and undo the log transformation
+  pred <- predictions(gamm_model, newdata = pred_data, type = "response", transform = function(x) exp(x) - 1)  # Use predictions function
+  pred_data$estimate <- pred$estimate  # Store the predicted estimates
+  pred_data$conf.low <- pred$conf.low  # Store the lower bound of the 95% confidence interval
+  pred_data$conf.high <- pred$conf.high  # Store the upper bound of the 95% confidence interval
+  
+  # Step 8: Plot the predicted values and confidence intervals
+  outcome_plot <- ggplot(pred_data, aes(x = scaled_cycleday, y = estimate)) +
+    scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
+                       labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +  # Custom labels for x-axis
+    labs(x = "Cycle Day (Scaled)", y = outcome) +  # Labels for axes
+    geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+              fill = "grey70", alpha = 0.2, color = "white") +  # Highlight the menses onset period
+    geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+              fill = "grey87", alpha = 0.2, color = "white") +  # Highlight the ovulation period
+    geom_line(size = 1, show.legend = TRUE) +  # Line plot for the estimated values
+    theme_minimal()  # Use a minimal theme for cleaner visualization
+  
+  # Display the plot
+  print(outcome_plot)
+  
+  # Step 9: Save the plot to a file
+  plot_file_path <- file.path(plot_path, paste0(outcome, "_k30.png"))  # Define the path for saving the plot
+  ggsave(filename = plot_file_path, plot = outcome_plot, width = 8, height = 6)  # Save the plot as a PNG file
+  cat("Plot saved to:", plot_file_path, "\n")  # Print confirmation
+}
+
+# Define paths for saving outputs (modify as per your folder structure)
+output_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/"
+plot_path <- file.path(output_path, "GAMMplots_k30")
+
+# List of outcomes to loop through (replace with your actual outcomes)
+# already exists as "outcomelist" above
+
+# Loop through each outcome and apply the GAMM function
+for (outcome in outcomelist) {
+  gamm_model_loop(outcome, df, output_path, plot_path)  # Apply the function to each outcome
+}
+
+```
+
+
+
+
+
+
+
+
+
+# GAMM and initial plot - DRSP_1 - MS F, NS R
+```{r}
+hist(df$DRSP_1)
+df$DRSP_1log <- log(df$DRSP_1+1)
+hist(df$DRSP_1log)
+gamm_DRSP_1 <- gam(DRSP_1log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_1)
+
+plot.gam(gamm_DRSP_1, select = 3)
+
+hist(df$DRSP_1)
+```
+
+
+# Model-Implied Plot - DRSP_1
+```{r}
+
+DRSP_1dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_1, newdata = DRSP_1dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_1dat$estimate = pred$estimate
+DRSP_1dat$conf.low = pred$conf.low
+DRSP_1dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_1plot <- ggplot(DRSP_1dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Depressed Mood") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_1plot
+
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/depblue.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_2 - MS F, NS R
+```{r}
+hist(df$DRSP_2)
+df$DRSP_2log <- log(df$DRSP_2+1)
+hist(df$DRSP_2log)
+gamm_DRSP_2 <- gam(DRSP_2log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_2)
+
+plot.gam(gamm_DRSP_2, select = 3)
+
+hist(df$DRSP_2)
+```
+
+
+# Model-Implied Plot - DRSP2
+```{r}
+
+DRSP_2dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_2, newdata = DRSP_2dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_2dat$estimate = pred$estimate
+DRSP_2dat$conf.low = pred$conf.low
+DRSP_2dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_2plot <- ggplot(DRSP_2dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Hopelessness") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_2plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/hopeless.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_3 - NS F, NS R
+```{r}
+hist(df$DRSP_3)
+df$DRSP_3log <- log(df$DRSP_3+1)
+hist(df$DRSP_3log)
+gamm_DRSP_3 <- gam(DRSP_3log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_3)
+
+plot.gam(gamm_DRSP_3, select = 3)
+
+hist(df$DRSP_3)
+```
+
+
+# Model-Implied Plot - DRSP_3
+```{r}
+
+DRSP_3dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_3, newdata = DRSP_3dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_3dat$estimate = pred$estimate
+DRSP_3dat$conf.low = pred$conf.low
+DRSP_3dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_3plot <- ggplot(DRSP_3dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Worthlessness & Guilt") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_3plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/worthguilt.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_4 - MS F, SIG R
+```{r}
+hist(df$DRSP_4)
+df$DRSP_4log <- log(df$DRSP_4+1)
+hist(df$DRSP_4log)
+gamm_DRSP_4 <- gam(DRSP_4log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_4)
+
+plot.gam(gamm_DRSP_4, select = 3)
+
+hist(df$DRSP_4)
+```
+
+
+# Model-Implied Plot - DRSP_4
+```{r}
+
+DRSP_4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_4, newdata = DRSP_4dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_4dat$estimate = pred$estimate
+DRSP_4dat$conf.low = pred$conf.low
+DRSP_4dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_4plot <- ggplot(DRSP_4dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Anxiety & Tension") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_4plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/anxiety.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_5 - SIG F, SIG R
+```{r}
+hist(df$DRSP_5)
+df$DRSP_5log <- log(df$DRSP_5+1)
+hist(df$DRSP_5log)
+gamm_DRSP_5 <- gam(DRSP_5log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_5)
+
+plot.gam(gamm_DRSP_5, select = 3)
+
+hist(df$DRSP_5)
+```
+
+
+# Model-Implied Plot - DRSP_5
+```{r}
+
+DRSP_5dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_5, newdata = DRSP_5dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_5dat$estimate = pred$estimate
+DRSP_5dat$conf.low = pred$conf.low
+DRSP_5dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_5plot <- ggplot(DRSP_5dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Mood Swings") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_5plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/moodswings.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_6 - NS F, MS R
+```{r}
+hist(df$DRSP_6)
+df$DRSP_6log <- log(df$DRSP_6+1)
+hist(df$DRSP_6log)
+gamm_DRSP_6 <- gam(DRSP_6log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_6)
+
+plot.gam(gamm_DRSP_6, select = 3)
+
+hist(df$DRSP_6)
+```
+
+
+# Model-Implied Plot - DRSP_6
+```{r}
+
+DRSP_6dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_6, newdata = DRSP_6dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_6dat$estimate = pred$estimate
+DRSP_6dat$conf.low = pred$conf.low
+DRSP_6dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_6plot <- ggplot(DRSP_6dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Rejection Sensitivity") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_6plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/rejsens.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+
+# GAMM and initial plot - DRSP_7 - SIG F, NS R
+```{r}
+hist(df$DRSP_7)
+df$DRSP_7log <- log(df$DRSP_7+1)
+hist(df$DRSP_7log)
+gamm_DRSP_7 <- gam(DRSP_7log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_7)
+
+plot.gam(gamm_DRSP_7, select = 3)
+
+hist(df$DRSP_7)
+```
+
+
+# Model-Implied Plot - DRSP_7
+```{r}
+
+DRSP_7dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_7, newdata = DRSP_7dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_7dat$estimate = pred$estimate
+DRSP_7dat$conf.low = pred$conf.low
+DRSP_7dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_7plot <- ggplot(DRSP_7dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Anger or Irritability") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_7plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/angirr.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_8 - NS F, NS R
+```{r}
+hist(df$DRSP_8)
+df$DRSP_8log <- log(df$DRSP_8+1)
+hist(df$DRSP_8log)
+gamm_DRSP_8 <- gam(DRSP_8log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_8)
+
+plot.gam(gamm_DRSP_8, select = 3)
+
+hist(df$DRSP_8)
+```
+
+
+# Model-Implied Plot - DRSP_8
+```{r}
+
+DRSP_8dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_8, newdata = DRSP_8dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_8dat$estimate = pred$estimate
+DRSP_8dat$conf.low = pred$conf.low
+DRSP_8dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_8plot <- ggplot(DRSP_8dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Interpersonal Conflict") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_8plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/intconf.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_9 - Sig F, NS R
+```{r}
+hist(df$DRSP_9)
+df$DRSP_9log <- log(df$DRSP_9+1)
+hist(df$DRSP_9log)
+gamm_DRSP_9 <- gam(DRSP_9log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_9)
+
+plot.gam(gamm_DRSP_9, select = 3)
+
+hist(df$DRSP_9)
+```
+
+
+# Model-Implied Plot - DRSP_9
+```{r}
+
+DRSP_9dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_9, newdata = DRSP_9dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_9dat$estimate = pred$estimate
+DRSP_9dat$conf.low = pred$conf.low
+DRSP_9dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_9plot <- ggplot(DRSP_9dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Lack of Interest or Motivation") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_9plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/lackintmot.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_10 - NS F, NS R
+```{r}
+hist(df$DRSP_10)
+df$DRSP_10log <- log(df$DRSP_10+1)
+hist(df$DRSP_10log)
+gamm_DRSP_10 <- gam(DRSP_10log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_10)
+
+plot.gam(gamm_DRSP_10, select = 3)
+
+hist(df$DRSP_10)
+```
+
+
+# Model-Implied Plot - DRSP_10
+```{r}
+
+DRSP_10dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_10, newdata = DRSP_10dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_10dat$estimate = pred$estimate
+DRSP_10dat$conf.low = pred$conf.low
+DRSP_10dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_10plot <- ggplot(DRSP_10dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Difficulty Concentrating") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_10plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/diffconc.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_11 - MS F, NS R
+```{r}
+hist(df$DRSP_11)
+df$DRSP_11log <- log(df$DRSP_11+1)
+hist(df$DRSP_11log)
+gamm_DRSP_11 <- gam(DRSP_11log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_11)
+
+plot.gam(gamm_DRSP_11, select = 3)
+
+hist(df$DRSP_11)
+```
+
+
+# Model-Implied Plot - DRSP_11
+```{r}
+
+DRSP_11dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_11, newdata = DRSP_11dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_11dat$estimate = pred$estimate
+DRSP_11dat$conf.low = pred$conf.low
+DRSP_11dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_11plot <- ggplot(DRSP_11dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Lethargy, Fatigue") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_11plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/fatigue.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_12 - SIG F, NS R
+```{r}
+hist(df$DRSP_12)
+df$DRSP_12log <- log(df$DRSP_12+1)
+hist(df$DRSP_12log)
+gamm_DRSP_12 <- gam(DRSP_12log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_12)
+
+plot.gam(gamm_DRSP_12, select = 3)
+
+hist(df$DRSP_12)
+```
+
+
+# Model-Implied Plot - DRSP_12
+```{r}
+
+DRSP_12dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_12, newdata = DRSP_12dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_12dat$estimate = pred$estimate
+DRSP_12dat$conf.low = pred$conf.low
+DRSP_12dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_12plot <- ggplot(DRSP_12dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Increased Appetite, Overeating") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_12plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/Appoverate.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_13 - SIG F, NS R
+```{r}
+hist(df$DRSP_13)
+df$DRSP_13log <- log(df$DRSP_13+1)
+hist(df$DRSP_13log)
+gamm_DRSP_13 <- gam(DRSP_13log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_13)
+
+plot.gam(gamm_DRSP_13, select = 3)
+
+hist(df$DRSP_13)
+```
+
+
+# Model-Implied Plot - DRSP_13
+```{r}
+
+DRSP_13dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_13, newdata = DRSP_13dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_13dat$estimate = pred$estimate
+DRSP_13dat$conf.low = pred$conf.low
+DRSP_13dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_13plot <- ggplot(DRSP_13dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Food Cravings") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_13plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/foodcrave.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_14 - NS F, NS R
+```{r}
+hist(df$DRSP_14)
+df$DRSP_14log <- log(df$DRSP_14+1)
+hist(df$DRSP_14log)
+gamm_DRSP_14 <- gam(DRSP_14log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_14)
+
+plot.gam(gamm_DRSP_14, select = 3)
+
+hist(df$DRSP_14)
+```
+
+
+# Model-Implied Plot - DRSP_14
+```{r}
+
+DRSP_14dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_14, newdata = DRSP_14dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_14dat$estimate = pred$estimate
+DRSP_14dat$conf.low = pred$conf.low
+DRSP_14dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_14plot <- ggplot(DRSP_14dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Hypersomnia") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_14plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/Hypersomnia.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_15 - NS F, NS R
+```{r}
+hist(df$DRSP_15)
+df$DRSP_15log <- log(df$DRSP_15+1)
+hist(df$DRSP_15log)
+gamm_DRSP_15 <- gam(DRSP_15log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_15)
+
+plot.gam(gamm_DRSP_15, select = 3)
+
+hist(df$DRSP_15)
+```
+
+
+# Model-Implied Plot - TEMPLATE
+```{r}
+
+DRSP_15dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_15, newdata = DRSP_15dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_15dat$estimate = pred$estimate
+DRSP_15dat$conf.low = pred$conf.low
+DRSP_15dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_15plot <- ggplot(DRSP_15dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Insomnia") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_15plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/Insomnia.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_16 - NS F, NS R
+```{r}
+hist(df$DRSP_16)
+df$DRSP_16log <- log(df$DRSP_16+1)
+hist(df$DRSP_16log)
+gamm_DRSP_16 <- gam(DRSP_16log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_16)
+
+plot.gam(gamm_DRSP_16, select = 3)
+
+hist(df$DRSP_16)
+```
+
+
+# Model-Implied Plot - DRSP_16
+```{r}
+
+DRSP_16dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_16, newdata = DRSP_16dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_16dat$estimate = pred$estimate
+DRSP_16dat$conf.low = pred$conf.low
+DRSP_16dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_16plot <- ggplot(DRSP_16dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Overwhelmed") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_16plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/overwhelm.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_17 - Sig F, NS R
+```{r}
+hist(df$DRSP_17)
+df$DRSP_17log <- log(df$DRSP_17+1)
+hist(df$DRSP_17log)
+gamm_DRSP_17 <- gam(DRSP_17log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_17)
+
+plot.gam(gamm_DRSP_17, select = 3)
+
+hist(df$DRSP_17)
+```
+
+
+# Model-Implied Plot - TEMPLATE
+```{r}
+
+DRSP_17dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_17, newdata = DRSP_17dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_17dat$estimate = pred$estimate
+DRSP_17dat$conf.low = pred$conf.low
+DRSP_17dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_17plot <- ggplot(DRSP_17dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Out of Control") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_17plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/OOC.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+
+# GAMM and initial plot - DRSP_18 - Sig F, Sig R
+```{r}
+hist(df$DRSP_18)
+df$DRSP_18log <- log(df$DRSP_18+1)
+hist(df$DRSP_18log)
+gamm_DRSP_18 <- gam(DRSP_18log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_18)
+
+plot.gam(gamm_DRSP_18, select = 3)
+
+hist(df$DRSP_18)
+```
+
+
+# Model-Implied Plot - DRSP_18
+```{r}
+
+DRSP_18dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_18, newdata = DRSP_18dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_18dat$estimate = pred$estimate
+DRSP_18dat$conf.low = pred$conf.low
+DRSP_18dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_18plot <- ggplot(DRSP_18dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Breast Tenderness") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_18plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/Breast Tender.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DRSP_19 - SIG F, NS R
+```{r}
+hist(df$DRSP_19)
+df$DRSP_19log <- log(df$DRSP_19+1)
+hist(df$DRSP_19log)
+gamm_DRSP_19 <- gam(DRSP_19log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_19)
+
+plot.gam(gamm_DRSP_19, select = 3)
+
+hist(df$DRSP_19)
+```
+
+
+# Model-Implied Plot - DRSP_19
+```{r}
+
+DRSP_19dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_19, newdata = DRSP_19dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_19dat$estimate = pred$estimate
+DRSP_19dat$conf.low = pred$conf.low
+DRSP_19dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_19plot <- ggplot(DRSP_19dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Swelling, Bloating, or Weight Gain") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_19plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/swellbloatgain.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+# GAMM and initial plot - DSRP_20 - MS F, NS R
+```{r}
+hist(df$DRSP_20)
+df$DRSP_20log <- log(df$DRSP_20+1)
+hist(df$DRSP_20log)
+gamm_DRSP_20 <- gam(DRSP_20log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_20)
+
+plot.gam(gamm_DRSP_20, select = 3)
+
+hist(df$DRSP_20)
+```
+
+
+# Model-Implied Plot - DSRP_20
+```{r}
+
+DRSP_20dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_20, newdata = DRSP_20dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_20dat$estimate = pred$estimate
+DRSP_20dat$conf.low = pred$conf.low
+DRSP_20dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_20plot <- ggplot(DRSP_20dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Headache") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_20plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/headache.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+
+
+# GAMM and initial plot - DRSP_21 - NS F, NS R
+```{r}
+hist(df$DRSP_21)
+df$DRSP_21log <- log(df$DRSP_21+1)
+hist(df$DRSP_21log)
+gamm_DRSP_21 <- gam(DRSP_21log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_21)
+
+plot.gam(gamm_DRSP_21, select = 3)
+
+hist(df$DRSP_21)
+```
+
+
+# Model-Implied Plot - DRSP_21
+```{r}
+
+DRSP_21dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_21, newdata = DRSP_21dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_21dat$estimate = pred$estimate
+DRSP_21dat$conf.low = pred$conf.low
+DRSP_21dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_21plot <- ggplot(DRSP_21dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Joint or Muscle Pain") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_21plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/jointmuscpain.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# GAMM and initial plot - DRSP_22 - Sig F, NS R
+```{r}
+hist(df$DRSP_22)
+df$DRSP_22log <- log(df$DRSP_22+1)
+hist(df$DRSP_22log)
+gamm_DRSP_22 <- gam(DRSP_22log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_22)
+
+plot.gam(gamm_DRSP_22, select = 3)
+
+hist(df$DRSP_22)
+```
+
+
+# Model-Implied Plot - DRSP_22
+```{r}
+
+DRSP_22dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_22, newdata = DRSP_22dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_22dat$estimate = pred$estimate
+DRSP_22dat$conf.low = pred$conf.low
+DRSP_22dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_22plot <- ggplot(DRSP_22dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "School or Work Impairment") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_22plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/Workimp.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+
+
+# GAMM and initial plot - DRSP_23 - MS F, NS R
+```{r}
+hist(df$DRSP_23)
+df$DRSP_23log <- log(df$DRSP_23+1)
+hist(df$DRSP_23log)
+gamm_DRSP_23 <- gam(DRSP_23log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_DRSP_23)
+
+plot.gam(gamm_DRSP_23, select = 3)
+
+hist(df$DRSP_23)
+```
+
+
+# Model-Implied Plot - DRSP_23
+```{r}
+
+DRSP_23dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_DRSP_23, newdata = DRSP_23dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+DRSP_23dat$estimate = pred$estimate
+DRSP_23dat$conf.low = pred$conf.low
+DRSP_23dat$conf.high = pred$conf.high
+
+# Plotting
+DRSP_23plot <- ggplot(DRSP_23dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "Relationship Interference") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+DRSP_23plot
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/relimp.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+```
+
+# Output all Model Files to Box
+
+```{r}
+
+outcomelist <- c(
+  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
+  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
+  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
+  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
+  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
+  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
+  "UPPS_Total", "DEBQ_Total"
+)
+
+
+# Define your list of outcomes
+print(outcomelist)
+
+# Function to save summary of GAMM models to a file
+save_gamm_summary <- function(outcome) {
+  # Dynamically create model variable name
+  model_var <- paste0("gamm_", outcome)
+  
+  # Dynamically create the file path for each outcome
+  file_path <- paste0("/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-30/GAMMmodels/", outcome, "_gam_model_summary.txt")
+  
+  # Capture and write the summary to the file
+  writeLines(capture.output(summary(get(model_var))), file_path)
+}
+
+# Loop over each outcome and save the summary
+lapply(outcomelist, save_gamm_summary)
+
+```
+
+
+
+
+##### Reference and template info below
+
+
+# OUTCOMES
+
+BDEFS_1, BDEFS_2, BDEFS_3, BDEFS_4, BDEFS_5, BDEFS_6, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DRSP_9, DRSP_10, DRSP_11, DRSP_12, DRSP_13, DRSP_14, DRSP_15, DRSP_16, DRSP_17, DRSP_18, DRSP_19, DRSP_20, DRSP_21, DRSP_22, DRSP_23, CSS_B_1, CSS_B_2, CSS_B_3, CSS_B_4, CSS_B_5, CSS_B_6, CSS_B_7, CSS_B_8, CSS_B_9, CSS_B_10, CSS_B_11, CSS_B_12, CSS_B_13, CSS_B_14, CSS_B_15, CSS_B_16, CSS_B_17, CSS_B_18, CSS_Function_1, CSS_Function_2, CSS_Function_3, CSS_Function_4, CSS_Function_5, CSS_Function_6, CSS_Function_7, CSS_Function_8, CSS_Function_9, CSS_Function_10, CSS_B2_1, CSS_B2_2, CSS_B2_3, CSS_B2_4, CSS_B2_5, CSS_B2_6, CSS_B2_7, CSS_B2_8, UPPS_1, UPPS_2, UPPS_3, UPPS_4, UPPS_5, UPPS_6, UPPS_9, UPPS_10, UPPS_11, UPPS_12, UPPS_13, UPPS_14, UPPS_15, DEBQ_1, DEBQ_2, DEBQ_3, DEBQ_4, DEBQ_5, DEBQ_6, DEBQ_7, DEBQ_8, DEBQ_9, DEBQ_10, DEBQ_11, DEBQ_12, DEBQ_13
+
+BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, game_pinball, game_name_pinball, score_pinball, user_level_pinball, session_level_pinball, game_nth_pinball, game_lpi_pinball, RecordedDate_pinball, recorded_date_pinball, hour_recorded_pinball, midnight_to_seven_pinball, game_type_pinball, date_rated_dontuse_pinball, game_robot, game_name_robot, score_robot, user_level_robot, session_level_robot, game_nth_robot, game_lpi_robot, RecordedDate_robot, recorded_date_robot, hour_recorded_robot, midnight_to_seven_robot, game_type_robot, date_rated_dontuse_robot, nth_pinball_squared, nth_robot_squared, RES_robot, RES_pinball,
+
+
+DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DRSP_9, DRSP_10, DRSP_11, DRSP_12, DRSP_13, DRSP_14, DRSP_15, DRSP_16, DRSP_17, DRSP_18, DRSP_19, DRSP_20, DRSP_21, DRSP_22, DRSP_23, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg
+
+# GAMM SCALED CYCLE DAY Effects - TEMPLATE MODEL
+```{r}
+hist(df$P4)
+df$P4log <- log(df$P4+1)
+hist(df$P4log)
+gamm_p4 <- gam(P4log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
+
+summary(gamm_p4)
+
+plot.gam(gamm_p4, select = 3)
+
+hist(df$P4)
+```
+
+
+# GAMM SCALED CYCLE DAY Effects - TEMPLATE PLOT
+```{r}
+
+P4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
+                      id = 0) 
+
+# Predict using the model for each dataset and add predictions
+pred <- predictions(gamm_p4, newdata = P4dat, type = "response", transform = function(x) exp(x) - 1)
+
+#, transform = function(x) exp(x) - 1) #don't need to include anything for 'transform' if your outcome is not log-transformed. This undo's the logtransform so model-implied values are not on the log scale 
+
+P4dat$estimate = pred$estimate
+P4dat$conf.low = pred$conf.low
+P4dat$conf.high = pred$conf.high
+
+# Plotting
+P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "P4") +
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  #geom_point(size = 3) +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal()
+
+P4plot
+
+
+```
+
+
+
+
+
+
+
+
+# HORMONE MODELS
+
+## Prepare Hormones
+
+```{r}
+
+#df$logE2 = log(df$E2 + 1)
+#df$logP4 = log(df$P4 + 1)
+
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+      logE2= log(E2+1), 
+    logP4= log(P4+1),
+    E2zd = scale(E2),
+    P4zd = scale(P4),
+    
+    # Calculate 5th and 95th percentiles for E2 and P4 within each id
+    E2_lower = quantile(E2zd, 0.05, na.rm = TRUE),
+    E2_upper = quantile(E2zd, 0.95, na.rm = TRUE),
+    P4_lower = quantile(P4zd, 0.05, na.rm = TRUE),
+    P4_upper = quantile(P4zd, 0.95, na.rm = TRUE),
+    
+    # Manually Winsorize by clamping values to the 5th and 95th percentiles
+    E2zd = pmin(pmax(E2zd, E2_lower), E2_upper),
+    P4zd = pmin(pmax(P4zd, P4_lower), P4_upper),
+    
+    # Daily derivatives for E2 and P4
+    E2zch = c(NA, diff(E2zd)),  # Winsorized E2 derivative
+    P4zch = c(NA, diff(P4zd))   # Winsorized P4 derivative
+  ) %>%
+  filter(
+    !is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+      !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
+      !is.na(E2zch) & !is.nan(E2zch) & !is.infinite(E2zch) &
+      !is.na(P4zch) & !is.nan(P4zch) & !is.infinite(P4zch)
+  ) %>%
+  ungroup()
+
+
+hist(df$E2zd)
+hist(df$P4zd)
+
+df_all <- df_all %>%
+  group_by(id) %>%
+  mutate(
+    logE2= log(E2+1), 
+    logP4= log(P4+1),
+    E2zd = scale(E2),
+    P4zd = scale(P4),
+    
+    # Calculate 5th and 95th percentiles for E2 and P4 within each id
+    E2_lower = quantile(E2zd, 0.05, na.rm = TRUE),
+    E2_upper = quantile(E2zd, 0.95, na.rm = TRUE),
+    P4_lower = quantile(P4zd, 0.05, na.rm = TRUE),
+    P4_upper = quantile(P4zd, 0.95, na.rm = TRUE),
+    
+    # Manually Winsorize by clamping values to the 5th and 95th percentiles
+    E2zd = pmin(pmax(E2zd, E2_lower), E2_upper),
+    P4zd = pmin(pmax(P4zd, P4_lower), P4_upper),
+    
+    # Daily derivatives for E2 and P4
+    E2zch = c(NA, diff(E2zd)),  # Winsorized E2 derivative
+    P4zch = c(NA, diff(P4zd))   # Winsorized P4 derivative
+  ) %>%
+  filter(
+    !is.na(E2zd) & !is.nan(E2zd) & !is.infinite(E2zd) &
+      !is.na(P4zd) & !is.nan(P4zd) & !is.infinite(P4zd) &
+      !is.na(E2zch) & !is.nan(E2zch) & !is.infinite(E2zch) &
+      !is.na(P4zch) & !is.nan(P4zch) & !is.infinite(P4zch)
+  ) %>%
+  ungroup()
+
+
+```
+
+# Looping through hormone effects - FIXED: E2zd, P4zd, E2zd*P4zd, E2zch, P4zch
+
+```{r}
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(outcomelist, df_all, save_dir) {
+  for (outcome in outcomelist) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+
+    # Plot histogram for transformed outcome
+    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
+    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + s(E2zd) +",
+      " s(P4zd)  + ti(E2zd, P4zd) +",
+      " s(E2zch) + s(P4zch)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed__wzch_85_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Plot the GAMM effects
+    plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
+    plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
+   plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
+   plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ s(E2zd) + s(P4zd) + ti(E2zd, P4zd)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df_all$E2zd, na.rm = TRUE),
+        max(df_all$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      P4zd = seq(
+        min(df_all$P4zd, na.rm = TRUE),
+        max(df_all$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response",
+                              transform = function(x) exp(x) - 1)
+
+    # Contour plot
+    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df_all, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "_85_wzch_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+  }
+}
+
+# CALL THE LOOP
+
+#OutcomeList already exists above
+
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots")
+
+```
+
+
+
+ 
+# TEMPLATE GAMM .zd and Derivative effects of Hormones - TEMPLATE
+
+```{r}
+
+
+hist(df_all$CSS_Inatt)
+df_all$CSS_Inattlog <- log(df_all$CSS_Inatt+1)
+hist(df_all$CSS_Inattlog)
+
+gamm_hormzd_CSS_Inatt <- gam(
+  CSS_Inattlog ~ s(id, bs = "re") + s(E2zd) + s(E2zd, id, bs = "re") +
+    s(P4zd) + s(P4zd, id, bs = "re") + ti(E2zd, P4zd) +
+    s(E2zch) + s(E2zch, id, bs = "re") + s(P4zch) + s(P4zch, id, bs = "re"),
+  data = df_all,
+  family = gaussian,
+  method = "REML"
+)
+
+# Summary and plot of the model
+summary(gamm_hormzd_CSS_Inatt)
+
+
+# Save the model summary as a text file
+summary_output <- capture.output(summary(gamm_hormzd_CSS_Inatt))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots/CSS_Inatt_model_EP_summary.txt"
+writeLines(summary_output, summary_file_path)
+cat("Model summary saved to:", summary_file_path, "\n")
+
+plot.gam(gamm_hormzd_CSS_Inatt, select=2) #Estrogen
+plot.gam(gamm_hormzd_CSS_Inatt, select=4) #Progesterone
+plot.gam(gamm_hormzd_CSS_Inatt, select=7) #Estrogen CHANGE
+plot.gam(gamm_hormzd_CSS_Inatt, select=8) #Progesterone CHANGE
+
+
+# Simpler model without random effects for visualization
+gamm_horm_CSS_Inatt_simple <- gam(
+  CSS_Inattlog ~ s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+  data = df_all,
+  family = gaussian,
+  method = "REML"
+)
+
+# Create the grid for contour plot
+grid <- expand.grid(
+  E2zd = seq(
+    min(df$E2zd, na.rm = TRUE),
+    max(df$E2zd, na.rm = TRUE),
+    length.out = 100
+  ),
+  P4zd = seq(
+    min(df$P4zd, na.rm = TRUE),
+    max(df$P4zd, na.rm = TRUE),
+    length.out = 100
+  )
+)
+
+# Predict values
+grid$predicted <- predict(gamm_horm_CSS_Inatt_simple,
+                          newdata = grid,
+                          type = "response", 
+                         transform = function(x) exp(x) - 1)
+
+# Contour plot
+ggplot() +
+  geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+  geom_contour(data = grid,
+               aes(x = E2zd, y = P4zd, z = predicted),
+               color = "black") +
+  geom_point(
+    data = df,
+    aes(x = E2zd, y = P4zd),
+    color = "black",
+    alpha = 0.25
+  ) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = median(grid$predicted)) +
+  labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+  theme_minimal() +
+  ggtitle("Predicting CSS_Inatt from E2 and P4 (Person Standardized)")
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots/CSS_Inatt.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
+
+```
+
+
+
+# Looping through hormone effects - FIXED E2zd*P4zd TENSOR PRODUCT SMOOTH
+
+```{r}
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(outcomelist, df_all, save_dir) {
+  for (outcome in outcomelist) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+
+    # Plot histogram for transformed outcome
+    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
+    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + te(E2zd, P4zd)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed__wzch_85_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Plot the GAMM effects
+   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
+   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
+  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
+  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ te(E2zd, P4zd)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df_all$E2zd, na.rm = TRUE),
+        max(df_all$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      P4zd = seq(
+        min(df_all$P4zd, na.rm = TRUE),
+        max(df_all$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response",
+                              transform = function(x) exp(x) - 1)
+
+    # Contour plot
+    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df_all, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "_te_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+  }
+}
+
+
+# CALL THE LOOP
+
+#OutcomeList already exists above
+
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+
+```
+
+
+# Looping through hormone effects - FIXED - RAW - TENSOR PRODUCT SMOOTH
+
+```{r}
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(outcomelist, df_all, save_dir) {
+  for (outcome in outcomelist) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+
+    # Plot histogram for transformed outcome
+    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
+    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + te(E2, P4)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawEP_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Plot the GAMM effects
+   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
+   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
+  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
+  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ te(E2, P4)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand.grid(
+      E2 = seq(
+        min(df_all$E2, na.rm = TRUE),
+        max(df_all$E2, na.rm = TRUE),
+        length.out = 100
+      ),
+      P4 = seq(
+        min(df_all$P4, na.rm = TRUE),
+        max(df_all$P4, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response",
+                              transform = function(x) exp(x) - 1)
+
+    # Contour plot
+    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2, y = P4, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2, y = P4, z = predicted), color = "black") +
+      geom_point(data = df_all, aes(x = E2, y = P4), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2", y = "P4", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "rawEP_te_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+  }
+}
+
+
+# CALL THE LOOP
+
+#OutcomeList already exists above
+
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+
+```
+
+
+# Looping through hormone effects - FIXED - RAW LOG - TENSOR PRODUCT SMOOTH
+
+```{r}
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(outcomelist, df_all, save_dir) {
+  for (outcome in outcomelist) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+
+    # Plot histogram for transformed outcome
+    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
+    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + te(logE2 , logP4)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawlogEP_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Plot the GAMM effects
+   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
+   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
+  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
+  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ te(logE2 , logP4)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df_all,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand.grid(
+      logE2  = seq(
+        min(df_all$logE2 , na.rm = TRUE),
+        max(df_all$logE2 , na.rm = TRUE),
+        length.out = 100
+      ),
+      logP4 = seq(
+        min(df_all$logP4, na.rm = TRUE),
+        max(df_all$logP4, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response",
+                              transform = function(x) exp(x) - 1)
+
+    # Contour plot
+    plot_title <- paste("Predicting", outcome, "from logE2  and logP4")
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = logE2 , y = logP4, fill = predicted)) +
+      geom_contour(data = grid, aes(x = logE2 , y = logP4, z = predicted), color = "black") +
+      geom_point(data = df_all, aes(x = logE2 , y = logP4), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "logE2 ", y = "logP4", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "rawlogEP_te_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+  }
+}
+
+
+# CALL THE LOOP
+
+#OutcomeList already exists above
+
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+
+```
