@@ -397,7 +397,7 @@ df$score_pinball <- max_pinball - df$score_pinball
 
 # Keeping only the variables I need 
 
-df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", 
+df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", "TubeNumber",
   "DEBQ_avg", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_Imp_Count", "CSS_Hyp_Count", "CSS_HypImp_Count", "CSS_Fx_Total",
   "BDEFS_WM_avg", "BDEFS_RI_avg", "BDEFS_Total", "UPPS_NU_avg", 
   "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
@@ -1411,7 +1411,7 @@ print(nrow(df))
 
 ```{r}
 
-write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv", row.names = FALSE)
+write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241009_L2N85.csv", row.names = FALSE)
 
 variable_names <- names(df)
 formatted_list <- paste(variable_names, collapse = ", ")
@@ -1426,12 +1426,27 @@ cat(formatted_list)
 
 ```{r}
 # Load your CSV file (adjust the path to your actual file location)
-df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv")
+df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241009_L2N85.csv")
 ```
 
 
 
+# Check Association between cycleday variable and days since starting
 
+```{r}
+df_first <- df %>%
+  group_by(id) %>%
+  filter(TubeNumber == 1) %>%
+  ungroup()
+
+hist(df_first$scaled_cycleday, breaks = 20)
+
+
+#cor(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
+
+#plot(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
+
+```
 
 
 # 2024-09-25 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
@@ -3666,6 +3681,8 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 # Looping through hormone effects - FIXED E2zd*P4zd TENSOR PRODUCT SMOOTH
 
 ```{r}
+library(plotly)
+library(htmlwidgets)
 
 # Function to Loop Through Outcomes and Generate GAMM Models
 create_gamm_models <- function(outcomelist, df_all, save_dir) {
@@ -3752,21 +3769,49 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     print(contour_plot)
 
     # Save the contour plot
-    plot_file_path <- file.path(save_dir, paste0(outcome, "_te_fixed.png"))
+    plot_file_path <- file.path(save_dir, paste0(outcome, "_te_zd_fixed.png"))
     ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
     cat("Contour plot saved to:", plot_file_path, "\n")
+    
+     # Create the 3D surface plot using Plotly
+    grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
+    surface_plot <- plot_ly(
+      x = seq(min(df_all$E2zd, na.rm = TRUE), max(df_all$E2zd, na.rm = TRUE), length.out = 100),
+      y = seq(min(df_all$P4zd, na.rm = TRUE), max(df_all$P4zd, na.rm = TRUE), length.out = 100),
+      z = ~grid_matrix
+    ) %>%
+      add_surface() %>%
+      layout(
+        title = paste("3D Surface Plot of E2zd and P4zd Interaction for", outcome),
+        scene = list(
+          xaxis = list(title = "E2zd"),
+          yaxis = list(title = "P4zd"),
+          zaxis = list(title = "Predicted Outcome")
+        )
+      )
+
+    # Save the interactive surface plot as an HTML file
+    surface_plot_file_path <- file.path(save_dir, paste0(outcome, "_zd_3D_surface.html"))
+    saveWidget(surface_plot, surface_plot_file_path)
+    cat("3D surface plot saved to:", surface_plot_file_path, "\n")
   }
 }
 
 
 # CALL THE LOOP
 
-#OutcomeList already exists above
+outcomelist <- c("UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
+  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
+  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
+  "UPPS_Total", "DEBQ_Total")
 
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/")
 
 ```
 
+"DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
+  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
+  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23",
 
 # Looping through hormone effects - FIXED - RAW - TENSOR PRODUCT SMOOTH
 
@@ -3860,6 +3905,8 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     plot_file_path <- file.path(save_dir, paste0(outcome, "rawEP_te_fixed.png"))
     ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
     cat("Contour plot saved to:", plot_file_path, "\n")
+    
+    
   }
 }
 
@@ -3991,7 +4038,12 @@ plot_ly(x = ~logE2, y = ~logP4, z = ~z, type = "surface") %>%
 
 ```
 
-# Function for te(raw log E*P) in 85 dataset with 3D html plot output
+
+
+
+
+
+# Function for te(???? not sure) in 85 dataset with 3D html plot output
 ```{r}
 # Load required libraries
 library(dplyr)
