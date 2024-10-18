@@ -1,0 +1,7 @@
+Step 1: Grouping data by ID and arranging by date
+Step 1 completed: Data grouped by ID and arranged by date
+Step 2: Calculating luteal day count using ovtoday and ovtoday_impute
+Step 2 completed: Luteal day count calculated
+Step 3: Calculating lutmax and luteal percentages
+Step 3 completed: Luteal phase percentages calculated
+Step 4: Calculating follicular day count and percentages

@@ -1,0 +1,28 @@
+---
+title: "ADHDCYCLE_loaddata"
+author: "Tory Eisenlohr-Moul"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r}
+
+# ---- Load Data ----
+
+# Load your CSV file (adjust the path to your actual file location)
+
+rawdf <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") # Change the path to your file
+
+df<-rawdf
+
+#skim(df)
+#View(df)
+
+
+# Print Variable Names
+
+variable_names <- names(df)
+formatted_list <- paste(variable_names, collapse = ", ")
+cat(formatted_list)
+
+```

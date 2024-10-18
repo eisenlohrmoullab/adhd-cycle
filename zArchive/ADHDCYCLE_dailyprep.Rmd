@@ -1,30 +1,19 @@
----
-title: "ADHDCYCLE_daily"
-output: 
-  html_document: 
-    toc: true
-    fig_caption: true
-    number_sections: true
-    df_print: default
-date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
----
 
 
 
 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
+
+
+
+
+
+
+WARNING DO NOT USE
+
+
+
+
+
 
 
 
@@ -45,23 +34,22 @@ date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 
 # ---- Global Chunk Options and Settings ----
 
-knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
+# Setting options for knitr to display R code in output
+knitr::opts_chunk$set(echo = TRUE)
 
-options(scipen = 999) # Turn off scientific notation
+# Prevent scientific notation in outputs
+options(scipen = 999)
 
-  # ---- Data Manipulation and Cleaning ----
 
-library(cowplot)  # Needed for draw_label function
-library(patchwork) # Needed for align_plots function
-library(htmlwidgets) # Needed for saving plotly plots as HTML
-library(htmltools) # Needed for saving plotly plots as HTML
-library(plotly) # Needed for interactive plots
+# ---- Data Manipulation and Cleaning ----
 
 # Core tidyverse libraries for data manipulation and visualization
-
+library(dplyr)       # Data manipulation (part of tidyverse)
+library(tidyr)       # Data tidying (part of tidyverse)
 library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
 library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
 library(skimr)       # Summarize and inspect data quickly
+
 
 # ---- Reading and Working with Files ----
 
@@ -70,9 +58,11 @@ library(haven)       # For reading SPSS, Stata, and SAS files
 library(readxl)      # For reading Excel files
 library(readr)       # For reading CSV and other text files
 
+
 # ---- Plotting and Visualization ----
 
 # Core and extended libraries for data visualization
+library(ggplot2)     # Core plotting library
 library(ggdist)      # Visualizing distributions and uncertainty
 library(ggforce)     # Extending ggplot2 functionality with advanced features
 library(ggrepel)     # For adding non-overlapping text labels to ggplot2
@@ -82,10 +72,8 @@ library(corrplot)    # For creating correlation matrix visualizations
 library(grid)        # Base R graphics system for visual layout
 library(gridExtra)   # Arranging multiple plots in a grid
 library(see)         # Visualizing model checks and diagnostics
-library(DescTools)   # Descriptive statistics and visualization
-library(ggHoriPlot)  # Horizontal versions of common ggplot2 plots
-library(ggthemes)   # Additional themes for ggplot2
 
+library(DescTools)
 
 # ---- Time Series and Rolling Averages ----
 
@@ -108,6 +96,7 @@ library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed 
 # Generalized additive models and marginal effects
 library(mgcv)        # Fitting generalized additive models (GAMs)
 library(marginaleffects) # Tools for calculating marginal effects from regression models
+
 
 # ---- Statistical Tools ----
 
@@ -137,8 +126,7 @@ library(targets)     # Workflow management for reproducible research pipelines
 # ---- Load Data ----
 
 # Load your CSV file (adjust the path to your actual file location)
-
-df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") # Change the path to your file
+df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv")
 
 #skim(df)
 #View(df)
@@ -151,8 +139,6 @@ formatted_list <- paste(variable_names, collapse = ", ")
 cat(formatted_list)
 
 ```
-
-
 
 
 ```{r}
@@ -429,7 +415,7 @@ df$score_pinball <- max_pinball - df$score_pinball
 
 # Keeping only the variables I need 
 
-df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", "TubeNumber",
+df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", 
   "DEBQ_avg", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_Imp_Count", "CSS_Hyp_Count", "CSS_HypImp_Count", "CSS_Fx_Total",
   "BDEFS_WM_avg", "BDEFS_RI_avg", "BDEFS_Total", "UPPS_NU_avg", 
   "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
@@ -475,10 +461,7 @@ outcomelist <- c(
   "UPPS_Premed_avg",
   "UPPS_Persev_avg",
   "UPPS_Sens_avg",
-  "DEBQ_Total",
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23"
+  "DEBQ_Total"
 ) %>% noquote()
 
 # person-centered deviations
@@ -503,10 +486,8 @@ outcomelist.d <- c(
   "UPPS_Premed_avg.d",
   "UPPS_Persev_avg.d",
   "UPPS_Sens_avg.d",
-  "DEBQ_Total.d",
-  "DRSP_1.d", "DRSP_2.d", "DRSP_3.d", "DRSP_4.d", "DRSP_5.d", "DRSP_6.d", "DRSP_7.d", "DRSP_8.d", "DRSP_9.d", 
-  "DRSP_10.d", "DRSP_11.d", "DRSP_12.d", "DRSP_13.d", "DRSP_14.d", "DRSP_15.d", "DRSP_16.d", "DRSP_17.d", 
-  "DRSP_18.d", "DRSP_19.d", "DRSP_20.d", "DRSP_21.d", "DRSP_22.d", "DRSP_23.d") %>% noquote()
+  "DEBQ_Total.d"
+) %>% noquote()
 
 # rolling averages
 outcomelist.roll <- c(
@@ -530,99 +511,8 @@ outcomelist.roll <- c(
   "UPPS_Premed_avg.roll",
   "UPPS_Persev_avg.roll",
   "UPPS_Sens_avg.roll",
-  "DEBQ_Total.roll",
-    "DRSP_1.roll", "DRSP_2.roll", "DRSP_3.roll", "DRSP_4.roll", "DRSP_5.roll", "DRSP_6.roll", "DRSP_7.roll", "DRSP_8.roll", "DRSP_9.roll", 
-  "DRSP_10.roll", "DRSP_11.roll", "DRSP_12.roll", "DRSP_13.roll", "DRSP_14.roll", "DRSP_15.roll", "DRSP_16.roll", "DRSP_17.roll", 
-  "DRSP_18.roll", "DRSP_19.roll", "DRSP_20.roll", "DRSP_21.roll", "DRSP_22.roll", "DRSP_23.roll"
+  "DEBQ_Total.roll"
 ) %>% noquote()
-
-
-dv_list <- c(
-  "DRSP_1",
-  "DRSP_2",
-  "DRSP_3",
-  "DRSP_4",
-  "DRSP_5",
-  "DRSP_6",
-  "DRSP_7",
-  "DRSP_8",
-  "DRSP_9",
-  "DRSP_10",
-  "DRSP_11",
-  "DRSP_12",
-  "DRSP_13",
-  "DRSP_14",
-  "DRSP_15",
-  "DRSP_16",
-  "DRSP_17",
-  "DRSP_18",
-  "DRSP_19",
-  "DRSP_20",
-  "DRSP_21",
-  "DRSP_22",
-  "DRSP_23",
-  "CSS_Inatt",
-  "CSS_HypImp",
-  "score_pinball",
-  "score_robot",
-  "BDEFS_Total",
-  "BDEFS_WM_avg",
-  "BDEFS_RI_avg",
-  "UPPS_NU_avg",
-  "UPPS_PU_avg",
-  "UPPS_Premed_avg",
-  "UPPS_Persev_avg",
-  "UPPS_Sens_avg",
-  "DEBQ_Total",
-  "CSS_Inatt_Count",
-  "CSS_Hyp_Count",
-  "CSS_Imp_Count",
-  "CSS_HypImp_Count"
-) %>% noquote()
-
-# Rename the variables based on DRSP items
-names(dv_list) <- c(
-  "Depressed Mood", # DRSP_1
-  "hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Increased Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloating/Weight Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Impairment", 
-  "Relational Impairment",
-  "Inattention Symptoms", 
-  "Hyperactivity/Impulsivity Symptoms", 
-  "Pinball Score",
-  "Robot Score",
-  "BDEFS Total",
-  "BDEFS Working Memory",
-  "BDEFS Response Inhibition",
-  "Negative Urgency",
-  "Positive Urgency",
-  "Lack of Premeditation",
-  "Lack of Perseverance",
-  "Sensation Seeking",
-  "DEBQ Total",
-  "Inattention Sx Count",
-  "Hyperactivity Sx Count",
-  "Impulsivity Sx Count",
-  "Hyperactivity/Impulsivity Sx Count"
-)
 
 
 #View(df)
@@ -633,17 +523,6 @@ names(dv_list) <- c(
 ```{r}
 
 #ROLLING AVGS
-
-outcomelist <- c(
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
-  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "DEBQ_Total"
-)
-
 
 #create rolling averages on RAW variables
 for (i in outcomelist) {
@@ -677,44 +556,9 @@ for (i in outcomelist.roll) {
 }
 
 
-#----- DF_ALL
-
-
-#create rolling averages on RAW variables
-for (i in outcomelist) {
-  df_all <- create.3day.rolling.avg(df_all, !!sym({{i}}), 3)
-}
-
-#MEANS
-
-#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
-for (i in outcomelist.roll) {
-  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
-}
-
-#execute for loop: run create.person.mean() on everything in "outcomelist"
-for (i in outcomelist) {
-  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
-}
-
-#PERSON-DEVIATIONS
-
-#for raw deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist) {
-  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-#for rolling avgs deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist.roll) {
-  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-
 #Check 
 
-#df_all %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
+df %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
 
 ```
 
@@ -1419,7 +1263,6 @@ df <- df %>%
   mutate(cycleday_perc = (scaled_cycleday + 1) / 2) %>%
   mutate(cycleday_perc_round = round(cycleday_perc, 1)) %>%
   mutate(cycleday_10perc = round(cycleday_perc / 0.10) * 0.10) %>%
-  mutate(cycleday_5perc = round(cycleday_perc / 0.05) * 0.05) %>%
   mutate(cycleday_2perc = round(cycleday_perc / 0.02) * 0.02)
 
 
@@ -1435,7 +1278,6 @@ df <- df %>%
   mutate(cycledayov_perc = (scaled_cycleday_ov + 1) / 2) %>%
   mutate(cycledayov_perc_round = round(cycledayov_perc, 1)) %>%
   mutate(cycledayov_10perc = round(cycledayov_perc / 0.10) * 0.10) %>%
-    mutate(cycledayov_5perc = round(cycledayov_perc / 0.05) * 0.05) %>%
   mutate(cycledayov_2perc = round(cycledayov_perc / 0.02) * 0.02)
 
 
@@ -1587,7 +1429,7 @@ print(nrow(df))
 
 ```{r}
 
-write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241017_L2N85.csv", row.names = FALSE)
+write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv", row.names = FALSE)
 
 variable_names <- names(df)
 formatted_list <- paste(variable_names, collapse = ", ")
@@ -1602,287 +1444,11 @@ cat(formatted_list)
 
 ```{r}
 # Load your CSV file (adjust the path to your actual file location)
-df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241017_L2N85.csv")
+df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/adhd_daily_df_20241003_L2N85.csv")
 ```
 
 
 
-# Check Association between cycleday variable and days since starting
-
-```{r}
-df_first <- df %>%
-  group_by(id) %>%
-  filter(TubeNumber == 1) %>%
-  ungroup()
-
-hist(df_first$scaled_cycleday, breaks = 30)
-
-
-#cor(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
-
-#plot(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
-
-```
-
-# 2024-10-17 - HORIZON PLOTS OF RAW DATA
-
-<!-- HCL palettes -->
-
-<!-- Type:  Qualitative  -->
-<!-- Names: Pastel 1, Dark 2, Dark 3, Set 2, Set 3, Warm, Cold, Harmonic, Dynamic -->
-
-<!-- Type:  Sequential (single-hue)  -->
-<!-- Names: Grays, Light Grays, Blues 2, Blues 3, Purples 2, Purples 3, Reds 2, Reds 3, Greens 2, Greens 3, -->
-<!--        Oslo -->
-
-<!-- Type:  Sequential (multi-hue)  -->
-<!-- Names: Purple-Blue, Red-Purple, Red-Blue, Purple-Orange, Purple-Yellow, Blue-Yellow, Green-Yellow, -->
-<!--        Red-Yellow, Heat, Heat 2, Terrain, Terrain 2, Viridis, Plasma, Inferno, Rocket, Mako, Dark -->
-<!--        Mint, Mint, BluGrn, Teal, TealGrn, Emrld, BluYl, ag_GrnYl, Peach, PinkYl, Burg, BurgYl, -->
-<!--        RedOr, OrYel, Purp, PurpOr, Sunset, Magenta, SunsetDark, ag_Sunset, BrwnYl, YlOrRd, YlOrBr, -->
-<!--        OrRd, Oranges, YlGn, YlGnBu, Reds, RdPu, PuRd, Purples, PuBuGn, PuBu, Greens, BuGn, GnBu, -->
-<!--        BuPu, Blues, Lajolla, Turku, Hawaii, Batlow -->
-
-<!-- Type:  Diverging  -->
-<!-- Names: Blue-Red, Blue-Red 2, Blue-Red 3, Red-Green, Purple-Green, Purple-Brown, Green-Brown, Blue-Yellow -->
-<!--        2, Blue-Yellow 3, Green-Orange, Cyan-Magenta, Tropic, Broc, Cork, Vik, Berlin, Lisbon, -->
-<!--        Tofino -->
-
-```{r warning=FALSE}
-
-#colorspace::hcl_palettes() # Lists available HCL palettes.
-
-
-horiz_plot <-df_all %>%  
-  ggplot() +  # Start the ggplot chain with the dataset `df`
-  
-  # Create a horizon plot using the geom_horizon function
-  # The 'aes' function specifies the x and y aesthetics for the plot.
-  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
-  # and 'E2' (estradiol levels) is mapped to the y-axis.
-  geom_horizon(aes(scaled_cycleday_ov, 
-                   E2zd), # Use the 'E2zd' variable for the y-axis.
-               # The 'origin' argument defines the baseline for splitting positive/negative values.
-               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
-               
-               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
-               horizonscale = 7) +  # Use 4 levels of shading.
-  
-  # Add a color scale using the HCL color palette ('BluGrn').
-  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
-  
-  scale_fill_hcl(palette = 'Heat', reverse = T) + 
-  
-  
-  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
-  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
-  facet_grid(id~.) +
-  
-  # Apply the 'theme_few' theme for a clean, minimal look.
-  theme_few() +
-  
-  # Customize the theme further:
-  theme(
-    # Set the vertical spacing between panels to zero lines.
-    panel.spacing.y = unit(0, "lines"),
-    
-    # Customize the text of the facet strips (which show the participant IDs).
-    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
-    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
-    
-    # Remove the legend from the plot.
-    legend.position = 'right',
-    
-    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
-    axis.text.y = element_blank(),  # No y-axis text.
-    axis.title.y = element_blank(),  # No y-axis title.
-    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
-    
-    # Remove the border around each panel.
-    panel.border = element_blank()
-  ) +
-  
-  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
-  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
-  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
-  
-  # Add a title to the plot.
-  ggtitle('Person-Std E2 Across (Menses to Menses) Cycle by ID') +
-  
-  # Add a label to the x-axis.
-  xlab('Scaled Cycleday (Ovulation at 0)')
-
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_mens-mens.png", 
-       plot = horiz_plot, 
-       width = 8, 
-       height = 6)
-
-horiz_plot <-df_all %>%  
-  ggplot() +  # Start the ggplot chain with the dataset `df`
-  
-  # Create a horizon plot using the geom_horizon function
-  # The 'aes' function specifies the x and y aesthetics for the plot.
-  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
-  # and 'E2' (estradiol levels) is mapped to the y-axis.
-  geom_horizon(aes(scaled_cycleday, 
-                   E2zd), # Use the 'E2zd' variable for the y-axis.
-               # The 'origin' argument defines the baseline for splitting positive/negative values.
-               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
-               
-               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
-               horizonscale = 7) +  # Use 4 levels of shading.
-  
-  # Add a color scale using the HCL color palette ('BluGrn').
-  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
-  
-  scale_fill_hcl(palette = 'Heat', reverse = T) + 
-  
-  
-  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
-  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
-  facet_grid(id~.) +
-  
-  # Apply the 'theme_few' theme for a clean, minimal look.
-  theme_few() +
-  
-  # Customize the theme further:
-  theme(
-    # Set the vertical spacing between panels to zero lines.
-    panel.spacing.y = unit(0, "lines"),
-    
-    # Customize the text of the facet strips (which show the participant IDs).
-    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
-    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
-    
-    # Remove the legend from the plot.
-    legend.position = 'right',
-    
-    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
-    axis.text.y = element_blank(),  # No y-axis text.
-    axis.title.y = element_blank(),  # No y-axis title.
-    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
-    
-    # Remove the border around each panel.
-    panel.border = element_blank()
-  ) +
-  
-  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
-  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
-  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
-  
-  # Add a title to the plot.
-  ggtitle('Person-Std E2 Across (Ov to Ov) Cycle by ID') +
-  
-  # Add a label to the x-axis.
-  xlab('Scaled Cycleday (Menses at 0)')
-
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_ov-ov.png", 
-       plot = horiz_plot, 
-       width = 8, 
-       height = 6)
-
-```
-
-```{r}
-# Function to create horizon plots for a list of outcomes (menses to menses cycle)
-horizon_plot_menses_to_menses_list <- function(df, outcomes, filename_prefix) {
-  # Loop through each outcome in the list of outcomes
-  for (outcome in outcomes) {
-    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
-    outcome.zd <- paste0(outcome, '.zd')
-    # Create the filename for saving the plot
-    filename <- paste0(filename_prefix, outcome, '_horizon_plot_mens-mens.png')
-    
-    # Generate the plot
-    plot <- df %>%  
-      ggplot() +
-      # Create a horizon plot for the given outcome
-      geom_horizon(aes(scaled_cycleday_ov, .data[[outcome.zd]]),
-                   origin = 'midpoint',  # Set the baseline at the midpoint
-                   horizonscale = 7) +  # Set the number of shading levels
-      # Set the color scale using the HCL 'Heat' palette
-      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
-      # Facet by participant ID to create individual panels for each participant
-      facet_grid(id~.) +
-      # Use a minimal theme for the plot
-      theme_few() +
-      # Customize the theme further
-      theme(
-        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
-        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
-        legend.position = 'right',  # Place the legend on the right side
-        axis.text.y = element_blank(),  # Remove y-axis text
-        axis.title.y = element_blank(),  # Remove y-axis title
-        axis.ticks.y = element_blank(),  # Remove y-axis ticks
-        panel.border = element_blank()  # Remove panel borders
-      ) +
-      # Add a title to the plot
-      ggtitle(paste('Person-Std', outcome, 'Across (Menses to Menses) Cycle by ID')) +
-      # Add a label to the x-axis
-      xlab('Scaled Cycleday (Ovulation at 0)')
-    
-    # Save the plot to the specified filename (using the old file path)
-    ggsave(filename = filename, plot = plot, width = 8, height = 6)
-  }
-}
-
-# Function to create horizon plots for a list of outcomes (ovulation to ovulation cycle)
-horizon_plot_ovulation_to_ovulation_list <- function(df, outcomes, filename_prefix) {
-  # Loop through each outcome in the list of outcomes
-  for (outcome in outcomes) {
-    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
-    outcome.zd <- paste0(outcome, '.zd')
-    # Create the filename for saving the plot
-    filename <- paste0(filename_prefix, outcome, '_horizon_plot_ov-ov.png')
-    
-    # Generate the plot
-    plot <- df %>%  
-      ggplot() +
-      # Create a horizon plot for the given outcome
-      geom_horizon(aes(scaled_cycleday, .data[[outcome.zd]]),
-                   origin = 'midpoint',  # Set the baseline at the midpoint
-                   horizonscale = 7) +  # Set the number of shading levels
-      # Set the color scale using the HCL 'Heat' palette
-      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
-      # Facet by participant ID to create individual panels for each participant
-      facet_grid(id~.) +
-      # Use a minimal theme for the plot
-      theme_few() +
-      # Customize the theme further
-      theme(
-        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
-        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
-        legend.position = 'right',  # Place the legend on the right side
-        axis.text.y = element_blank(),  # Remove y-axis text
-        axis.title.y = element_blank(),  # Remove y-axis title
-        axis.ticks.y = element_blank(),  # Remove y-axis ticks
-        panel.border = element_blank()  # Remove panel borders
-      ) +
-      # Add a title to the plot
-      ggtitle(paste('Person-Std', outcome, 'Across (Ov to Ov) Cycle by ID')) +
-      # Add a label to the x-axis
-      xlab('Scaled Cycleday (Menses at 0)')
-    
-    # Save the plot to the specified filename (using the old file path)
-    ggsave(filename = filename, plot = plot, width = 8, height = 6)
-  }
-}
-
-outcomelist <- c(
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
-  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "UPPS_Total", "DEBQ_Total"
-)
-
-horizon_plot_menses_to_menses_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
-
-horizon_plot_ovulation_to_ovulation_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
-
-```
 
 
 
@@ -2088,23 +1654,16 @@ plot_DVs(outcomelist, df)
 
 # 2024-09-25 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
 
-```{r warning=TRUE}
+```{r warning=FALSE}
 
-# Load necessary libraries
-library(dplyr)   # Data manipulation
-library(ggplot2) # Plotting
-library(rlang)   # Symbolic programming utilities
-library(here)    # Constructing file paths
+# Define the folder location for saving the plots
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-30b"
 
 # Define the function to generate plots for a list of DVs
-# Args:
-#   dv_list: A named vector of dependent variables (DVs) to be plotted.
-#   df: A data frame containing the data for analysis and plotting.
-#   output_folder: The folder path where the generated plots should be saved.
-plot_DVs_M2M <- function(dv_list, df, output_folder) {
+plot_DVs_M2M <- function(DV_list, df) {
   
   # Create person-standardized (z-scored within each participant) versions of each DV
-  for (DV in dv_list) {
+  for (DV in DV_list) {
     zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
     
     # Add the person-standardized columns for each DV
@@ -2115,118 +1674,180 @@ plot_DVs_M2M <- function(dv_list, df, output_folder) {
   }
   
   # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
-  # This transformation helps in visual comparison by keeping the SD consistent across participants
   df <- df %>%
     group_by(id) %>%
-    mutate(E2.rescale = scale(E2, center = TRUE, scale = (sd(E2, na.rm = TRUE)*1.75)),
-           P4.rescale = scale(P4, center = TRUE, scale = (sd(P4, na.rm = TRUE)*1.75))) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
     ungroup()
   
-  # Indicators for menstrual bleeding (static values for highlighting cycle day range)
+  # Indicators for menstrual bleeding
   bleeding_indicator <- data.frame(xmin = 0, xmax = 0.2, ymin = -Inf, ymax = Inf)
   
-  # Loop through each DV to generate plots
-  for (DV in dv_list) {
-    # Get the label for the DV from dv_list
-    DV_label <- names(dv_list)[which(dv_list == DV)]
+  for (DV in DV_list) {
     
-    # Calculate mean and standard error for the raw dependent variable
-    dv <- df %>%
-      group_by(cycledayov_10perc) %>%
-      summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
-                se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
-    
-    # Calculate mean and standard error for the person-z-scored outcome (zd)
-    zd_var <- paste0(DV, ".zd")
-    dv_zd <- df %>%
-      group_by(cycledayov_10perc) %>%
-      summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
-                se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
-    
-    # Generate plot for the person-standardized outcome (zd)
-p3 <- ggplot(dv_zd, aes(x = cycledayov_10perc, y = mean_value)) +
-  # Plotting the mean values for the person-standardized outcome with LOESS smoothing
-  geom_smooth(method = "loess", span = .7, size = 1.5, se = FALSE, color = "black") +  # Use geom_smooth for the main DV with CI
-  # Plotting the rescaled E2 and P4 values with LOESS smoothing
-  geom_smooth(data = df, aes(x = cycledayov_10perc, y = E2.rescale, color = "E2"), method = "loess", span = 0.5, 
-              linetype = "dashed", size = 1, alpha = 0.9, se = FALSE) +
-  geom_smooth(data = df, aes(x = cycledayov_10perc, y = P4.rescale, color = "P4"), method = "loess", span = 0.5, 
-              linetype = "dashed", size = 1, alpha = 0.8, se = FALSE) +
-  # Manual color settings for different lines in the plot
-  scale_color_manual(values = c("E2" = "forestgreen", "P4" = "red")) +
-  # Set axis labels and plot title
-  xlab("Cycle Day (10% bins)") + ylab(paste("Smoothed Person-Z-Scored", DV_label)) +
-  # Apply minimal theme for cleaner look
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, size = 14),
-        plot.margin = margin(15, 5, 50, 5),
-        legend.title = element_blank(),
-        legend.position = "right") +
-  coord_cartesian(clip = "off") +
-  ggtitle(label=DV_label)+
-  # Highlight menstrual bleeding days with a red rectangle
-  geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), 
-            fill = "red", alpha = 0.2, inherit.aes = FALSE)
+    if (DV %in% c("E2", "P4", "LH")) {
+      # Raw plot for E2, P4, LH
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.1) +
+        geom_point(size = 1) +
+        geom_line(size = 1) +
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_", ".png"), plot = last_plot(), width = 8, height = 6)
 
-# Print the plot to the graphics device
-print(p3)
-    
-    # Save the plot to the specified output folder
-    ggsave(filename = file.path(output_folder, paste0(DV, "_", "ov_zd_noSE", ".png")), plot = p3, width = 8, height = 6)
+      
+    } else {
+      # For DVs that are NOT E2, P4, LH
+      
+      # Raw data points and line for the dependent variable
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+    # Person-rescaled E2 and P4 lines (thin dotted)  <- Changed variable names here
+      e2_std <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(E2.rescale, na.rm = TRUE)) #changed here
+
+      p4_std <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(P4.rescale, na.rm = TRUE))  #changed here
+      
+      p1 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # Thin dotted lines for E2 and P4
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      # Deviations plot
+      dev_var <- paste0(DV, ".d")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p2 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p2)
+      
+            ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_dev", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Person-standardized outcome (zd)
+      zd_var <- paste0(DV, ".zd")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                  se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p3 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
+        geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
+        ggtitle(paste("Person-standardized", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p3)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_zd", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Rolling deviations plot
+      roll_dev_var <- paste0(DV, ".roll.d")
+      dv <- df %>%
+        group_by(cycledayov_10perc) %>%
+        summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(roll_dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p4 <- ggplot(dv, aes(x = cycledayov_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycledayov_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Rolling Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Rolling Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p4)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "ov_rolld", ".png"), plot = last_plot(), width = 8, height = 6)
+
+    }
   }
 }
 
-# Rename the variables based on DRSP items
-# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
-names(dv_list) <- c(
-  "Depressed Mood", # DRSP_1
-  "Hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Incr Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloat/Wt Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Imp", 
-  "Relational Imp",
-  "Inattention Sx", 
-  "Hyperactivity/Imp Sx", 
-  "Pinball Score",
-  "Robot Score",
-  "BDEFS Total",
-  "BDEFS Working Memory",
-  "BDEFS Resp Inhibition",
-  "Negative Urgency",
-  "Positive Urgency",
-  "Lack of Premeditation",
-  "Lack of Perseverance",
-  "Sensation Seeking",
-  "DEBQ Total",
-  "Inattention Sx Count",
-  "Hyperactivity Sx Count",
-  "Impulsivity Sx Count",
-  "Hyp/Imp Sx Count"
-)
 
-# Define the folder location for saving the plots
-# Define the folder location for saving the plots
-output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10"
+plot_DVs_M2M(outcomelist, df)
 
-# Call the function with the dataframe and output folder
-plot_DVs_M2M(dv_list, df, output_folder)
+
 
 ```
 
@@ -2237,6 +1858,8 @@ plot_DVs_M2M(dv_list, df, output_folder)
 # FITTING GAMMs 
 
 
+
+
 # GAMM and initial plot - E2 - Ov to Ov
 ```{r}
 
@@ -2244,9 +1867,7 @@ hist(df$E2)
 df$E2log <- log(df$E2+1)
 hist(df$E2log)
 
-gamm_E2 <- gam(E2log ~ s(id, bs = "re") + 
-                 s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20), data = df, method = "REML")
+gamm_E2 <- gam(E2log ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re") + s(scaled_cycleday, k = 20), data = df, method = "REML")
 
 summary(gamm_e2)
 
@@ -2260,8 +1881,6 @@ cat("Model summary saved to:", summary_file_path, "\n")
 plot.gam(gamm_e2, select = 3)
 
 ```
-
-
 
 # Model-Implied Plot - E2 - Ov to Ov
 ```{r}
@@ -2291,6 +1910,7 @@ e2plot <- ggplot(e2dat, aes(x = scaled_cycleday, y = estimate)) +
   theme_minimal()
 
 e2plot
+
 
 ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/GAMMplots/E2.png", 
        plot = last_plot(), 
@@ -2505,151 +2125,7 @@ for (outcome in outcomelist) {
 
 
 
-# Trying a version of the loop that merges in E2: 
 
-```{r}
-
-
-gamm_model_loop <- function(outcome, df, output_path, plot_path) {
-  
-  # Step 1: Create a histogram for the outcome variable to check its distribution
-  hist(df[[outcome]], main = paste("Histogram of", outcome), xlab = outcome)
-  
-  # Step 2: Log-transform the outcome variable to deal with skewness
-  log_outcome <- paste0(outcome, "log")  
-  df[[log_outcome]] <- log(df[[outcome]] + 1)  
-  hist(df[[log_outcome]], main = paste("Histogram of Log-Transformed", outcome), xlab = log_outcome)
-  
-  # Step 3: Fit a GAMM
-  gamm_model <- gam(as.formula(paste0(log_outcome, " ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 30)")),
-                    data = df, method = "REML")
-  
-  # Step 4: Save the model summary
-  summary_output <- summary(gamm_model)
-  summary_file_path <- file.path(output_path, paste0("gamm_", outcome, ".txt"))
-  writeLines(capture.output(summary_output), summary_file_path)
-  
-  # Step 4a: Extract p-value and edf for scaled_cycleday
-  scaled_cycleday_term <- summary_output$s.table["s(scaled_cycleday)", ]
-  p_value <- scaled_cycleday_term["p-value"]
-  edf <- scaled_cycleday_term["edf"]
-
-  # Determine significance symbol
-  significance <- ""
-  if (p_value < 0.001) {
-    significance <- "***"
-  } else if (p_value < 0.01) {
-    significance <- "**"
-  } else if (p_value < 0.05) {
-    significance <- "*"
-  } else if (p_value < 0.15) {
-    significance <- "†"
-  }
-
- # Step 5: Create a dataset for predictions from the model
-pred_data <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
-pred <- predict(gamm_model, newdata = pred_data, type = "response", se.fit = TRUE) # Predict on the link scale
-
-# Calculate confidence intervals on the link scale
-pred_data$conf.low <- pred$fit - 1.96 * pred$se.fit 
-pred_data$conf.high <- pred$fit + 1.96 * pred$se.fit
-
-# Transform predictions and confidence intervals to the response scale
-pred_data$estimate <- exp(pred$fit) - 1
-pred_data$conf.low <- exp(pred_data$conf.low) - 1
-pred_data$conf.high <- exp(pred_data$conf.high) - 1
-
-# Scale the transformed values  <-- This is the moved line
-pred_data$estimate <- scale(pred_data$estimate)
-pred_data$conf.low <- scale(pred_data$conf.low)
-pred_data$conf.high <- scale(pred_data$conf.high) 
-
-  # Step 6: Plot predicted values and confidence intervals for the outcome and add E2 curve
-  outcome_plot <- ggplot(pred_data, aes(x = scaled_cycleday)) +
-    scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
-                       labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
-    labs(x = "Cycle Day (Scaled)", y = "Scaled Predicted Values") +
-    geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
-              fill = "grey70", alpha = 0.2, color = "white") +
-    geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
-              fill = "grey87", alpha = 0.2, color = "white") +
-    
-    # Confidence ribbons for the outcome estimates
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "black", alpha = 0.1) +
-    
-    # Line plot for outcome
-    geom_line(aes(y = estimate, color = "outcome"), size = 1, show.legend = TRUE) +  
-    
-    # Step 6a: Add E2 and P4 curves on top (using e2dat and P4dat)
-    geom_line(data = e2dat, aes(x = scaled_cycleday, y = scale(estimate), color = "E2"), size = 1, linetype = "dashed") +  # E2 curve
-    geom_line(data = P4dat, aes(x = scaled_cycleday, y = scale(estimate), color = "P4"), size = 1, linetype = "dashed") +  # P4 curve
-    
-    # Step 6b: Customize legend with desired order
-    scale_color_manual(name = "Key", 
-                       values = c("outcome" = "black", "E2" = "forestgreen", "P4" = "red"),
-                       labels = c("outcome" = outcome, "E2" = "E2", "P4" = "P4"),
-                       breaks = c("outcome", "E2", "P4")) +  # Ensure correct legend order
-    
-    theme_minimal() +
-    theme(legend.position = "right")
-
-  # Create a label for EDF and p-value, and add it below the legend
-  annotation_text <- paste("EDF:", round(edf, 2), significance)
-  annotated_plot <- ggdraw(outcome_plot) +
-    draw_label(annotation_text, x = 0.85, y = 0.2, hjust = 0, size = 10, fontface = "bold")
-
-  # Display the plot with annotation
-  print(annotated_plot)
-
-  # Step 7: Save the plot to a file
-  plot_file_path <- file.path(plot_path, paste0(outcome, "_with_horm.png"))
-  ggsave(filename = plot_file_path, plot = annotated_plot, width = 8, height = 6)
-  cat("Plot with Hormone overlays saved to:", plot_file_path, "\n")
-}
-
-# Define paths for saving outputs (modify as per your folder structure)
-output_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/"
-plot_path <- file.path(output_path, "Plots with Hormone Overlays")
-
-# List of outcomes to loop through (replace with your actual outcomes)
-outcomelist_test <- c("CSS_Inatt")
-
-outcomelist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total",  "CSS_Inatt_Count", "CSS_HypImp_Count", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_7")
-
-# Loop through each outcome and apply the GAMM function
-for (outcome in outcomelist) {
-  gamm_model_loop(outcome, df, output_path, plot_path)  # Apply the function to each outcome
-}
-
-```
-
-
-Alt Patchwork Code
-```{r}
-
-  library(patchwork)
-
-# Create separate plots for Outcome, E2, and P4
-outcome_plot <- ggplot(pred_data, aes(x = scaled_cycleday, y = estimate)) +
-  geom_line(size = 1, color = "blue") +
-  labs(x = "Cycle Day (Scaled)", y = outcome) +
-  theme_minimal()
-
-e2_plot <- ggplot(e2dat, aes(x = scaled_cycleday, y = estimate)) +
-  geom_line(size = 1, color = "forestgreen", linetype = "dashed") +
-  labs(x = "Cycle Day (Scaled)", y = "E2") +
-  theme_minimal()
-
-p4_plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
-  geom_line(size = 1, color = "red", linetype = "dashed") +
-  labs(x = "Cycle Day (Scaled)", y = "P4") +
-  theme_minimal()
-
-# Arrange all three plots in a single view
-combined_plot <- outcome_plot / e2_plot / p4_plot
-print(combined_plot)
-```
 
 
 
@@ -3941,8 +3417,6 @@ P4plot
 df <- df %>%
   group_by(id) %>%
   mutate(
-      logE2= log(E2+1), 
-    logP4= log(P4+1),
     E2zd = scale(E2),
     P4zd = scale(P4),
     
@@ -3975,8 +3449,6 @@ hist(df$P4zd)
 df_all <- df_all %>%
   group_by(id) %>%
   mutate(
-    logE2= log(E2+1), 
-    logP4= log(P4+1),
     E2zd = scale(E2),
     P4zd = scale(P4),
     
@@ -4005,7 +3477,7 @@ df_all <- df_all %>%
 
 ```
 
-# Looping through hormone effects - FIXED: E2zd, P4zd, E2zd*P4zd, E2zch, P4zch
+# Looping through hormone effects 
 
 ```{r}
 
@@ -4113,7 +3585,7 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 
 
  
-# TEMPLATE GAMM .zd and Derivative effects of Hormones - TEMPLATE
+#GAMM .zd and Derivative effects of Hormones
 
 ```{r}
 
@@ -4204,364 +3676,90 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 ```
 
 
-
-# Looping through hormone effects - FIXED E2zd*P4zd TENSOR PRODUCT SMOOTH
-
-```{r}
-library(plotly)
-library(htmlwidgets)
-
-# Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
-  for (outcome in outcomelist) {
-    # Prepare variables dynamically
-    outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
-
-    # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
-
-    # GAMM model with hormone z-scores and derivatives
-    gamm_formula <- as.formula(paste0(
-      outcome_log, " ~ s(id, bs = \"re\") + te(E2zd, P4zd)"
-    ))
-
-    gamm_model <- gam(
-      gamm_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Summary and plot of the model
-    model_summary <- summary(gamm_model)
-    print(model_summary)
-
-    # Save the model summary as a text file
-    summary_output <- capture.output(model_summary)
-    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed__wzch_85_model_EP_summary.txt"))
-    writeLines(summary_output, summary_file_path)
-    cat("Model summary saved to:", summary_file_path, "\n")
-
-    # Plot the GAMM effects
-   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
-   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
-  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
-  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
-
-    # Simpler model without random effects for visualization
-    gamm_simple_formula <- as.formula(paste0(
-      outcome_log, " ~ te(E2zd, P4zd)"
-    ))
-
-    gamm_model_simple <- gam(
-      gamm_simple_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Create the grid for contour plot
-    grid <- expand.grid(
-      E2zd = seq(
-        min(df_all$E2zd, na.rm = TRUE),
-        max(df_all$E2zd, na.rm = TRUE),
-        length.out = 100
-      ),
-      P4zd = seq(
-        min(df_all$P4zd, na.rm = TRUE),
-        max(df_all$P4zd, na.rm = TRUE),
-        length.out = 100
-      )
-    )
-
-    # Predict values
-    grid$predicted <- predict(gamm_model_simple,
-                              newdata = grid,
-                              type = "response",
-                              transform = function(x) exp(x) - 1)
-
-    # Contour plot
-    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
-    contour_plot <- ggplot() +
-      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
-      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
-      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
-      theme_minimal() +
-      ggtitle(plot_title)
-
-    print(contour_plot)
-
-    # Save the contour plot
-    plot_file_path <- file.path(save_dir, paste0(outcome, "_te_zd_fixed.png"))
-    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
-    cat("Contour plot saved to:", plot_file_path, "\n")
-    
-     # Create the 3D surface plot using Plotly
-    grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
-    surface_plot <- plot_ly(
-      x = seq(min(df_all$E2zd, na.rm = TRUE), max(df_all$E2zd, na.rm = TRUE), length.out = 100),
-      y = seq(min(df_all$P4zd, na.rm = TRUE), max(df_all$P4zd, na.rm = TRUE), length.out = 100),
-      z = ~grid_matrix
-    ) %>%
-      add_surface() %>%
-      layout(
-        title = paste("3D Surface Plot of E2zd and P4zd Interaction for", outcome),
-        scene = list(
-          xaxis = list(title = "E2zd"),
-          yaxis = list(title = "P4zd"),
-          zaxis = list(title = "Predicted Outcome")
-        )
-      )
-
-    # Save the interactive surface plot as an HTML file
-    surface_plot_file_path <- file.path(save_dir, paste0(outcome, "_zd_3D_surface.html"))
-    saveWidget(surface_plot, surface_plot_file_path)
-    cat("3D surface plot saved to:", surface_plot_file_path, "\n")
-  }
-}
-
-
-# CALL THE LOOP
-
-outcomelist <- c("UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "UPPS_Total", "DEBQ_Total")
-
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/")
-
-```
-
-"DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23",
-
-# Looping through hormone effects - FIXED - RAW - TENSOR PRODUCT SMOOTH
+#GAMM .zd and Derivative effects of Hormones - CSS_HypImp (ZERO INF POISS)
 
 ```{r}
 
-# Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
-  for (outcome in outcomelist) {
-    # Prepare variables dynamically
-    outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+hist(df$CSS_HypImp)
+df$CSS_HypImplog <- log(df$CSS_HypImp+1)
+hist(df$CSS_HypImplog)
 
-    # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+gamm_hormzd_CSS_HypImp <- gam(
+  CSS_HypImp_Count ~ s(id, bs = "re") + s(E2zd, k=10) + s(E2zd, id, bs = "re") +
+    s(P4zd, k=10) + s(P4zd, id, bs = "re") + ti(E2zd, P4zd, k=10),
+  data = df,
+  family = ziP(),
+  method = "REML"
+)
 
-    # GAMM model with hormone z-scores and derivatives
-    gamm_formula <- as.formula(paste0(
-      outcome_log, " ~ s(id, bs = \"re\") + te(E2, P4)"
-    ))
-
-    gamm_model <- gam(
-      gamm_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Summary and plot of the model
-    model_summary <- summary(gamm_model)
-    print(model_summary)
-
-    # Save the model summary as a text file
-    summary_output <- capture.output(model_summary)
-    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawEP_model_EP_summary.txt"))
-    writeLines(summary_output, summary_file_path)
-    cat("Model summary saved to:", summary_file_path, "\n")
-
-    # Plot the GAMM effects
-   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
-   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
-  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
-  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
-
-    # Simpler model without random effects for visualization
-    gamm_simple_formula <- as.formula(paste0(
-      outcome_log, " ~ te(E2, P4)"
-    ))
-
-    gamm_model_simple <- gam(
-      gamm_simple_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Create the grid for contour plot
-    grid <- expand.grid(
-      E2 = seq(
-        min(df_all$E2, na.rm = TRUE),
-        max(df_all$E2, na.rm = TRUE),
-        length.out = 100
-      ),
-      P4 = seq(
-        min(df_all$P4, na.rm = TRUE),
-        max(df_all$P4, na.rm = TRUE),
-        length.out = 100
-      )
-    )
-
-    # Predict values
-    grid$predicted <- predict(gamm_model_simple,
-                              newdata = grid,
-                              type = "response",
-                              transform = function(x) exp(x) - 1)
-
-    # Contour plot
-    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
-    contour_plot <- ggplot() +
-      geom_tile(data = grid, aes(x = E2, y = P4, fill = predicted)) +
-      geom_contour(data = grid, aes(x = E2, y = P4, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = E2, y = P4), color = "black", alpha = 0.25) +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
-      labs(x = "E2", y = "P4", fill = "Outcome") +
-      theme_minimal() +
-      ggtitle(plot_title)
-
-    print(contour_plot)
-
-    # Save the contour plot
-    plot_file_path <- file.path(save_dir, paste0(outcome, "rawEP_te_fixed.png"))
-    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
-    cat("Contour plot saved to:", plot_file_path, "\n")
-    
-    
-  }
-}
+# Summary and plot of the model
+summary(gamm_hormzd_CSS_HypImp)
 
 
-# CALL THE LOOP
+# Save the model summary as a text file
+summary_output <- capture.output(summary(gamm_hormzd_CSS_HypImp))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-30/EP_Models_Plots/CSS_HypImp_model_EP_summary.txt"
+writeLines(summary_output, summary_file_path)
+cat("Model summary saved to:", summary_file_path, "\n")
 
-#OutcomeList already exists above
-
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
-
-```
-
-
-# Looping through hormone effects - FIXED - RAW LOG - TENSOR PRODUCT SMOOTH
-
-```{r}
-
-# Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
-  for (outcome in outcomelist) {
-    # Prepare variables dynamically
-    outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
-
-    # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
-
-    # GAMM model with hormone z-scores and derivatives
-    gamm_formula <- as.formula(paste0(
-      outcome_log, " ~ s(id, bs = \"re\") + te(logE2 , logP4)"
-    ))
-
-    gamm_model <- gam(
-      gamm_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Summary and plot of the model
-    model_summary <- summary(gamm_model)
-    print(model_summary)
-
-    # Save the model summary as a text file
-    summary_output <- capture.output(model_summary)
-    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawlogEP_model_EP_summary.txt"))
-    writeLines(summary_output, summary_file_path)
-    cat("Model summary saved to:", summary_file_path, "\n")
-
-    # Plot the GAMM effects
-   # plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
-   # plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
-  # plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
-  # plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
-
-    # Simpler model without random effects for visualization
-    gamm_simple_formula <- as.formula(paste0(
-      outcome_log, " ~ te(logE2 , logP4)"
-    ))
-
-    gamm_model_simple <- gam(
-      gamm_simple_formula,
-      data = df_all,
-      family = gaussian,
-      method = "REML"
-    )
-
-    # Create the grid for contour plot
-    grid <- expand.grid(
-      logE2  = seq(
-        min(df_all$logE2 , na.rm = TRUE),
-        max(df_all$logE2 , na.rm = TRUE),
-        length.out = 100
-      ),
-      logP4 = seq(
-        min(df_all$logP4, na.rm = TRUE),
-        max(df_all$logP4, na.rm = TRUE),
-        length.out = 100
-      )
-    )
-
-    # Predict values
-    grid$predicted <- predict(gamm_model_simple,
-                              newdata = grid,
-                              type = "response",
-                              transform = function(x) exp(x) - 1)
-
-    # Contour plot
-    plot_title <- paste("Predicting", outcome, "from logE2  and logP4")
-    contour_plot <- ggplot() +
-      geom_tile(data = grid, aes(x = logE2 , y = logP4, fill = predicted)) +
-      geom_contour(data = grid, aes(x = logE2 , y = logP4, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = logE2 , y = logP4), color = "black", alpha = 0.25) +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
-      labs(x = "logE2 ", y = "logP4", fill = "Outcome") +
-      theme_minimal() +
-      ggtitle(plot_title)
-
-    print(contour_plot)
-
-    # Save the contour plot
-    plot_file_path <- file.path(save_dir, paste0(outcome, "rawlogEP_te_fixed.png"))
-    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
-    cat("Contour plot saved to:", plot_file_path, "\n")
-  }
-}
+plot.gam(gamm_hormzd_CSS_HypImp, select=2) #Estrogen
+plot.gam(gamm_hormzd_CSS_HypImp, select=4) #Progesterone
+plot.gam(gamm_hormzd_CSS_HypImp, select=7) #Estrogen CHANGE
+plot.gam(gamm_hormzd_CSS_HypImp, select=8) #Progesterone CHANGE
 
 
-# CALL THE LOOP
+# Simpler model without random effects for visualization
+gamm_horm_CSS_HypImp_simple <- gam(
+  CSS_HypImp ~ s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+  data = df,
+  family = gaussian,
+  method = "REML"
+)
 
-#OutcomeList already exists above
+# Create the grid for contour plot
+grid <- expand.grid(
+  E2zd = seq(
+    min(df$E2zd, na.rm = TRUE),
+    max(df$E2zd, na.rm = TRUE),
+    length.out = 100
+  ),
+  P4zd = seq(
+    min(df$P4zd, na.rm = TRUE),
+    max(df$P4zd, na.rm = TRUE),
+    length.out = 100
+  )
+)
 
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+# Predict values
+grid$predicted <- predict(gamm_horm_CSS_HypImp_simple,
+                          newdata = grid,
+                          type = "response", transform = function(x) exp(x) - 1))
 
-# Simulate data for logE2, logP4, and outcome
-logE2 <- seq(-2, 2, length.out = 100)
-logP4 <- seq(-2, 2, length.out = 100)
-z <- outer(logE2, logP4, function(e2, p4) sin(e2) * cos(p4)) # Replace with actual model estimates
+# Contour plot
+ggplot() +
+  geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+  geom_contour(data = grid,
+               aes(x = E2zd, y = P4zd, z = predicted),
+               color = "black") +
+  geom_point(
+    data = df,
+    aes(x = E2zd, y = P4zd),
+    color = "black",
+    alpha = 0.10
+  ) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = mean(grid$predicted)) +
+  labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+  theme_minimal() +
+  ggtitle("Predicting CSS_HypImp from E2 and P4 (Person Standardized)")
 
-plot_ly(x = ~logE2, y = ~logP4, z = ~z, type = "surface") %>%
-  layout(title = "Interaction Effect of logE2 and logP4 on Outcome",
-         scene = list(
-           xaxis = list(title = "logE2"),
-           yaxis = list(title = "logP4"),
-           zaxis = list(title = "Predicted Outcome")
-         ))
-
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-09-30/EP_Models_Plots/CSS_Inatt.png", 
+       plot = last_plot(), 
+       width = 8, 
+       height = 6)
 
 ```
 
@@ -4569,138 +3767,41 @@ plot_ly(x = ~logE2, y = ~logP4, z = ~z, type = "surface") %>%
 
 
 
+#GAMM .zd and Derivative effects of Hormones - TEMPLATE 
 
-# Function for te(???? not sure) in 85 dataset with 3D html plot output
 ```{r}
-# Load required libraries
-library(dplyr)
-library(tidyr)
-library(tidyverse)
-library(ggplot2)
-library(gridExtra)
-library(mgcv)
-library(plotly)
-library(htmlwidgets)
 
-# Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
-  for (outcome in outcomelist) {
-    # Prepare variables dynamically
-    outcome_log <- paste0(outcome, "log")
-    df_all <- df_all %>% mutate(!!outcome_log := log(!!sym(outcome) + 1))
+hist(df$CSS_HypImp)
+df$CSS_HypImplog <- log(df$CSS_HypImp+1)
+hist(df$CSS_HypImplog)
 
-    # Plot histogram for transformed outcome using ggplot2
-    hist_orig <- ggplot(df_all, aes(x = !!sym(outcome))) +
-      geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
-      labs(title = paste("Histogram of", outcome), x = outcome, y = "Count") +
-      theme_minimal()
+gamm_hormzd_CSS_HypImp <- gam(CSS_HypImplog ~ s(id, bs = "re") + s(E2zd) + s(E2zd, id, bs = "re") + s(P4zd) + s(P4zd, id, bs = "re") + ti(E2zd, P4zd), data = df, method = "REML")
 
-    hist_log <- ggplot(df_all, aes(x = !!sym(outcome_log))) +
-      geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
-      labs(title = paste("Histogram of Log-transformed", outcome), x = paste0(outcome, " (log)"), y = "Count") +
-      theme_minimal()
+summary(gamm_hormzd_CSS_HypImp)
 
-    # Arrange the two histograms side by side and save
-    histograms <- grid.arrange(hist_orig, hist_log, ncol = 2)
-    hist_file_path <- file.path(save_dir, paste0(outcome, "_histograms.png"))
-    ggsave(filename = hist_file_path, plot = histograms, width = 12, height = 6)
-    cat("Histograms saved to:", hist_file_path, "\n")
+plot.gam(gamm_hormzd_CSS_HypImp, select=2) #Plot E2zd
+plot.gam(gamm_hormzd_CSS_HypImp, select=7) #Plot E2zch
+plot.gam(gamm_hormzd_CSS_HypImp, select=4) #Plot P4zd
+plot.gam(gamm_hormzd_CSS_HypImp, select=8) #Plot E2zch
 
-    # GAMM model with hormone z-scores and derivatives
-    gamm_formula <- as.formula(paste0(
-      outcome_log, " ~ s(id, bs = \"re\") + te(logE2 , logP4)"
-    ))
+#tab_model(gamm_hormzd_CSS_HypImp)
 
-    gamm_model <- gam(
-      gamm_formula,
-      data = df_all,
-      family = gaussian(),
-      method = "REML"
-    )
+# CONTOUR PLOT for interaction of E2zd and P4zd
 
-    # Summary and plot of the model
-    model_summary <- summary(gamm_model)
-    print(model_summary)
+# Refit the model without random effects for visualization
+gamm_horm_CSS_HypImp_simple <- gam(CSS_HypImplog ~ s(E2zd) + s(P4zd) + ti(E2zd, P4zd), data = df, method = "REML")
 
-    # Save the model summary as a text file
-    summary_output <- capture.output(model_summary)
-    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed_te_rawlogEP_model_EP_summary.txt"))
-    writeLines(summary_output, summary_file_path)
-    cat("Model summary saved to:", summary_file_path, "\n")
+# Create a data frame for plotting
+grid$predicted <- predict(gamm_horm_CSS_HypImp_simple, newdata = grid, transform = function(x) exp(x) - 1)
 
-    # Simpler model without random effects for visualization
-    gamm_simple_formula <- as.formula(paste0(
-      outcome_log, " ~ te(logE2 , logP4)"
-    ))
+# Create contour plot with color gradients
+ggplot(grid, aes(x = E2zd, y = P4zd, z = predicted)) +
+  geom_tile(aes(fill = predicted)) +
+  geom_contour(color = "black") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint=mean(df$CSS_HypImplog)) +
+  labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+  theme_minimal()+
+  ggtitle("Predicting CSS_HypImp from E2 and P4 (Person Standardized)")
 
-    gamm_model_simple <- gam(
-      gamm_simple_formula,
-      data = df_all,
-      family = gaussian(),
-      method = "REML"
-    )
-
-    # Create the grid for contour plot
-    grid <- expand_grid(
-      logE2 = seq(
-        min(df_all$logE2, na.rm = TRUE),
-        max(df_all$logE2, na.rm = TRUE),
-        length.out = 100
-      ),
-      logP4 = seq(
-        min(df_all$logP4, na.rm = TRUE),
-        max(df_all$logP4, na.rm = TRUE),
-        length.out = 100
-      )
-    )
-
-    # Predict values for contour plot
-    grid <- grid %>%
-      mutate(predicted = predict(gamm_model_simple, newdata = ., type = "response"))
-
-    # Contour plot using ggplot2
-    plot_title <- paste("Predicting", outcome, "from logE2 and logP4")
-    contour_plot <- ggplot(grid, aes(x = logE2, y = logP4, z = predicted)) +
-      geom_tile(aes(fill = predicted)) +
-      geom_contour(color = "black") +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted, na.rm = TRUE)) +
-      labs(x = "logE2", y = "logP4", fill = "Predicted Outcome") +
-      theme_minimal() +
-      ggtitle(plot_title)
-
-    print(contour_plot)
-
-    # Save the contour plot
-    plot_file_path <- file.path(save_dir, paste0(outcome, "_rawlogEP_te_fixed.png"))
-    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
-    cat("Contour plot saved to:", plot_file_path, "\n")
-
-    # Create the 3D surface plot using Plotly
-    grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
-    surface_plot <- plot_ly(
-      x = seq(min(df_all$logE2, na.rm = TRUE), max(df_all$logE2, na.rm = TRUE), length.out = 100),
-      y = seq(min(df_all$logP4, na.rm = TRUE), max(df_all$logP4, na.rm = TRUE), length.out = 100),
-      z = ~grid_matrix
-    ) %>%
-      add_surface() %>%
-      layout(
-        title = paste("3D Surface Plot of logE2 and logP4 Interaction for", outcome),
-        scene = list(
-          xaxis = list(title = "logE2"),
-          yaxis = list(title = "logP4"),
-          zaxis = list(title = "Predicted Outcome")
-        )
-      )
-
-    # Save the interactive surface plot as an HTML file
-    surface_plot_file_path <- file.path(save_dir, paste0(outcome, "_3D_surface.html"))
-    saveWidget(surface_plot, surface_plot_file_path)
-    cat("3D surface plot saved to:", surface_plot_file_path, "\n")
-  }
-}
-
-# CALL THE LOOP
-create_gamm_models(outcomelist, df_all, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
 ```
-

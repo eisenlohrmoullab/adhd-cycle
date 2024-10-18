@@ -1,0 +1,124 @@
+---
+title: "05_ADHDCYC_Transforms"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# RAW ROLLING AVGS
+
+#Create Raw Rolling Averages
+
+```{r}
+
+#In Full Dataset
+
+#create rolling averages on RAW variables
+for (i in outcomelist) {
+  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
+}
+
+#In Clean Dataset without Bad Horm IDs
+
+#create rolling averages on RAW variables
+for (i in outcomelist) {
+  df_all <- create.3day.rolling.avg(df_all, !!sym({{i}}), 3)
+}
+
+```
+
+# PERSON MEANS
+
+#Create Person Means from Rolling Averages
+```{r}
+
+#In Full Dataset
+
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in outcomelist.roll) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+#In Clean Dataset without Bad Horm IDs
+
+#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
+for (i in outcomelist.roll) {
+  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
+}
+
+
+```
+
+# Create Person Means from Raw Variables
+```{r}
+
+#In Full Dataset
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in outcomelist) {
+  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
+}
+
+#In Clean Dataset without Bad Horm IDs
+
+#execute for loop: run create.person.mean() on everything in "outcomelist"
+for (i in outcomelist) {
+  df <- create.person.mean(df, !!sym({{i}}), id)
+}
+
+```
+
+
+# RAW PERSON-DEVIATIONS
+
+```{r}
+
+#for raw deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+
+#for raw deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist) {
+  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+```
+
+# Rolling Average Deviations
+```{r}
+
+#for rolling avgs deviations
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist.roll) {
+  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+
+#In Clean Dataset without Bad Horm IDs
+
+#execute for loop: run create.deviation() on everything in list
+for (i in outcomelist.roll) {
+  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
+}
+```
+
+
+
+
+
+
+
+#PERSON-DEVIATIONS
+
+#for rolling avgs deviations
+
+
+
+#Check 
+
+#df_all %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
+
+```

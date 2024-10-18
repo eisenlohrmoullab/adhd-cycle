@@ -1,0 +1,190 @@
+---
+title: "04_ADHDCYC_Lists"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# INPUTS: 
+# OUTPUTS:
+
+
+## create Lists
+```{r echo=T}
+
+dv_list <- c(
+  "DRSP_1",
+  "DRSP_2",
+  "DRSP_3",
+  "DRSP_4",
+  "DRSP_5",
+  "DRSP_6",
+  "DRSP_7",
+  "DRSP_8",
+  "DRSP_9",
+  "DRSP_10",
+  "DRSP_11",
+  "DRSP_12",
+  "DRSP_13",
+  "DRSP_14",
+  "DRSP_15",
+  "DRSP_16",
+  "DRSP_17",
+  "DRSP_18",
+  "DRSP_19",
+  "DRSP_20",
+  "DRSP_21",
+  "DRSP_22",
+  "DRSP_23",
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count"
+) %>% noquote()
+
+# Rename the variables based on DRSP items
+names(dv_list) <- c(
+  "Depressed Mood", # DRSP_1
+  "hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Increased Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloating/Weight Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Impairment", 
+  "Relational Impairment",
+  "Inattention Symptoms", 
+  "Hyperactivity/Impulsivity Symptoms", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Response Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyperactivity/Impulsivity Sx Count"
+)
+
+
+#View(df)
+
+#person-centered deviations
+outcomelist <- c(
+  "E2",
+  "P4",
+  "LH",
+  "CSS_Fx_Total",
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total",
+  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
+  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
+  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23"
+) %>% noquote()
+
+# person-centered deviations
+outcomelist.d <- c(
+  "E2.d",
+  "P4.d",
+  "LH.d",
+  "CSS_Fx_Total.d",
+  "CSS_Inatt.d",
+  "CSS_HypImp.d",
+  "CSS_Inatt_Count.d",
+  "CSS_HypImp_Count.d",
+    "CSS_Hyp_Count.d",
+  "CSS_Imp_Count.d",
+  "score_pinball.d",
+  "score_robot.d",
+  "BDEFS_Total.d",
+  "BDEFS_WM_avg.d",
+  "BDEFS_RI_avg.d",
+  "UPPS_NU_avg.d",
+  "UPPS_PU_avg.d",
+  "UPPS_Premed_avg.d",
+  "UPPS_Persev_avg.d",
+  "UPPS_Sens_avg.d",
+  "DEBQ_Total.d",
+  "DRSP_1.d", "DRSP_2.d", "DRSP_3.d", "DRSP_4.d", "DRSP_5.d", "DRSP_6.d", "DRSP_7.d", "DRSP_8.d", "DRSP_9.d", 
+  "DRSP_10.d", "DRSP_11.d", "DRSP_12.d", "DRSP_13.d", "DRSP_14.d", "DRSP_15.d", "DRSP_16.d", "DRSP_17.d", 
+  "DRSP_18.d", "DRSP_19.d", "DRSP_20.d", "DRSP_21.d", "DRSP_22.d", "DRSP_23.d") %>% noquote()
+
+# rolling averages
+outcomelist.roll <- c(
+  "E2.roll",
+  "P4.roll",
+  "LH.roll",
+  "CSS_Fx_Total.roll",
+  "CSS_Inatt.roll",
+  "CSS_HypImp.roll",
+  "CSS_Inatt_Count.roll",
+  "CSS_HypImp_Count.roll",
+    "CSS_Hyp_Count.roll",
+  "CSS_Imp_Count.roll",
+  "score_pinball.roll",
+  "score_robot.roll",
+  "BDEFS_Total.roll",
+  "BDEFS_WM_avg.roll",
+  "BDEFS_RI_avg.roll",
+  "UPPS_NU_avg.roll",
+  "UPPS_PU_avg.roll",
+  "UPPS_Premed_avg.roll",
+  "UPPS_Persev_avg.roll",
+  "UPPS_Sens_avg.roll",
+  "DEBQ_Total.roll",
+    "DRSP_1.roll", "DRSP_2.roll", "DRSP_3.roll", "DRSP_4.roll", "DRSP_5.roll", "DRSP_6.roll", "DRSP_7.roll", "DRSP_8.roll", "DRSP_9.roll", 
+  "DRSP_10.roll", "DRSP_11.roll", "DRSP_12.roll", "DRSP_13.roll", "DRSP_14.roll", "DRSP_15.roll", "DRSP_16.roll", "DRSP_17.roll", 
+  "DRSP_18.roll", "DRSP_19.roll", "DRSP_20.roll", "DRSP_21.roll", "DRSP_22.roll", "DRSP_23.roll"
+) %>% noquote()
+
+
+
+```

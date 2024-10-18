@@ -1,0 +1,1050 @@
+---
+title: "00_ADHDCYCLE_Functions"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+  toc: true
+---
+
+
+# print.variable.names() Function to print variable names
+
+```{r}
+print.variable.names <- function(df) {
+  variable_names <- names(df)
+  formatted_list <- paste(variable_names, collapse = ", ")
+  cat(formatted_list)
+}
+
+```
+
+# COMBINED PERSON METRICS FUNCTION
+
+# create.person.metrics(): Function to create person summary metrics: mean, SD, deviation, and standardized values
+
+```{r}
+create.person.metrics <- function(df, var, ...) {
+  # Create person means for the specified variable, grouped by additional grouping variables
+  df <- df %>%
+    group_by(...) %>%
+    mutate("{{var}}.m" := mean({{var}}, na.rm=TRUE))
+  
+  # Create person standard deviations for the specified variable, grouped by additional grouping variables
+  df <- df %>%
+    group_by(...) %>%
+    mutate("{{var}}.sd" := sd({{var}}, na.rm=TRUE))
+  
+  # Create person deviations from the mean for the specified variable
+  # Note: This requires person means to be already calculated
+  df <- df %>%
+    rowwise() %>%
+    mutate("{{var}}.d" := {{var}} - {{var}}.m)
+  
+  # Create person standardized values (z-scores) for the specified variable
+  # Note: This requires person means and standard deviations to be already calculated
+  df <- df %>%
+    rowwise() %>%
+    mutate("{{var}}.zd" := ({{var}} - {{var}}.m)/{{var}}.sd)
+  
+  # Return the modified dataframe with the new metrics
+  return(df)
+}
+
+# Example usage:
+# df <- create.person.metrics(df, var = your_variable_name, grouping_variable)
+
+```
+
+# INDIVIDUAL PERSON METRIC FUNCTIONS (REDUNDANT WITH ABOVE)
+
+#create.person.mean(): Function to create person means
+
+```{r}
+# Function to create person means
+create.person.mean <- function(df, var, ...) {
+  df %>%
+    group_by(...) %>%
+    mutate("{{var}}.m" := mean({{var}}, na.rm=TRUE))
+}
+
+```
+
+# create.person.sd(): Function to create person SDs
+
+```{r}
+create.person.sd <- function(df, var, ...) {
+  df %>%
+    group_by(...) %>%
+    mutate("{{var}}.sd" := sd({{var}}, na.rm=TRUE))
+}
+
+```
+
+#create.deviation(): Function to create person deviations (note, must have person means already made)
+
+```{r}
+create.deviation <- function(df, var, var.m) {
+  df %>%
+    rowwise() %>%
+    mutate("{{var}}.d" := {{var}} - {{var.m}})
+}
+
+```
+
+
+# create.zd(): Function to create person standardized values (note, must have person means AND person SDs already made)
+
+```{r}
+create.zd <- function(df, var, var.m, var.sd) {
+  df %>%
+    rowwise() %>%
+    mutate("{{var}}.zd" := ({{var}} - {{var.m}})/{{var.sd}})
+}
+
+```
+
+
+
+#ROLLING AVERAGE FUNCTIONS
+
+# create.3day.rolling.avg(): Function to create 3-day rolling average
+
+```{r}
+create.3day.rolling.avg <- function(df, var) {
+  df %>%
+    group_by(id) %>%
+    mutate("{{var}}.roll" := rollapply({{var}}, 3, mean, align="center", fill=NA))
+}
+
+```
+
+# create.5day.rolling.avg(): Function to create 5-day rolling average
+
+```{r}
+create.5day.rolling.avg <- function(df, var) {
+  df %>%
+    group_by(id) %>%
+    mutate("{{var}}.roll" := rollapply({{var}}, 5, mean, align="center", fill=NA))
+}
+
+```
+
+# plot_participant_data(): Function to plot participant data with hormones and clinical outcome 
+
+```{r PERSON-PLOT, warning=FALSE}
+
+plot_participant_data <- function(df, id, outcome_var, outcome_label, output_dir) {
+  df <- ungroup(df)
+  if (!is.null(df$id)) {
+    df$id <- as.numeric(as.character(df$id))
+  } else {
+    stop("Column 'id' not found in the dataset")
+  }
+  id <- as.numeric(id)
+  participant_data <- df %>% filter(id == id)
+  if (nrow(participant_data) == 0) {
+    stop(paste("No df available for participant ID:", id))
+  }
+  participant_data$daterated <- as.Date(participant_data$daterated, format = "%m/%d/%Y")
+  if (all(is.na(participant_data$daterated))) {
+    stop("Error: daterated column could not be converted to Date type")
+  }
+  participant_data$date_numeric <- as.numeric(participant_data$daterated - min(participant_data$daterated, na.rm = TRUE))
+  non_na_counts <- participant_data %>%
+    summarise(across(c(E2, P4, LH, !!sym(outcome_var)), ~sum(!is.na(.))), total_days = n())
+  safe_scale <- function(x) {
+    if (all(is.na(x)) || length(unique(x)) == 1) return(rep(0, length(x)))
+    as.vector(scale(x))
+  }
+  participant_data <- participant_data %>%
+    mutate(across(c(E2, P4, LH, !!sym(outcome_var)), 
+                  list(z = ~safe_scale(.), z_roll = ~rollapply(safe_scale(.), 3, mean, fill = NA, align = "center")),
+                  .names = "{.col}_{.fn}")) %>%
+    mutate(across(ends_with("_z_roll"), list(d = ~c(NA, diff(.))), .names = "{.col}_{.fn}"))
+  safe_cor <- function(x, y) {
+    if (all(is.na(x)) || all(is.na(y)) || length(unique(x)) == 1 || length(unique(y)) == 1) return(NA)
+    cor(x, y, use = "pairwise.complete.obs")
+  }
+  corr_E2 <- safe_cor(participant_data$E2_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_P4 <- safe_cor(participant_data$P4_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_LH <- safe_cor(participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_dE2 <- safe_cor(participant_data$E2_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  corr_dP4 <- safe_cor(participant_data$P4_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  corr_dLH <- safe_cor(participant_data$LH_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  mondays <- participant_data$date_numeric[wday(participant_data$daterated) == 2]
+  all_y_values <- c(participant_data$P4_z_roll, participant_data$E2_z_roll, 
+                    participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  min_date <- min(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
+  max_date <- max(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
+  if (is.infinite(min_date) || is.infinite(max_date) || is.na(min_date) || is.na(max_date)) {
+    stop("Error: 'min_date' or 'max_date' is invalid")
+  }
+
+  p <- ggplot(participant_data, aes(x = date_numeric)) +
+    geom_line(aes(y = P4_z_roll, color = "P4"), linewidth = 1) +
+    geom_point(aes(y = P4_z_roll), color = "#D62728", size = 3) +
+    geom_line(aes(y = E2_z_roll, color = "E2"), linewidth = 1) +
+    geom_point(aes(y = E2_z_roll), color = "#1F77B4", size = 3) +
+    geom_line(aes(y = LH_z_roll, color = "LH"), linewidth = 1) +
+    geom_point(aes(y = LH_z_roll), color = "#2CA02C", size = 3) +
+    geom_line(aes(y = .df[[paste0(outcome_var, "_z_roll")]], color = "Clinical Outcome"), linewidth = 2) +
+    geom_vline(xintercept = mondays, color = "gray", linetype = "dashed", alpha = 0.5) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+    scale_color_manual(values = c("P4" = "#D62728", "E2" = "#1F77B4", "LH" = "#2CA02C", "Clinical Outcome" = "black")) +
+    labs(title = paste("Menstrual Cycle Hormones and", outcome_label,"for Participant", id),
+         x = "Date", y = paste(outcome_label, "\nZ-scored, 3d Rolling Avg"), color = "Legend") +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 14, face = "bold"), axis.title = element_text(size = 12),
+          axis.text = element_text(size = 10), legend.title = element_blank(), legend.text = element_text(size = 10),
+          legend.position = "right", legend.box = "horizontal", legend.margin = margin(0, 0, 10, 0),
+          plot.margin = margin(10, 10, 30, 10)) +
+    scale_x_continuous(breaks = seq(min_date, max_date, by = 3),
+                       labels = format(min(participant_data$daterated) + seq(min_date, max_date, by = 3), "%b %d"),
+                       limits = c(min_date, max_date), expand = c(0.02, 0)) +
+    scale_y_continuous(limits = c(min(all_y_values[is.finite(all_y_values)], na.rm = TRUE) - 1,
+                                  max(all_y_values[is.finite(all_y_values)], na.rm = TRUE) + 1), expand = c(0.1, 0.1))
+
+  mens_dates <- participant_data$date_numeric[participant_data$mensdayonefirst == 1]
+  LH_dates <- participant_data$date_numeric[participant_data$LHposdayfirst == 1]
+
+  for (date in mens_dates) {
+    p <- p + annotate("rect", xmin = date, xmax = date + 4, ymin = -Inf, ymax = Inf, fill = "pink", alpha = 0.3)
+  }
+  for (date in LH_dates) {
+    p <- p + annotate("rect", xmin = date, xmax = date + 1, ymin = -Inf, ymax = Inf, fill = "#2CA02C", alpha = 0.3)
+  }
+
+  min_y <- min(all_y_values[is.finite(all_y_values)], na.rm = TRUE)
+  if (is.infinite(min_y) || is.na(min_y)) min_y <- -1
+  min_y <- min_y - 0.5
+
+  p <- p +
+    geom_point(df = df.frame(x = mens_dates, y = rep(min_y, length(mens_dates))),
+               aes(x = x, y = y), color = "#D62728", shape = 17, size = 4) +
+    geom_point(df = df.frame(x = LH_dates, y = rep(min_y, length(LH_dates))),
+               aes(x = x, y = y), color = "#2CA02C", shape = 17, size = 4)
+
+  format_corr <- function(corr) {
+    if (is.na(corr)) return("N/A")
+    return(sprintf("%.2f", corr))
+  }
+
+  correlation_text <- sprintf(
+    "Bivariate Correlations with %s:\nlevP4: r=%s, derP4: r=%s, levE2: r=%s, derE2: r=%s, levLH: r=%s, derLH: r=%s.",
+    outcome_label, format_corr(corr_P4), format_corr(corr_dP4), format_corr(corr_E2),
+    format_corr(corr_dE2), format_corr(corr_LH), format_corr(corr_dLH)
+  )
+
+  nonmissing_text <- sprintf(
+    "Available df for this Participant:\nP4=%d, E2=%d, LH=%d, %s=%d out of %d days.",
+    non_na_counts$P4, non_na_counts$E2, non_na_counts$LH, outcome_label, 
+    non_na_counts[[outcome_var]], non_na_counts$total_days
+  )
+
+  predictors <- c("P4_z_roll", "P4_z_roll_d", "E2_z_roll", "E2_z_roll_d")
+  valid_predictors <- predictors[sapply(predictors, function(var) {
+    sum(!is.na(participant_data[[var]])) > 1 && sd(participant_data[[var]], na.rm = TRUE) > 0
+  })]
+
+  predictor_labels <- c("P4_z_roll" = "levP4", "P4_z_roll_d" = "derP4",
+                        "E2_z_roll" = "levE2", "E2_z_roll_d" = "derE2")
+
+  reg_text <- "Regression results: Not enough valid df for regression."
+  if (length(valid_predictors) > 0) {
+    formula_str <- paste(outcome_var, "~", paste(valid_predictors, collapse = " + "))
+    model <- lm(as.formula(formula_str), df = participant_data)
+    model_summary <- summary(model)
+    if (!is.null(model_summary$coefficients) && nrow(model_summary$coefficients) > 0) {
+      coef_info <- model_summary$coefficients
+      format_coef <- function(coef, p_val) {
+        if (is.na(p_val)) return(sprintf("%.2f (NA)", coef))
+        if (p_val < 0.001) return(sprintf("%.2f***", coef))
+        if (p_val < 0.01) return(sprintf("%.2f**", coef))
+        if (p_val < 0.05) return(sprintf("%.2f*", coef))
+        if (p_val < 0.15) return(sprintf("%.2f+", coef))
+        return(sprintf("%.2f", coef))
+      }
+      reg_text <- paste(
+        "Regression results:",
+        paste(sapply(valid_predictors, function(var) {
+          label <- predictor_labels[[var]]
+          if (var %in% rownames(coef_info)) {
+            sprintf("%s: %s", label, format_coef(coef_info[var, "Estimate"], coef_info[var, "Pr(>|t|)"]))
+          } else {
+            sprintf("%s: N/A", label)
+          }
+        }), collapse = ", "),
+        sep = "\n"
+      )
+    }
+  }
+
+  combined_text <- paste(nonmissing_text, correlation_text, reg_text, sep = "\n")
+  print(combined_text)
+  text_grob <- textGrob(combined_text, x = 0.05, y = 0.5, just = "left", gp = gpar(fontsize = 9))
+  final_plot <- arrangeGrob(p, text_grob, ncol = 1, heights = c(4, 1))
+  grid.newpage()
+  grid.draw(final_plot)
+  ggsave(filename = file.path(output_dir, paste0("participant_", id, "_", outcome_var, "_hormplot.png")),
+         plot = final_plot, width = 12, height = 8, units = "in")
+  grid.draw(final_plot)
+}
+
+#TEST
+
+#dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - df Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+#plot_participant_data(df, 208, 'CSS_Fx_Total', "CSS Functional Impact", dailydir)
+
+
+```
+
+# calculate_mcyclength(): Function to calculate menses-to-menses cycle length and number of cycles within a person
+
+```{r}
+calculate_mcyclength <- function(df) {
+  # Calculate m2mcount: This counts from 1 menses onset to the next to give the length of a menses-to-menses cycle
+  df <- df %>%
+    group_by(id) %>%
+    arrange(daterated, .by_group = TRUE) %>%
+    mutate(
+      m2mcount = NA,
+      mcyclength = NA,
+      cycle_incomplete = 0
+    )
+  
+  for (i in seq_len(nrow(df))) {
+    if (!is.na(df$A[i]) && df$A[i] == 1) {
+      df$m2mcount[i] <- 1
+      j <- i + 1
+      
+      while (j <= nrow(df) &&
+             df$id[j] == df$id[i] && (is.na(df$A[j]) || df$A[j] != 1)) {
+        df$m2mcount[j] <- df$m2mcount[j - 1] + 1
+        j <- j + 1
+      }
+      
+      if (j <= nrow(df) &&
+          df$id[j] == df$id[i] && !is.na(df$A[j]) && df$A[j] == 1) {
+        df$m2mcount[j] <- df$m2mcount[j - 1] + 1
+      }
+    }
+  }
+  
+  # Identify incomplete cycles: This identifies instances where a complete menses-to-menses cycle was not captured
+  df <- df %>%
+    mutate(cycle_incomplete = ifelse(!is.na(m2mcount) &
+                                       (is.na(lead(m2mcount)) & id != lead(id)), 1, 0))
+  
+  # New condition: Set cycle_incomplete = 1 if m2mcount restarts when id changes
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      cycle_incomplete = ifelse(
+        id != lag(id, default = first(id)) & m2mcount == 1, 1, cycle_incomplete
+      )
+    ) %>%
+    ungroup()
+  
+  # Propagate cycle_incomplete within each group of m2mcount
+  df <- df %>%
+    group_by(id) %>%
+    mutate(cycle_group = cumsum(!is.na(m2mcount) & m2mcount == 1)) %>%
+    group_by(id, cycle_group) %>%
+    mutate(
+      cycle_incomplete = ifelse(any(cycle_incomplete == 1), 1, 0),
+      # Fix: handle cases where all values in m2mcount are NA
+      mcyclength = ifelse(all(is.na(m2mcount)), NA, max(m2mcount, na.rm = TRUE))
+    ) %>%
+    ungroup() %>%
+    dplyr::select(-cycle_group)
+  
+  df$cycle_incomplete = ifelse(is.na(df$cycle_incomplete), 1, 0)
+  df$cycle_incomplete = ifelse(is.na(df$m2mcount), NA, df$cycle_incomplete)
+  
+  # Calculate cyclenum: calculates number of menses-to-menses cycles within a person
+  df <- df %>%
+    group_by(id) %>%
+    mutate(cyclenum = cumsum(!is.na(m2mcount) & m2mcount == 1 & cycle_incomplete == 0)) %>%
+    ungroup()
+  
+  df <- df %>%
+    group_by(id) %>%
+    mutate(cyclenum = ifelse(
+      cycle_incomplete == 1,
+      NA,
+      cumsum(!is.na(m2mcount) & m2mcount == 1 & cycle_incomplete == 0)
+    )) %>%
+    ungroup()
+  
+  return(df)
+}
+```
+
+# calculate_lutdaycount(): function to compute length of each luteal phase 
+
+```{r}
+
+#calculate_lutdaycount: counts length of luteal phase 
+
+calculate_lutdaycount <- function(df, ovtoday) {
+  last_id <- NULL
+  lutdaycount1 <- rep(NA, nrow(df))
+  lut_incomplete1 <- rep(NA, nrow(df))  # Initialize lut_incomplete
+  count_started_row <- NA  # Track the starting row of a lutdaycount1 stretch
+  active_count <- FALSE  # Track if lutdaycount1 is currently counting
+
+  for (i in 1:nrow(df)) {
+    # If id changes, reset lutdaycount1 and lut_incomplete
+    if (is.null(last_id) || last_id != df$id[i]) {
+      if (active_count) {
+        # Mark the whole stretch as incomplete if stopped by id change
+        lut_incomplete1[count_started_row:(i - 1)] <- 1
+      }
+      lutdaycount1[i] <- ifelse(ovtoday[i] == 1, 0, NA)
+      active_count <- !is.na(lutdaycount1[i])  # Start counting if lutdaycount1 is initialized
+      count_started_row <- ifelse(!is.na(lutdaycount1[i]), i, NA)  # Record start row
+    } else if (!is.na(lutdaycount1[i - 1])) {
+      lutdaycount1[i] <- lutdaycount1[i - 1] + 1
+    }
+
+    # If lutdaycount1 is active and stops because of A == 1, set lut_incomplete = 0 for the entire stretch
+    if (!is.na(lutdaycount1[i]) && !is.na(df$A[i]) && df$A[i] == 1) {
+      lutdaycount1[i] <- NA
+      lut_incomplete1[count_started_row:(i - 1)] <- 0  # Mark stretch as complete due to A == 1
+      active_count <- FALSE  # Stop counting due to A == 1
+    } else if (ovtoday[i] == 1) {
+      lutdaycount1[i] <- 0
+      active_count <- TRUE  # Start counting at ovtoday == 1
+      count_started_row <- i  # Record start row of the count
+    }
+
+    # Assign the current row to last_id for the next iteration
+    last_id <- df$id[i]
+  }
+
+  # Update the dataset with lutdaycount1 and lut_incomplete
+  df$lutdaycount1 <- lutdaycount1
+  df$lut_incomplete1 <- lut_incomplete1
+  
+  return(df)
+}
+
+```
+
+# calculate_foldaycount(): function to count length of each follicular phase 
+
+```{r}
+calculate_foldaycount <- function(df, ovtoday) {
+  df$foldaycount <- NA  # Initialize column for follicular day count
+  df$fol_incomplete <- NA  # Initialize column for incomplete flag
+  
+  last_id <- NULL  # To track when id changes
+  foldaycount <- NA  # Will store the current count
+  active_count <- FALSE  # To track if we're counting days
+  count_started_row <- NULL  # Track the row where counting starts
+  
+  for (i in 1:nrow(df)) {
+    # When id changes or we are on a new participant
+    if (is.null(last_id) || is.na(df$id[i]) || df$id[i] != last_id) {
+      if (active_count && !is.na(count_started_row)) {
+        # Mark the previous stretch as incomplete due to id change
+        df$fol_incomplete[count_started_row:(i - 1)] <- 1
+      }
+      # Reset variables for new participant
+      foldaycount <- ifelse(df$A[i] == 1, 0, NA)
+      active_count <- !is.na(foldaycount)
+      count_started_row <- ifelse(!is.na(foldaycount), i, NA)
+    }
+    
+    # If ovulation happens, mark the end of the follicular phase
+    if (active_count && !is.na(ovtoday[i]) && ovtoday[i] == 1) {
+      # Mark the stretch as complete
+      df$fol_incomplete[count_started_row:(i - 1)] <- 0
+      foldaycount <- NA  # Stop counting
+      active_count <- FALSE  # No longer counting
+      count_started_row <- NA  # Reset start row
+    }
+    
+    # Start or reset the count if A == 1
+    if (df$A[i] == 1) {
+      foldaycount <- 0
+      active_count <- TRUE
+      count_started_row <- i
+    }
+    
+    # Increment count if it's active
+    if (active_count && !is.na(foldaycount)) {
+      foldaycount <- foldaycount + 1
+    }
+
+    # Assign current foldaycount and fol_incomplete to the row
+    df$foldaycount[i] <- foldaycount
+    if (!is.na(foldaycount)) {
+      df$fol_incomplete[i] <- NA
+    }
+    
+    # Update last_id for the next iteration
+    last_id <- df$id[i]
+  }
+  
+  return(df)
+}
+
+
+```
+
+#prep_cycle_LH_mens(): Process Data Function for Menstrual and LH Cycle Analysis
+
+# Example usage
+# df <- prep_cycle_LH_mens(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE)
+
+
+# This function processes a data frame containing participant menstrual and LH test data. It performs the following operations:
+# 1. Creates variables to identify first day of menses and first positive LH test.
+# 2. Removes participants based on optional criteria (e.g., no positive LH test, no menses onset).
+# 3. Calculates cycle days relative to menses onset and LH test.
+# 4. Logs participant removals, potential issues, and outputs descriptive information.
+
+# Parameters:
+# - df: The data frame containing participant data. Must have columns: 'id', 'daterated', 'StartPeriod', 'LHposday'.
+# - remove_participants_no_menses (default TRUE): If TRUE, removes participants without any menses onset.
+# - remove_participants_no_LH (default TRUE): If TRUE, removes participants without any positive LH test.
+# - test_mode (default FALSE): If TRUE, only processes a small subset of the data for testing purposes.
+
+# Required Columns:
+# - id: Unique identifier for each participant.
+# - daterated: Date of the rating, must be in 'YYYY-MM-DD' format.
+# - StartPeriod: Numeric flag indicating the start of the menstrual period (1 for start, otherwise 0).
+# - LHposday: Numeric flag indicating a positive LH test (1 for positive, otherwise 0).
+
+
+```{r}
+
+prep_cycle_LH_mens <- function(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE) {
+  # Input Validation
+  if (!all(c("id", "daterated", "StartPeriod", "LHposday") %in% names(df))) {
+    stop("Error: Missing one or more required columns in the input data.")
+  }
+  
+  df <- df %>%
+    mutate(
+      id = as.character(id),
+      daterated = as.Date(daterated, format = "%Y-%m-%d"),
+      StartPeriod = as.numeric(StartPeriod),
+      LHposday = as.numeric(LHposday)
+    )
+  
+  if (test_mode) {
+    df <- df %>% sample_n(100)  # Process only a subset for testing
+  }
+
+  # Step 1: Create first_day_of_menses variable (1 if first day of period, otherwise 0 or NA)
+  log_message("Step 1: Creating first_day_of_menses variable")
+  df <- df %>%
+    filter(!is.na(id)) %>%
+    arrange(id, daterated) %>%
+    mutate(
+      first_day_of_menses = ifelse(StartPeriod == 1, 1, 0),
+      mensdayone = first_day_of_menses  # Original variable name for compatibility
+    )
+  log_message(paste("Step 1 completed: Number of unique participant IDs remaining:", length(unique(df$id))))
+
+  # Step 2: Create first_menses_day_flag variable (only the first menses onset day per participant)
+  log_message("Step 2: Creating first_menses_day_flag variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      first_menses_day_flag = ifelse(
+        first_day_of_menses == 1 & (lag(first_day_of_menses, order_by = daterated) != 1 | is.na(lag(first_day_of_menses))),
+        1, 0
+      ),
+      mensdayonefirst = first_menses_day_flag  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  # Step 3: Create positive_LH_test_day variable (1 if positive LH test, otherwise 0 or NA)
+  log_message("Step 3: Creating positive_LH_test_day variable")
+  df <- df %>%
+    mutate(
+      positive_LH_test_day = ifelse(LHposday == 1, 1, 0),
+      LHposday = positive_LH_test_day  # Original variable name for compatibility
+    )
+
+  # Step 4: Create first_positive_LH_test_day_flag variable (only the first positive LH test day per participant)
+  log_message("Step 4: Creating first_positive_LH_test_day_flag variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      first_positive_LH_test_day_flag = ifelse(
+        positive_LH_test_day == 1 & (lag(positive_LH_test_day, order_by = daterated) != 1 | is.na(lag(positive_LH_test_day))),
+        1, 0
+      ),
+      LHposdayfirst = first_positive_LH_test_day_flag  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  # Step 5: Create participant_level_positive_LH_test variable
+  log_message("Step 5: Creating participant_level_positive_LH_test variable")
+  participant_LH_test_summary <- df %>%
+    group_by(id) %>%
+    summarise(participant_level_positive_LH_test = ifelse(sum(first_positive_LH_test_day_flag, na.rm = TRUE) > 0, 1, 0)) %>%
+    ungroup()
+
+  df <- df %>%
+    left_join(participant_LH_test_summary, by = "id")
+
+  # Step 6: Optionally remove participants with no positive LH test
+  if (remove_participants_no_LH) {
+    log_message("Step 6: Removing participants with no positive LH test")
+    participants_removed_no_LH <- df %>% filter(participant_level_positive_LH_test == 0) %>% pull(id) %>% unique()
+    log_message("Participant IDs removed due to no positive LH test:")
+    for (id in participants_removed_no_LH) {
+      number_of_observations <- nrow(df %>% filter(id == !!id))
+      log_message(paste("Participant ID:", id, "- Number of observations:", number_of_observations))
+    }
+    removed_percentage <- (length(participants_removed_no_LH) / length(unique(df$id))) * 100
+    if (removed_percentage > 30) {
+      log_message("Warning: More than 30% of participants are being removed due to no positive LH test. Consider reviewing data quality.")
+    }
+    df <- df %>% filter(participant_level_positive_LH_test == 1)
+  }
+
+  # Step 7: Create cycle_day_from_menses variable (count forward and backward from first menses onset)
+  backward_limit <- -15
+  forward_limit <- 11
+  log_message("Step 7: Creating cycle_day_from_menses variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(temp_menses_flag = first_menses_day_flag) %>%
+    mutate(
+      cycle_day_from_menses = {
+        indices_of_first_menses <- which(temp_menses_flag == 1)
+        if (length(indices_of_first_menses) == 0) return(rep(NA, length(temp_menses_flag)))
+        cycle_numbers <- lapply(indices_of_first_menses, function(index) {
+          cycle_numbers <- seq_along(temp_menses_flag) - index
+          cycle_numbers[cycle_numbers >= 0] <- cycle_numbers[cycle_numbers >= 0] + 1
+          cycle_numbers[cycle_numbers < backward_limit | cycle_numbers > forward_limit] <- NA
+          cycle_numbers
+        })
+        do.call(coalesce, cycle_numbers)
+      },
+      cycleday = cycle_day_from_menses  # Original variable name for compatibility
+    ) %>%
+    ungroup() %>%
+    select(-temp_menses_flag)
+  log_message(paste("Step 7 completed: Number of non-NA entries in cycle_day_from_menses:", sum(!is.na(df$cycle_day_from_menses))))
+
+  # Step 8: Optionally remove participants with no menses onset
+  if (remove_participants_no_menses) {
+    log_message("Step 8: Removing participants with no menses onset")
+    participants_removed_no_menses <- df %>% group_by(id) %>% filter(!any(first_menses_day_flag == 1)) %>% pull(id) %>% unique()
+    log_message("Participant IDs removed due to no menses onset:")
+    for (id in participants_removed_no_menses) {
+      number_of_observations <- nrow(df %>% filter(id == !!id))
+      log_message(paste("Participant ID:", id, "- Number of observations:", number_of_observations))
+    }
+    df <- df %>%
+      group_by(id) %>%
+      filter(any(first_menses_day_flag == 1)) %>%
+      ungroup()
+  }
+
+  # Step 9: Create cycle_day_from_positive_LH variable (count forward and backward from first positive LH test)
+  lh_backward_limit <- -7
+  lh_forward_limit <- 15
+  log_message("Step 9: Creating cycle_day_from_positive_LH variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(temp_LH_flag = first_positive_LH_test_day_flag) %>%
+    mutate(
+      cycle_day_from_positive_LH = {
+        indices_of_first_positive_LH <- which(temp_LH_flag == 1)
+        if (length(indices_of_first_positive_LH) == 0) return(rep(NA, length(temp_LH_flag)))
+        LH_cycle_numbers <- lapply(indices_of_first_positive_LH, function(index) {
+          LH_cycle_numbers <- seq_along(temp_LH_flag) - index
+          LH_cycle_numbers[LH_cycle_numbers < lh_backward_limit | LH_cycle_numbers > lh_forward_limit] <- NA
+          LH_cycle_numbers
+        })
+        do.call(coalesce, LH_cycle_numbers)
+      },
+      daycountLH = cycle_day_from_positive_LH  # Original variable name for compatibility
+    ) %>%
+    ungroup() %>%
+    select(-temp_LH_flag)
+  log_message(paste("Step 9 completed: Number of non-NA entries in cycle_day_from_positive_LH:", sum(!is.na(df$cycle_day_from_positive_LH))))
+
+  return(df)
+}
+
+# Helper function for logging messages to console and optionally to a file
+log_message <- function(message) {
+  cat(message, "\n")
+  # Uncomment the line below to log messages to a file
+  # write(message, file = "process_data_log.txt", append = TRUE)
+}
+
+# Example usage
+# df <- prep_cycle_LH_mens(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE)
+
+# Check the resulting variables
+# df %>% dplyr::select(id, daterated, first_menses_day_flag, first_positive_LH_test_day_flag, cycle_day_from_menses, cycle_day_from_positive_LH) %>% View()
+
+```
+
+#LHposday_impute(): Impute LH pos day based on the Natural Cycles Norms for each cycle's length
+# LHposday_impute Function
+#
+# This function processes a dataframe to impute ovulation day based on menstrual cycle length data.
+# It performs the following operations:
+#
+# 1. Calculates luteal and follicular length imputations based on the provided menstrual cycle length (mcyclength).
+# 2. Groups the data by participant ID and arranges rows in chronological order by 'daterated'.
+# 3. Initializes and calculates 'follcount1', which tracks follicular days from menses onset.
+# 4. Identifies the imputed ovulation day ('ovtoday_impute') based on the calculated 'follcount1'.
+# 5. Handles missing values (NA) for 'ovtoday' and 'ovtoday_impute', setting them to 0 where applicable.
+
+# Parameters:
+# - df: A dataframe containing participant menstrual data. Required columns: 'id', 'daterated', 'A', 'mcyclength', 'm2mcount'.
+
+# Returns:
+# - A processed dataframe with additional columns for luteal length, follicular length, follicular count, and ovulation day imputations.
+
+# Key Assumptions:
+# - The dataframe must have all required columns, otherwise, an error will be thrown.
+# - 'A' is a binary flag indicating a condition related to follicular count initialization (e.g., the start of a follicular phase).
+# - 'mcyclength' is used to impute the length of luteal and follicular phases.
+
+# Example Usage:
+# df <- ovtoday_impute(df)
+```{r}
+
+
+LHposday_impute <- function(df) {
+  # Input Validation
+  if (!all(c("id", "daterated", "A", "mcyclength", "m2mcount") %in% names(df))) {
+    stop("Error: Missing one or more required columns in the input data.")
+  }
+  
+  # Step 1: Calculate lutlength_impute and follength_impute based on mcyclength
+  log_message("Step 1: Calculating lutlength_impute and follength_impute based on mcyclength")
+  df <- df %>% 
+    mutate(lutlength_impute = case_when(mcyclength == 20 ~ (mcyclength * 0.46),
+                                        mcyclength == 21 ~ (mcyclength * 0.476),
+                                        mcyclength == 22 ~ (mcyclength * 0.491),
+                                        mcyclength == 23 ~ (mcyclength * 0.491),
+                                        mcyclength == 24 ~ (mcyclength * 0.492),
+                                        mcyclength == 25 ~ (mcyclength * 0.484),
+                                        mcyclength == 26 ~ (mcyclength * 0.481),
+                                        mcyclength == 27 ~ (mcyclength * 0.470),
+                                        mcyclength == 28 ~ (mcyclength * 0.461),
+                                        mcyclength == 29 ~ (mcyclength * 0.448),
+                                        mcyclength == 30 ~ (mcyclength * 0.437),
+                                        mcyclength == 31 ~ (mcyclength * 0.426),
+                                        mcyclength == 32 ~ (mcyclength * 0.416),
+                                        mcyclength == 33 ~ (mcyclength * 0.40),
+                                        mcyclength == 34 ~ (mcyclength * 0.391),
+                                        mcyclength == 35 ~ (mcyclength * 0.377),
+                                        mcyclength == 36 ~ (mcyclength * 0.369),
+                                        mcyclength == 37 ~ (mcyclength * 0.359),
+                                        TRUE ~ NA_real_),
+           follength_impute = case_when(mcyclength == 20 ~ (mcyclength * 0.54),
+                                       mcyclength == 21 ~ (mcyclength * 0.524),
+                                       mcyclength == 22 ~ (mcyclength * 0.509),
+                                       mcyclength == 23 ~ (mcyclength * 0.509),
+                                       mcyclength == 24 ~ (mcyclength * 0.508),
+                                       mcyclength == 25 ~ (mcyclength * 0.516),
+                                       mcyclength == 26 ~ (mcyclength * 0.519),
+                                       mcyclength == 27 ~ (mcyclength * 0.530),
+                                       mcyclength == 28 ~ (mcyclength * 0.539),
+                                       mcyclength == 29 ~ (mcyclength * 0.552),
+                                       mcyclength == 30 ~ (mcyclength * 0.563),
+                                       mcyclength == 31 ~ (mcyclength * 0.574),
+                                       mcyclength == 32 ~ (mcyclength * 0.584),
+                                       mcyclength == 33 ~ (mcyclength * 0.60),
+                                       mcyclength == 34 ~ (mcyclength * 0.609),
+                                       mcyclength == 35 ~ (mcyclength * 0.623),
+                                       mcyclength == 36 ~ (mcyclength * 0.631),
+                                       mcyclength == 37 ~ (mcyclength * 0.641),
+                                       TRUE ~ NA_real_))
+  log_message("Step 1 completed: lutlength_impute and follength_impute calculated")
+  
+  # Step 2: Group by ID and arrange by date
+  log_message("Step 2: Grouping by ID and arranging by date")
+  df <- df %>%
+    group_by(id) %>%
+    arrange(daterated, .by_group = TRUE)
+  log_message("Step 2 completed: Data grouped by ID and arranged by date")
+  
+  # Step 3: Initialize follcount1 and calculate it based on follength_impute
+  log_message("Step 3: Initializing follcount1 and calculating it based on follength_impute")
+  df$follcount1 <- NA_real_
+  for (i in 1:nrow(df)) {
+    if (df$A[i] == 1 & !is.na(df$follength_impute[i])) {
+      follcount1 <- seq_len(round(df$follength_impute[i]))
+      if (i + length(follcount1) - 1 <= nrow(df)) {
+        df$follcount1[i:(i + length(follcount1) - 1)] <- follcount1
+      } else {
+        log_message(paste("Warning: follcount1 sequence exceeds dataframe bounds at row", i))
+      }
+    }
+  }
+  log_message("Step 3 completed: follcount1 calculated")
+  
+  # Step 4: Identify ovtoday_impute based on follcount1
+  log_message("Step 4: Identifying ovtoday_impute based on follcount1")
+  df <- df %>% 
+    mutate(ovtoday_impute = case_when(round(follength_impute) == follcount1 ~ 1,
+                                      TRUE ~ NA_real_))
+  log_message("Step 4 completed: ovtoday_impute identified")
+  
+  # Step 5: Handle NA values in ovtoday and ovtoday_impute
+  log_message("Step 5: Handling NA values in ovtoday and ovtoday_impute")
+  df <- df %>%
+    mutate(ovtoday = ifelse(is.na(ovtoday), 0, ovtoday),
+           ovtoday_impute = ifelse(is.na(ovtoday_impute), 0, ovtoday_impute))
+  log_message("Step 5 completed: NA values handled in ovtoday and ovtoday_impute")
+  
+  # Output Summary
+  log_message(paste("Function completed: Processed dataframe with", nrow(df), "rows and", length(unique(df$id)), "unique participants."))
+  
+  return(df)
+}
+
+# Example usage
+# df <- ovtoday_impute(df)
+
+# Helper function for logging messages to console and optionally to a file
+log_message <- function(message) {
+  cat(message, "\n")
+  # Uncomment the line below to log messages to a file
+  # write(message, file = "process_data_log.txt", append = TRUE)
+}
+
+```
+
+# scaled_cycleday Function
+#
+# This function processes a dataframe to calculate the percentage of the luteal and follicular phases based on ovulation day ('ovtoday') or an imputed ovulation day ('ovtoday_impute').
+# It computes luteal phase and follicular phase percentages that can be used in further cycle analyses, including ovulation-centered and menses-centered scaling.
+#
+# It performs the following operations:
+#1. Calculates the luteal and follicular phase day counts and their maximum values.
+#2. Computes the percentage of the luteal phase scaled from 0 to 1 and from -1 to 0 for both menses-centered and ovulation-centered analyses.
+#3. Computes similar calculations using imputed ovulation days.
+#4. Calculates follicular percentages using similar methods.
+#5. Prioritizes LH test-based scaled values over imputed values.
+#6. Creates scaled cycle day variables (`scaled_cycleday` and `scaled_cycleday_ov`).
+#7. Rounds luteal-follicular percentages (`cycleday_perc`, `cycleday_perc_round`, `cycleday_10perc`, `cycleday_5perc`, `cycleday_2perc`).
+#8. Rounds follicular-luteal percentages (`cycledayov_perc`, `cycledayov_perc_round`, `cycledayov_10perc`, `cycledayov_5perc`, `cycledayov_2perc`).
+#
+#
+# Parameters:
+# - df: A dataframe containing participant menstrual data. Required columns: 'id', 'daterated', 'A', 'ovtoday', 'ovtoday_impute', and others used for specific calculations.
+#
+# Returns:
+# - A processed dataframe with additional columns for luteal and follicular phase percentages, including both menses-centered and ovulation-centered scaling, as well as scaled cycle day variables, prioritizations based on LH tests, and rounded percentage variables for both luteal-follicular and follicular-luteal orders.
+#
+# Example Usage:
+# df <- scaled_cycleday(df)
+
+```{r}
+
+# Helper function for logging messages to console and optionally to a file
+log_message <- function(message) {
+  cat(message, "\n")
+  # Uncomment the line below to log messages to a file
+  # write(message, file = "process_data_log.txt", append = TRUE)
+}
+
+```
+
+
+```{r}
+
+scaled_cycleday <- function(df) {
+  # Input Validation
+  if (!all(c("id", "daterated", "A", "ovtoday", "ovtoday_impute") %in% names(df))) {
+    stop("Error: Missing one or more required columns in the input data.")
+  }
+
+  # Step 1: Initialize variables and arrange data by ID and date
+  log_message("Step 1: Grouping data by ID and arranging by date")
+  df <- df %>%
+    group_by(id) %>%
+    arrange(daterated, .by_group = TRUE) %>%
+    mutate(lutmax = NA_real_, folmax = NA_real_, lutmax_impute = NA_real_, folmax_impute = NA_real_)
+  log_message("Step 1 completed: Data grouped by ID and arranged by date")
+
+  # Step 2: Apply calculate_lutdaycount function to determine luteal day count based on ovtoday and ovtoday_impute
+  log_message("Step 2: Calculating luteal day count using ovtoday and ovtoday_impute")
+  df <- calculate_lutdaycount(df, df$ovtoday)
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      lutdaycount = lag(lutdaycount1),
+      lutdaycount = case_when(
+        is.na(lutdaycount) | id != lag(id) ~ NA_real_, 
+        TRUE ~ lutdaycount
+      )
+    )
+  log_message("Step 2 completed: Luteal day count calculated")
+
+  # Step 3: Calculate lutmax and luteal phase percentages
+  log_message("Step 3: Calculating lutmax and luteal percentages")
+  for (i in 1:(nrow(df)-1)) {
+    if (is.na(df$lutdaycount[i + 1]) && !is.na(df$lutdaycount[i])) {
+      if ((i - df$lutdaycount[i]) >= 1) {
+        df$lutmax[(i - df$lutdaycount[i]):i] <- as.numeric(df$lutdaycount[i])
+      }
+    }
+  }
+  df <- df %>%
+    mutate(
+      lutperc = ifelse(lut_incomplete == 0, (lutdaycount / lutmax), NA_real_),
+      perclut = lutperc - 1
+    )
+  log_message("Step 3 completed: Luteal phase percentages calculated")
+
+  # Step 4: Apply calculate_foldaycount function and calculate follicular percentages
+  log_message("Step 4: Calculating follicular day count and percentages")
+  df <- calculate_foldaycount(df, df$ovtoday)
+  if ("foldaycount_ov" %in% names(df)) {
+    df <- df %>% select(-foldaycount_ov)
+  }
+  df <- df %>% rename(foldaycount_ov = foldaycount)
+  for (i in 1:(nrow(df)-1)) {
+    if (is.na(df$foldaycount_ov[i + 1]) && !is.na(df$foldaycount_ov[i])) {
+      if ((i - df$foldaycount_ov[i]) >= 1) {
+        df$folmax[(i - df$foldaycount_ov[i]):i] <- as.numeric(df$foldaycount_ov[i])
+      }
+    }
+  }
+  df <- df %>%
+    mutate(
+      percfol = ifelse(fol_incomplete != 1, foldaycount_ov / (folmax), NA_real_),
+      percfol_ov = percfol - 1
+    )
+  log_message("Step 4 completed: Follicular phase percentages calculated")
+
+  # Step 5: Repeat calculations using ovtoday_impute
+  log_message("Step 5: Recalculating luteal and follicular day counts using ovtoday_impute")
+  df <- calculate_lutdaycount(df, df$ovtoday_impute)
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      lutdaycount_impute = lag(lutdaycount1),
+      lutdaycount_impute = case_when(
+        is.na(lutdaycount_impute) | id != lag(id) ~ NA_real_, 
+        TRUE ~ lutdaycount_impute
+      )
+    )
+  for (i in 1:(nrow(df)-1)) {
+    if (is.na(df$lutdaycount_impute[i + 1]) && !is.na(df$lutdaycount_impute[i])) {
+      if ((i - df$lutdaycount_impute[i]) >= 1) {
+        df$lutmax_impute[(i - df$lutdaycount_impute[i]):i] <- as.numeric(df$lutdaycount_impute[i])
+      }
+    }
+  }
+  df <- df %>%
+    mutate(
+      lutperc_impute = if_else(
+        !is.na(lutmax_impute) & lut_incomplete == 0,
+        lutdaycount_impute / lutmax_impute,
+        NA_real_
+      ),
+      perclut_impute = lutperc_impute - 1
+    )
+  df <- calculate_foldaycount(df, df$ovtoday_impute)
+  if ("foldaycount_impute" %in% names(df)) {
+    df <- df %>% select(-foldaycount_impute)
+  }
+  df <- df %>% rename(foldaycount_impute = foldaycount)
+  for (i in 1:(nrow(df)-1)) {
+    if (is.na(df$foldaycount_impute[i + 1]) && !is.na(df$foldaycount_impute[i])) {
+      if ((i - df$foldaycount_impute[i]) >= 1) {
+        df$folmax_impute[(i - df$foldaycount_impute[i]):i] <- as.numeric(df$foldaycount_impute[i])
+      }
+    }
+  }
+  df <- df %>%
+    mutate(
+      percfol_impute = ifelse(cycle_incomplete == 0, foldaycount_impute / (folmax_impute), NA_real_),
+      percfol_imp_ov = percfol_impute - 1
+    )
+  log_message("Step 5 completed: Luteal and follicular percentages recalculated using ovtoday_impute")
+
+  # Step 6: Remove helper variables
+  log_message("Step 6: Removing helper variables")
+  df <- df %>% dplyr::select(-c(lutdaycount1, lutperc, lut_incomplete1))
+  log_message("Step 6 completed: Helper variables removed")
+
+  # Step 7: Prioritize LH test-based scaled values over imputed values
+  log_message("Step 7: Prioritizing LH test-based scaled values over imputed values")
+
+  create_percent <- function(df, percentvar, percvar, percvar_impute) {
+    percentvar <- ensym(percentvar)
+    percvar <- ensym(percvar)
+    percvar_impute <- ensym(percvar_impute)
+    
+    df %>%
+      group_by(id, cyclenum) %>%
+      mutate(
+        !!percentvar := if (all(is.na(!!percvar) | !!percvar == 0)) {
+          # if percvar contains only NA or 0, use percvar_impute
+          !!percvar_impute
+        } else {
+          # otherwise, use percvar
+          !!percvar
+        }
+      ) %>%
+      ungroup()
+  }
+
+  df <- create_percent(df, percentlut, perclut, perclut_impute)
+  df <- create_percent(df, percentfol, percfol, percfol_impute)
+  df <- create_percent(df, percentlut_ov, perclut_ov, perclut_imp_ov)
+  df <- create_percent(df, percentfol_ov, percfol_ov, percfol_imp_ov)
+  log_message("Step 7 completed: LH test-based values prioritized over imputed values")
+
+  # Step 8: Creating scaled_cycleday
+  log_message("Step 8: Creating scaled_cycleday")
+  df <- df %>%
+    mutate(scaled_cycleday = ifelse(is.na(percentlut), percentfol, percentlut))
+  log_message("Step 8 completed: scaled_cycleday created")
+
+  # Step 9: Creating scaled_cycleday_ov
+  log_message("Step 9: Creating scaled_cycleday_ov")
+  df <- df %>%
+    mutate(scaled_cycleday_ov = ifelse(is.na(percentlut_ov), percentfol_ov, percentlut_ov))
+  log_message("Step 9 completed: scaled_cycleday_ov created")
+
+  # Step 10: Rounding Percents for LUTEAL-FOLLICULAR ORDER
+  log_message("Step 10: Rounding percents for LUTEAL-FOLLICULAR ORDER")
+  df <- df %>%
+    mutate(cycleday_perc = (scaled_cycleday + 1) / 2) %>%
+    mutate(cycleday_perc_round = round(cycleday_perc, 1)) %>%
+    mutate(cycleday_10perc = round(cycleday_perc / 0.10) * 0.10) %>%
+    mutate(cycleday_5perc = round(cycleday_perc / 0.05) * 0.05) %>%
+    mutate(cycleday_2perc = round(cycleday_perc / 0.02) * 0.02)
+  log_message("Step 10 completed: Rounding percents for LUTEAL-FOLLICULAR ORDER completed")
+
+  # Step 11: Rounding Percents for FOLLICULAR-LUTEAL ORDER
+  log_message("Step 11: Rounding percents for FOLLICULAR-LUTEAL ORDER")
+  df <- df %>%
+    mutate(cycledayov_perc = (scaled_cycleday_ov + 1) / 2) %>%
+    mutate(cycledayov_perc_round = round(cycledayov_perc, 1)) %>%
+    mutate(cycledayov_10perc = round(cycledayov_perc / 0.10) * 0.10) %>%
+    mutate(cycledayov_5perc = round(cycledayov_perc / 0.05) * 0.05) %>%
+    mutate(cycledayov_2perc = round(cycledayov_perc / 0.02) * 0.02)
+  log_message("Step 11 completed: Rounding percents for FOLLICULAR-LUTEAL ORDER completed")
+
+  return(df)
+}
+
+# Example usage
+#df <- scaled_cycleday(df)
+
+
+```
+

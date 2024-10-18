@@ -1,0 +1,188 @@
+---
+title: "ADHDCYCLE-scoring-scales"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#Using IA_Count (as a known measure of more sx) to check direction of variable coding
+
+```{r}
+
+#---- Checking BDEFS WM - Yes, higher is more sx r=.66 ----
+cor(df$CSS_Inatt_Count, df$BDEFS_WM_avg, use="pairwise.complete.obs")
+
+#---- Checking BDEFS RI - Yes, higher is more sx r=.57----
+cor(df$CSS_Inatt_Count, df$BDEFS_RI_avg, use="pairwise.complete.obs")
+
+#---- Checking RAW BDEFS  - Yes, higher is more sx for all ----
+cor(df$CSS_Inatt_Count, df$BDEFS_3, use="pairwise.complete.obs")
+
+#---- Checking UPPS raw variables - Yes, higher is more sx for all UPPS vars (incl 7 and 8) ----
+cor(df$CSS_Inatt_Count, df$UPPS_15, use="pairwise.complete.obs")
+
+#---- Checking DEBQ_avg - Yes, higher is more sx r=.28----
+cor(df$CSS_Inatt_Count, df$DEBQ_avg, use="pairwise.complete.obs")
+
+#---- Checking DRSP - Yes, higher is more sx ----
+cor(df$CSS_Inatt_Count, df$DRSP_1, use="pairwise.complete.obs")
+
+#---- Checking score_robot - NO, higher is lower sx, so we will recode ----
+cor(df$CSS_Inatt_Count, df$score_robot, use="pairwise.complete.obs")
+
+#---- Checking score_pinball - NO, higher is lower sx, so we will recode ----
+cor(df$CSS_Inatt_Count, df$score_pinball, use="pairwise.complete.obs")
+```
+#Notes re: how existing variables were coded --- but I'm not sure this is actually what was used because names don't match up 
+<!-- **************************************. -->
+<!-- Original Syntax by: Ashley Eng. -->
+<!-- **************************************. -->
+<!-- COMPUTE CSS_B_TotalIASymp=CSS_B_1 + CSS_B_3 + CSS_B_5 + CSS_B_7 + CSS_B_9 + CSS_B_11 + CSS_B_13 +  -->
+<!--     CSS_B_15 + CSS_B_17. -->
+<!-- VARIABLE LABELS CSS_B_TotalIASymp 'items 1, 3, 5, 7, 9. 11. 13. 15 .17'.  -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_B_TotalHISymp=CSS_B_2 + CSS_B_4 + CSS_B_6 + CSS_B_8 + CSS_B_10 + CSS_B_12 + CSS_B_14 +  -->
+<!--     CSS_B_16 + CSS_B_18. -->
+<!-- VARIABLE LABELS CSS_B_TotalHISymp 'items 2 4 6 8 10 12 14 16 18'.  -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_TotalFunction=CSS_Function_1 + CSS_Function_2 + CSS_Function_3 + CSS_Function_4 + CSS_Function_5 + CSS_Function_6 + CSS_Function_7 +  -->
+<!--     CSS_Function_8 + CSS_Function_9 + CSS_Function_10. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE CSS_B2_Total=CSS_B2_1 + CSS_B2_2 + CSS_B2_3 + CSS_B2_4 + CSS_B2_5 + CSS_B2_6 + CSS_B2_7 +  -->
+<!--     CSS_B2_8. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE DEBQ_Total=DEBQ_1 + DEBQ_2 + DEBQ_3 + DEBQ_4 + DEBQ_5 + DEBQ_6 + DEBQ_7 + DEBQ_8 + DEBQ_9 +  -->
+<!--     DEBQ_10 + DEBQ_11 + DEBQ_12 + DEBQ_13. -->
+<!-- EXECUTE. -->
+<!-- COMPUTE BDEFS_Total=BDEFS_1 + BDEFS_2 + BDEFS_3 + BDEFS_4 + BDEFS_5 + BDEFS_6. -->
+<!-- EXECUTE. -->
+<!-- RECODE UPPS_7 UPPS_8 (1=4) (2=3) (3=2) (4=1). -->
+<!-- EXECUTE. -->
+<!-- COMPUTE UPPS_Total=UPPS_1 + UPPS_2 + UPPS_3 + UPPS_4 + UPPS_5 + UPPS_6 + UPPS_7 + UPPS_8 + UPPS_9 +  -->
+<!--     UPPS_10 + UPPS_11 + UPPS_12 + UPPS_13 + UPPS_14 + UPPS_15. -->
+<!-- VARIABLE LABELS UPPS_Total 'After recoding items 7 and 8'. -->
+<!-- EXECUTE. -->
+
+
+```{r}
+# ---- Calculate ADHD, UPPS, BDEFS, and DEBQ Scores ----
+
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    # Convert columns to numeric to ensure proper summation
+    CSS_Inatt = rowMeans(across(
+      c(
+        CSS_B_1,
+        CSS_B_3,
+        CSS_B_5,
+        CSS_B_7,
+        CSS_B_9,
+        CSS_B_11,
+        CSS_B_13,
+        CSS_B_15,
+        CSS_B_17
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    # Convert each column to numeric, handle missing values with na.rm = TRUE
+    
+    CSS_HypImp = rowMeans(across(
+      c(
+        CSS_B_2,
+        CSS_B_4,
+        CSS_B_6,
+        CSS_B_8,
+        CSS_B_10,
+        CSS_B_12,
+        CSS_B_14,
+        CSS_B_16,
+        CSS_B_18
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    # Same process for CSS_HypImp scores
+    
+    # Adding the counts without needing row-wise summation
+    CSS_HypImp_Count = CSS_Imp_Count + CSS_Hyp_Count,
+    
+    # Direct summation of these variables, assuming they are already numeric
+    
+    # Functional Total Score: Summing specific function-related columns
+    CSS_Fx_Total = rowMeans(across(
+      c(
+        CSS_Function_1,
+        CSS_Function_2,
+        CSS_Function_3,
+        CSS_Function_4,
+        CSS_Function_5,
+        CSS_Function_6,
+        CSS_Function_7,
+        CSS_Function_8,
+        CSS_Function_9,
+        CSS_Function_10
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    
+    # DEBQ Total Score summing all DEBQ columns
+    DEBQ_Total = rowMeans(across(
+      c(
+        DEBQ_1,
+        DEBQ_2,
+        DEBQ_3,
+        DEBQ_4,
+        DEBQ_5,
+        DEBQ_6,
+        DEBQ_7,
+        DEBQ_8,
+        DEBQ_9,
+        DEBQ_10,
+        DEBQ_11,
+        DEBQ_12,
+        DEBQ_13
+      ),
+      ~ as.numeric(.)
+    ), na.rm = TRUE),
+    
+    # BDEFS Total Score summing all BDEFS columns
+    BDEFS_Total = rowMeans(across(
+      c(BDEFS_1, BDEFS_2, BDEFS_3, BDEFS_4, BDEFS_5, BDEFS_6),
+      ~ as.numeric(.)
+    ), na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Reverse code pinball and robot
+
+# Step 1: Find the maximum values for both variables
+max_robot <- max(df$score_robot, na.rm = TRUE)
+max_pinball <- max(df$score_pinball, na.rm = TRUE)
+
+# Step 2: Reverse code the variables WITH SAME NAME
+df$score_robot <- max_robot - df$score_robot
+df$score_pinball <- max_pinball - df$score_pinball
+
+
+# Check Histograms - they are all zero inflated
+
+#hist(df$CSS_Inatt, breaks = 10, main = "Histogram of CSS_Inatt", xlab = "CSS_Inatt", col = "lightblue")
+#hist(df$CSS_HypImp, breaks = 10, main = "Histogram of CSS_HypImp", xlab = "CSS_HypImp", col = "lightblue")
+#hist(df$BDEFS_Total, breaks = 10, main = "Histogram of BDEFS_Total", xlab = "BDEFS_Total", col = "lightblue")
+#hist(df$BDEFS_WM_avg, breaks = 10, main = "Histogram of BDEFS_WM_avg", xlab = "BDEFS_WM_avg", col = "lightblue")
+#hist(df$BDEFS_RI_avg)
+
+
+#hist(df$DEBQ_Total, breaks = 10, main = "Histogram of DEBQ_Total", xlab = "DEBQ_Total", col = "lightblue")
+
+# Checking direction - They are all positively correlated
+
+#cor(df$IA_Count, df$DEBQ_Total, use="pairwise.complete.obs")
+#cor(df$BDEFS_Total, df$BDEFS_WM_avg, use="pairwise.complete.obs")
+#cor(df$BDEFS_WM_avg, df$score_pinball, use="pairwise.complete.obs")
+#cor(df$BDEFS_RI_avg, df$score_robot, use="pairwise.complete.obs")
+
+
+```
+

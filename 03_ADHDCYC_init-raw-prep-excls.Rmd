@@ -1,0 +1,107 @@
+---
+title: "ADHDCYCLE_init-raw-prep"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+# ---- Data Preprocessing ----
+# Convert date_rated to Date format using lubridate if necessary (ensure date format matches)
+df <- df %>%
+  mutate(date_rated = as.Date(mdy(date_rated)))  # If in mm/dd/yyyy format
+
+# Remove rows where all values are NA
+df <- df[rowSums(is.na(df)) != ncol(df), ]
+
+# Remove rows with NA in key columns (e.g., id, date_rated)
+df <- df %>%
+  filter(!is.na(id), !is.na(date_rated))
+
+# Display number of rows after cleaning
+cat("Number of rows after cleaning: ", nrow(df), "\n")
+
+# Sort by id and date_rated
+df <- df %>%
+  arrange(id, date_rated)
+
+
+# ---- Hard-Coded Fixes ----
+# Example of hard-coding changes based on manual review
+df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
+
+# Fix date issues for participant 210
+df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
+df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
+
+
+# ---- Placeholder for Missing Dates ----
+df <- df %>%
+  group_by(id) %>%
+  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
+  ungroup()
+
+# Display the number of rows after adding placeholders
+cat("Number of rows after adding placeholders: ", nrow(df), "\n")
+
+
+# ---- Rename Hormone Columns ----
+df <- df %>%
+  rename(
+    E2 = Estradiol,
+    P4 = Progesterone, 
+    CSS_Inatt_Count = IA_Count, 
+    CSS_Hyp_Count = Hyp_Count, 
+    CSS_Imp_Count = Imp_Count)
+
+
+
+# Add in missing menses onset dates from Urveesha
+# <!-- Calculated menses onset (although almost all of these are recorded in the tracking sheet? Not sure why missing): -->
+# <!-- 206 - 4/25/21 -->
+# <!-- 208 - 2/27/21 -->
+# <!-- 209 - 2/15/21 -->
+# <!-- 255- 7/2/22 -->
+# <!-- 258 - 7/11/22 -->
+# <!-- 270 - 9/4/22 -->
+# <!-- 279 - 10/27/22 -->
+# <!-- 290 - 2/21/23 -->
+# <!-- 291 - 2/10/23 -->
+# <!-- 293 - 2/3/23 -->
+# <!-- 312 - 7/4/23 -->
+# <!-- 331 - 1/3/24 -->
+# <!-- 332 - 1/21/24     -->
+
+# Convert the dates to Date format
+df[["date_rated"]] <- as.Date(df[["date_rated"]], format = "%m/%d/%y")
+
+# Define a vector of IDs and their corresponding menses onset dates
+menses_onset_data <- data.frame(
+  id = c(206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332),
+  onset_date = as.Date(c("2021-04-25", "2021-02-27", "2021-02-15", "2022-07-02", "2022-07-11", 
+                         "2022-09-04", "2022-10-27", "2023-02-21", "2023-02-10", "2023-02-03", 
+                         "2023-07-04", "2024-01-03", "2024-01-21"))
+)
+
+# Update StartPeriod in df for these ID and date combinations
+for (i in 1:nrow(menses_onset_data)) {
+  df[["StartPeriod"]][df[["id"]] == menses_onset_data$id[i] & df[["date_rated"]] == menses_onset_data$onset_date[i]] <- 1
+}
+```
+
+
+# Flag and filter out people with bad hormone IDs (after that, L2N=85, L1N=4194)
+```{r}
+
+# There are 12 people whose hormones should probably be removed for sensitivity analysis
+badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
+#Filtering for sensitivity analyses: 
+
+# Create a new dataset keeping everyone
+df_all <- df
+
+#save the clean dataset without the bad hormone IDs
+df <- df %>% filter(!(id %in% badhorm_ids))
+
+```

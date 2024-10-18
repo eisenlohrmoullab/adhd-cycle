@@ -1,28 +1,32 @@
 ---
-title: "ADHDCYCLE_Pkgs"
+title: "00_ADHDCYC_Setup_Pkgs"
 author: "Tory Eisenlohr-Moul"
 date: "`r Sys.Date()`"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 
 ```{r Setup}
 
+# ---- Global Chunk Options and Settings ----
 
+knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
 
-# ---- Data Manipulation and Cleaning ----
+options(scipen = 999) # Turn off scientific notation
+
+  # ---- Data Manipulation and Cleaning ----
+
+library(cowplot)  # Needed for draw_label function
+library(patchwork) # Needed for align_plots function
+library(htmlwidgets) # Needed for saving plotly plots as HTML
+library(htmltools) # Needed for saving plotly plots as HTML
+library(plotly) # Needed for interactive plots
 
 # Core tidyverse libraries for data manipulation and visualization
-library(dplyr)       # Data manipulation (part of tidyverse)
-library(tidyr)       # Data tidying (part of tidyverse)
+
 library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
 library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
 library(skimr)       # Summarize and inspect data quickly
-
 
 # ---- Reading and Working with Files ----
 
@@ -31,11 +35,9 @@ library(haven)       # For reading SPSS, Stata, and SAS files
 library(readxl)      # For reading Excel files
 library(readr)       # For reading CSV and other text files
 
-
 # ---- Plotting and Visualization ----
 
 # Core and extended libraries for data visualization
-library(ggplot2)     # Core plotting library
 library(ggdist)      # Visualizing distributions and uncertainty
 library(ggforce)     # Extending ggplot2 functionality with advanced features
 library(ggrepel)     # For adding non-overlapping text labels to ggplot2
@@ -45,6 +47,9 @@ library(corrplot)    # For creating correlation matrix visualizations
 library(grid)        # Base R graphics system for visual layout
 library(gridExtra)   # Arranging multiple plots in a grid
 library(see)         # Visualizing model checks and diagnostics
+library(DescTools)   # Descriptive statistics and visualization
+library(ggHoriPlot)  # Horizontal versions of common ggplot2 plots
+library(ggthemes)   # Additional themes for ggplot2
 
 
 # ---- Time Series and Rolling Averages ----
@@ -68,7 +73,6 @@ library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed 
 # Generalized additive models and marginal effects
 library(mgcv)        # Fitting generalized additive models (GAMs)
 library(marginaleffects) # Tools for calculating marginal effects from regression models
-
 
 # ---- Statistical Tools ----
 
