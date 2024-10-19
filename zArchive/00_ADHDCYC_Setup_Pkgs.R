@@ -1,0 +1,202 @@
+## ----project-management--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for project and version control
+#require(usethis)     # Setting up GitHub repositories and managing projects
+#require(gitcreds)    # Managing Git credentials
+#require(targets)     # Workflow management for reproducible research
+#require(roxygen2)    # Documentation generation for R packages
+#require(testthat)    # Unit testing for R packages to ensure code quality
+require(conflicted)  # Manage conflicts between functions from different packages
+#require(rprojroot)   # Finding the root of an R project
+#require(here)        # Finding files within an R project
+#require(renv)        # Dependency management for reproducibility
+#renv::config() # Display the renv configuration
+#renv::activate() # Activate the renv environment
+#renv::deactivate(clean = TRUE)
+
+
+
+
+## ----data-visualization--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for data manipulation, cleaning, arranging, and visualization
+
+require(patchwork)        # Easily combine multiple ggplot2 plots
+require(ggplot2)          # Core data visualization library
+require(ggdist)           # Visualizing distributions and uncertainty
+require(ggforce)          # Extending ggplot2 with advanced features
+require(ggrepel)          # Non-overlapping text labels for ggplot2
+require(sjPlot)           # Plotting for statistical models (e.g., mixed models)
+require(corrplot)         # Correlation matrix visualizations
+require(see)              # Visualizing model checks and diagnostics
+require(ggthemes)         # Additional themes for ggplot2
+require(ggpubr)           # Publication-ready plots with ggplot2
+#require(gganimate)        # Animated visualizations with ggplot2
+#require(scales)           # Customizing axis scales and labels in ggplot2
+#require(ggridges)         # Ridge plots for visualizing distributions
+#require(tidybayes)        # Bayesian model visualizations
+require(ggVennDiagram)    # Alternative Venn diagrams with ggplot2
+#require(lemon)            # Advanced facetting and axis manipulation
+#require(paletteer)        # Comprehensive color palettes for ggplot2
+require(plot3D)           # 3D scatter plots and surfaces
+require(plotly)           # Interactive plots with ggplot2
+#require(ggalluvial)       # Alluvial plots for visualizing categorical data
+require(ggtext)           # Rich text rendering in ggplot2
+#require(ggupset)          # Upset plots for visualizing set intersections
+#require(ggbeeswarm)       # Beeswarm plots for visualizing categorical data
+#require(ggpointdensity)   # Point density plots for visualizing data density
+require(ggdist)           # Visualizing distributions and uncertainty
+require(ggside)           # Side plots for ggplot2
+#require(ggpattern)        # Geoms for patterned fills in ggplot2
+#require(ggimage)          # Geoms for displaying images in ggplot2
+#require(ggpmisc)          # Miscellaneous extensions for ggplot2
+#require(gganimate)        # Animated visualizations with ggplot2
+require(gridExtra)  # For combining the plots
+
+
+
+
+
+## ----file-handling-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for reading and writing various file formats
+require(haven)       # Reading SPSS, Stata, and SAS files
+require(readxl)      # Reading Excel files
+require(readr)       # Reading CSV and other text files
+require(writexl)     # Writing Excel files
+
+
+## ----time-series---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+require(zoo)         # Rolling means/averages and time series
+require(lubridate)   # Date and time manipulation
+#require(timetk)      # Time series analysis tools
+#require(tsibble)     # Tidy temporal data frames
+#require(forecast)    # Time series forecasting
+#require(feasts)      # Feature extraction and statistics for time series
+#require(tsfeatures)  # Time series feature extraction
+#require(slider)      # Flexible computation of rolling statistics
+
+
+## ----menstrual-cycle-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for menstrual cycle analysis
+#require(cpass)
+
+
+## ----ml-predictive-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#require(caret)       # Unified interface for predictive modeling
+#require(e1071)       # Support vector machines and other ML methods
+#require(randomForest) # Random forests for classification and regression
+#require(xgboost)     # Extreme gradient boosting
+#require(lightgbm)    # Light gradient boosting
+#require(caretEnsemble) # Ensemble models with caret
+#require(tune)        # Hyperparameter tuning
+#require(ranger)      # Fast implementation of random forests
+#require(keras)       # Deep learning via Keras
+
+
+## ----gam-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for GAMs and Bayesian analysis
+require(mgcv)        # Generalized additive models
+require(marginaleffects) # Marginal effects from regression models
+require(gratia)      # Diagnostic tools for GAMs
+require(gamair)      # Data and tools for learning about GAMs
+require(gam.hp)      # GAMs with hierarchical partitioning
+
+
+
+## ----bayesian------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for Bayesian analysis
+#require(rstan)       # R interface to Stan
+#require(bayesplot)   # Plotting functions for Bayesian analysis
+#require(loo)         # Model comparison using PSIS-LOO
+#require(bayestestR)  # Tools for Bayesian hypothesis testing
+#require(brms)        # Bayesian regression models using Stan
+
+
+
+## ----statistical-tools---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for specific statistical methods
+require(psych)       # Descriptive statistics and psychometrics
+#require(GPArotation) # Factor analysis rotations
+require(rmcorr)      # Repeated measures correlations
+require(careless)    # Detecting careless responses in surveys
+require(responsePatterns) # Analyzing response patterns
+
+
+## ----power-analysis------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#require(longpower)   # Power calculations for longitudinal data
+#require(pwr)         # Power analysis for t-tests, ANOVAs, and correlations
+#require(simr)        # Power analysis for mixed models
+#require(poweRlaw)    # Power laws and exponential distributions
+#require(pwr2ppl)     # Power analysis for two-phase pilot studies
+#require(pwrFDR)      # Power analysis for false discovery rate control
+
+
+
+## ----RCT-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#require(BayesCTDesign) # Bayesian clinical trial design
+#require(clinfun)     # Clinical trial design and analysis
+
+
+
+## ----mixed-and-generalized-models----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for mixed-effects models and generalized models
+
+require(lme4)        # Fitting mixed-effects models
+#require(nlme)        # Fitting linear and nonlinear mixed-effects models
+#require(merTools)    # Tools for analyzing mixed-effects models
+#require(MuMIn)       # Multi-model inference
+#require(robustlmm)   # Robust linear mixed models
+#require(ordinal)     # Ordinal regression models
+#require(bayestestR)  # Tools for Bayesian hypothesis testing
+require(lmtest)      # Testing linear models
+#require(sjstats)     # Summary statistics for statistical models
+require(sandwich)    # Robust covariance matrix estimators
+require(lmerTest)    # Adds p-values for lme4 models
+require(emmeans)     # Estimated marginal means
+require(broom.mixed) # Tidying mixed model results
+require(performance) # Model performance metrics
+#require(glmmTMB)     # Generalized linear mixed models with flexible distributions
+#require(MCMCglmm)    # Generalized linear mixed models using MCMC
+#require(blme)        # Bayesian linear mixed models extending lme4
+#require(brms)        # Bayesian generalized (non-)linear multivariate multilevel models using Stan
+
+
+## ----general-and-eda-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Libraries for general data manipulation and exploratory data analysis
+
+require(devtools) # Required for installing packages from GitHub
+require(beepr) # For audio notifications
+#require(chattr) # For adding comments to code chunks
+require(progress)     # Progress bars for R scripts)
+#require(remedy) # For error handling
+
+require(Rmisc)  # For descriptive statistics
+require(tidyr)    
+require(dplyr)   
+require(ggplot2)    
+require(stringr) 
+require(purrr)
+require(forcats)
+require(skimr)        # Summarize and inspect data quickly
+require(janitor)      # For cleaning data, e.g., renaming columns, removing empty rows
+#require(DataExplorer) # Automated EDA report generation
+#require(GGally)       # Extension of ggplot2 for pairs plots
+#require(Hmisc)        # Descriptive statistics and missing data management
+#require(gghighlight)  # Highlight specific groups in ggplot2 visualizations
+#require(naniar)       # Visualizing and analyzing missing data
+#require(DescTools)    # Tools for descriptive statistics
+#require(forcats)      # Tools for working with categorical data
+#require(waldo)       # Visualizing differences between data frames
+#require(visdat)       # Visualizing missing data and structure
+#require(tweenr)       # Interpolating data for animations
+
+
+
+
+## ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+conflict_scout()
+
+
+

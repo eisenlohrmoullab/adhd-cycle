@@ -18,6 +18,236 @@ print.variable.names <- function(df) {
 
 ```
 
+# Standardize index variable namesdate and id
+```{r}
+standardize_index_names <- function(df) {
+    df %>%
+        rename_with(~ gsub("([Dd]ate.?rated|daterated)", "date_rated", .),
+                    matches("date|daterated")) %>%
+        rename_with(~ gsub("([Ii][Dd])", "id", .), matches("ID|id"))
+}
+
+```
+
+
+
+
+## create Lists
+```{r echo=T}
+
+dv_list <- c(
+  "DRSP_1",
+  "DRSP_2",
+  "DRSP_3",
+  "DRSP_4",
+  "DRSP_5",
+  "DRSP_6",
+  "DRSP_7",
+  "DRSP_8",
+  "DRSP_9",
+  "DRSP_10",
+  "DRSP_11",
+  "DRSP_12",
+  "DRSP_13",
+  "DRSP_14",
+  "DRSP_15",
+  "DRSP_16",
+  "DRSP_17",
+  "DRSP_18",
+  "DRSP_19",
+  "DRSP_20",
+  "DRSP_21",
+  "DRSP_22",
+  "DRSP_23",
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count"
+) %>% noquote()
+
+
+# Rename the variables based on DRSP items
+# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
+names(dv_list) <- c(
+  "Depressed Mood", # DRSP_1
+  "Hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Incr Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloat/Wt Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Imp", 
+  "Relational Imp",
+  "Inattention Sx", 
+  "Hyperactivity/Imp Sx", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Resp Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyp/Imp Sx Count"
+)
+
+# Rename the variables based on DRSP items
+names(dv_list) <- c(
+  "Depressed Mood", # DRSP_1
+  "hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Increased Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloating/Weight Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Impairment", 
+  "Relational Impairment",
+  "Inattention Symptoms", 
+  "Hyperactivity/Impulsivity Symptoms", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Response Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyperactivity/Impulsivity Sx Count"
+)
+
+
+#View(df)
+
+hormlist <- c(
+  "E2",
+  "P4",
+  "LH"
+) %>% noquote()
+
+
+
+```
+# add_placeholders_for_missing_dates(): Function to Add Placeholders for Missing Dates in a Dataframe
+
+# This function takes a dataframe (df) as input and fills in missing dates for each group defined by 'id'.
+# It also prints the number of rows before and after adding the placeholders.
+# 'Fills in missing dates' means that for each unique 'id', any dates that are missing within the range from the earliest to the latest 'daterated' will be added with NA values for other columns.
+
+```{r}
+add_placeholders_for_missing_dates <- function(df) {
+  # ---- Placeholder for Missing Dates ----
+  # Display the number of rows BEFORE adding placeholders
+  cat("Number of rows BEFORE adding placeholders: ", nrow(df), "\n")
+
+  # Group the dataframe by 'id' and fill in missing dates within the range of 'daterated'
+  df <- df %>%
+    group_by(id) %>%
+    complete(daterated = seq.Date(min(daterated), max(daterated), by = "day")) %>%
+    ungroup()
+
+  # Display the number of rows AFTER adding placeholders
+  cat("Number of rows AFTER adding placeholders: ", nrow(df), "\n")
+
+  # Return the modified dataframe
+  return(df)
+}
+
+#Example usage
+# df <- add_placeholders_for_missing_dates(df)
+ 
+# - Ensure your dataframe has columns named 'id' and 'daterated' before using this function.
+# - 'id' should uniquely identify each group, and 'daterated' should be a date column.
+# - The function will add rows with missing dates for each 'id' group in the dataframe.
+```
+
+#' Count Unique IDs in a Dataframe
+#'
+#' This function takes a dataframe as input and counts the number of unique IDs in the dataset.
+#' It also prints the number of unique IDs along with the list of unique IDs in a formatted sentence.
+#'
+#' param df A dataframe containing a column named 'id' representing unique identifiers.
+#'
+#' return The function does not return a value but prints the count and list of unique IDs.
+#'
+#' examples
+#' df <- data.frame(id = c(1, 2, 2, 3, 4))
+#' count_unique_ids(df)
+#'
+
+```{r}
+
+count_list_unique_ids <- function(df) {
+  # Count how many remaining ids you have in the dataset
+  unique_id_count <- length(unique(df$id))
+
+  # Get a list of unique IDs in the dataset
+  id_list <- unique(df$id)
+
+  # Print the number of unique IDs and the list of unique IDs in a sentence
+  cat("There are", unique_id_count, "unique IDs in the dataset. The IDs are:", paste(id_list, collapse = ", "), ".\n")
+}
+
+# Usage example:
+ #count_unique_ids(df)
+
+#id_list
+```
+
+
+
 # COMBINED PERSON METRICS FUNCTION
 
 # create.person.metrics(): Function to create person summary metrics: mean, SD, deviation, and standardized values
@@ -1047,4 +1277,396 @@ scaled_cycleday <- function(df) {
 
 
 ```
+
+# dataset_summary Function
+#
+# This function summarizes the dataset by counting the number of unique participants and the total number of rows.
+# It provides a quick overview of the dataset's size and creates a summary object in the global environment.
+#
+# Parameters:
+# - df: A dataframe containing participant menstrual data.
+#
+# Returns:
+# - A list with the number of unique participants and the total number of rows in the dataframe.
+# - Also assigns a summary object named "datasetname_summary" to the global environment.
+#
+# Example Usage:
+# summary <- dataset_summary(df)
+# print(summary)
+
+```{r}
+
+dataset_summary <- function(df) {
+  log_message("Counting participants (Level 2 N) and rows (Level 1 N)")
+  unique_id_count <- length(unique(df$id))
+  row_count <- nrow(df)
+  log_message(paste("Number of unique participants:", unique_id_count))
+  log_message(paste("Number of rows:", row_count))
+  
+}
+
+# Example usage
+# df <- scaled_cycleday(df)
+#summary <- dataset_summary(df)
+
+```
+
+# save_and_list_variables(): 
+
+# Description:
+# - Saves the given dataframe to a CSV file with today's date and a custom dataset name in the file name.
+# - Prints the column names of the dataframe as a comma-separated list.
+#
+# Arguments:
+# - df: The dataframe to be saved.
+# - base_file_path: The base file path where the CSV file will be saved. The function will append the dataset name and today's date to this path.
+# - dataset_name: A string specifying the custom name for the dataset to be used in the file name.
+#
+# Example:
+# df <- your_dataframe  # Replace with your actual dataframe
+# base_file_path <- "/path/to/directory/filename_base"
+# dataset_name <- "L2N85"
+# save_and_list_variables(df, base_file_path, dataset_name)
+#
+# Output:
+# - CSV file is saved to the specified location with the format: base_file_path_datasetName_YYYYMMDD.csv
+# - Prints the variable names of the dataframe as a comma-separated string.
+```{r save_df_and_list_variables}
+
+save_df_and_list_variables <- function(df, base_file_path, dataset_name) {
+    # Get today's date in YYYYMMDD format
+    today_date <- format(Sys.Date(), "%Y%m%d")
+    
+    # Construct the full file path by inserting the dataset name and today's date
+    file_path <- paste0(base_file_path, "_", dataset_name, "_", today_date, ".csv")
+    
+    # Save the dataframe to a CSV file
+    write.csv(df, file_path, row.names = FALSE)
+    
+    # Extract variable names
+    variable_names <- names(df)
+    
+    # Format the list of variable names into a comma-separated string
+    formatted_list <- paste(variable_names, collapse = ", ")
+    
+    # Print the formatted list
+    cat(formatted_list, "\n")
+}
+
+
+
+# Usage example
+#df <- df  # Replace with your actual dataframe
+#base_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/"
+#dataset_name <- "clean"  # Replace with the desired dataset name
+
+#save_df_and_list_variables(df, base_file_path, dataset_name)
+
+
+
+```
+
+
+# 2024-09-25 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
+```{r}
+
+# Define the function to generate plots for a list of DVs
+plot_DVs <- function(DV_list, df) {
+  
+  # Create person-standardized (z-scored within each participant) versions of each DV
+  for (DV in DV_list) {
+    zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
+    
+    # Add the person-standardized columns for each DV
+    df <- df %>%
+      group_by(id) %>%
+      mutate(!!zd_var := scale(!!sym(DV), center = TRUE, scale = TRUE)) %>%
+      ungroup()
+  }
+  
+  # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
+  df <- df %>%
+    group_by(id) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = sd(E2, na.rm=TRUE)/0.5), #changed here
+           P4.rescale = scale(P4, center = TRUE, scale = sd(P4, na.rm=TRUE)/0.5)) %>% #changed here
+    ungroup()
+  
+  # Indicators for menstrual bleeding
+  bleeding_indicator <- data.frame(xmin = .5, xmax = 0.7, ymin = -Inf, ymax = Inf)
+  
+  for (DV in DV_list) {
+    
+    if (DV %in% c("E2", "P4", "LH")) {
+      # Raw plot for E2, P4, LH
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p1 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.1) +
+        geom_point(size = 1) +
+        geom_line(size = 1) +
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      ggsave(filename = paste0(output_folder, "/", DV, "_", "raw", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+    } else {
+      # For DVs that are NOT E2, P4, LH
+      
+      # Raw data points and line for the dependent variable
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                  se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+    # Person-rescaled E2 and P4 lines (thin dotted)  <- Changed variable names here
+      e2_std <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(E2.rescale, na.rm = TRUE)) #changed here
+
+      p4_std <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(P4.rescale, na.rm = TRUE))  #changed here
+      
+      p1 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # Thin dotted lines for E2 and P4
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Raw", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p1)
+      
+      # Deviations plot
+      dev_var <- paste0(DV, ".d")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p2 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p2)
+      
+            ggsave(filename = paste0(output_folder, "/", DV, "_", "dev", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Person-standardized outcome (zd)
+      zd_var <- paste0(DV, ".zd")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                  se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p3 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+                  linetype = "solid", color = "forestgreen", size = 1, alpha = 0.9) +  # E2
+        geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+                  linetype = "solid", color = "red", size = 1, alpha = 0.8) +  # P4
+        ggtitle(paste("Person-standardized", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Person-standardized Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      print(p3)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "zd", ".png"), plot = last_plot(), width = 8, height = 6)
+
+      
+      # Rolling deviations plot
+      roll_dev_var <- paste0(DV, ".roll.d")
+      dv <- df %>%
+        group_by(cycleday_10perc) %>%
+        summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
+                  se_value = sd(!!sym(roll_dev_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+      
+      p4 <- ggplot(dv, aes(x = cycleday_10perc, y = mean_value)) +
+        geom_ribbon(aes(ymin = mean_value - se_value, ymax = mean_value + se_value), 
+                    fill = "black", alpha = 0.3) +
+        geom_point(size = 1) +
+        geom_line(size = 2) +
+        # geom_line(data = e2_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "blue", size = 1, alpha = 0.6) +  # E2
+        # geom_line(data = p4_std, aes(x = cycleday_10perc, y = mean_value), 
+        #           linetype = "dotted", color = "forestgreen", size = 1, alpha = 0.6) +  # P4
+        ggtitle(paste("Rolling Deviations", DV, "Plot")) +
+        xlab("Cycle Day (10% bins)") + ylab(paste(DV, "Rolling Deviation Mean")) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5, size = 14),
+              plot.margin = margin(15, 5, 50, 5)) +
+        coord_cartesian(clip = "off") +
+        geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf), 
+                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      
+      # Plot the data
+      print(p4)
+                  ggsave(filename = paste0(output_folder, "/", DV, "_", "rolld", ".png"), plot = last_plot(), width = 8, height = 6)
+
+    }
+  }
+}
+
+# Define the folder location for saving the plots
+#output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03"
+
+
+#plot_DVs(outcomelist, df)
+
+
+
+
+
+```
+
+# 2024-09-25 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
+
+```{r warning=TRUE}
+
+# Load necessary libraries
+library(dplyr)   # Data manipulation
+library(ggplot2) # Plotting
+library(rlang)   # Symbolic programming utilities
+library(here)    # Constructing file paths
+
+# Define the function to generate plots for a list of DVs
+# Args:
+#   dv_list: A named vector of dependent variables (DVs) to be plotted.
+#   df: A data frame containing the data for analysis and plotting.
+#   output_folder: The folder path where the generated plots should be saved.
+plot_DVs_M2M <- function(dv_list, df, output_folder) {
+  
+  # Create person-standardized (z-scored within each participant) versions of each DV
+  for (DV in dv_list) {
+    zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
+    
+    # Add the person-standardized columns for each DV
+    df <- df %>%
+      group_by(id) %>%
+      mutate(!!zd_var := scale(!!sym(DV), center = TRUE, scale = TRUE)) %>%
+      ungroup()
+  }
+  
+  # Calculate person-rescaled E2 and P4 (scaled within each person, sd = 0.5)
+  # This transformation helps in visual comparison by keeping the SD consistent across participants
+  df <- df %>%
+    group_by(id) %>%
+    mutate(E2.rescale = scale(E2, center = TRUE, scale = (sd(E2, na.rm = TRUE)*1.75)),
+           P4.rescale = scale(P4, center = TRUE, scale = (sd(P4, na.rm = TRUE)*1.75))) %>%
+    ungroup()
+  
+  # Indicators for menstrual bleeding (static values for highlighting cycle day range)
+  bleeding_indicator <- data.frame(xmin = 0, xmax = 0.2, ymin = -Inf, ymax = Inf)
+  
+  # Loop through each DV to generate plots
+  for (DV in dv_list) {
+    # Get the label for the DV from dv_list
+    DV_label <- names(dv_list)[which(dv_list == DV)]
+    
+    # Calculate mean and standard error for the raw dependent variable
+    dv <- df %>%
+      group_by(cycledayov_10perc) %>%
+      summarise(mean_value = mean(!!sym(DV), na.rm = TRUE),
+                se_value = sd(!!sym(DV), na.rm = TRUE) / sqrt(n()))  # SE calculation
+    
+    # Calculate mean and standard error for the person-z-scored outcome (zd)
+    zd_var <- paste0(DV, ".zd")
+    dv_zd <- df %>%
+      group_by(cycledayov_10perc) %>%
+      summarise(mean_value = mean(!!sym(zd_var), na.rm = TRUE),
+                se_value = sd(!!sym(zd_var), na.rm = TRUE) / sqrt(n()))  # SE calculation
+    
+    # Generate plot for the person-standardized outcome (zd)
+p3 <- ggplot(dv_zd, aes(x = cycledayov_10perc, y = mean_value)) +
+  # Plotting the mean values for the person-standardized outcome with LOESS smoothing
+  geom_smooth(method = "loess", span = .7, size = 1.5, se = FALSE, color = "black") +  # Use geom_smooth for the main DV with CI
+  # Plotting the rescaled E2 and P4 values with LOESS smoothing
+  geom_smooth(data = df, aes(x = cycledayov_10perc, y = E2.rescale, color = "E2"), method = "loess", span = 0.5, 
+              linetype = "dashed", size = 1, alpha = 0.9, se = FALSE) +
+  geom_smooth(data = df, aes(x = cycledayov_10perc, y = P4.rescale, color = "P4"), method = "loess", span = 0.5, 
+              linetype = "dashed", size = 1, alpha = 0.8, se = FALSE) +
+  # Manual color settings for different lines in the plot
+  scale_color_manual(values = c("E2" = "forestgreen", "P4" = "red")) +
+  # Set axis labels and plot title
+  xlab("Cycle Day (10% bins)") + ylab(paste("Smoothed Person-Z-Scored", DV_label)) +
+  # Apply minimal theme for cleaner look
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+        plot.margin = margin(15, 5, 50, 5),
+        legend.title = element_blank(),
+        legend.position = "right") +
+  coord_cartesian(clip = "off") +
+  ggtitle(label=DV_label)+
+  # Highlight menstrual bleeding days with a red rectangle
+  geom_rect(data = bleeding_indicator, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), 
+            fill = "red", alpha = 0.2, inherit.aes = FALSE)
+
+# Print the plot to the graphics device
+print(p3)
+    
+    # Save the plot to the specified output folder
+    ggsave(filename = file.path(output_folder, paste0(DV, "_", "ov_zd_noSE", ".png")), plot = p3, width = 8, height = 6)
+  }
+}
+
+
+
+# Define the folder location for saving the plots
+# Define the folder location for saving the plots
+
+#output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10"
+
+# Call the function with the dataframe and output folder
+#plot_DVs_M2M(dv_list, df, output_folder)
+
+```
+
 

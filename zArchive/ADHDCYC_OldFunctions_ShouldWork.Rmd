@@ -1,0 +1,177 @@
+---
+title: "ADHDCYC_OldFunctions_ShouldWork"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+# plot_participant_data(): Function to plot participant data with hormones and clinical outcome 
+
+```{r PERSON-PLOT, warning=FALSE}
+
+plot_participant_data <- function(df, id, outcome_var, outcome_label, output_dir) {
+  df <- ungroup(df)
+  if (!is.null(df$id)) {
+    df$id <- as.numeric(as.character(df$id))
+  } else {
+    stop("Column 'id' not found in the dataset")
+  }
+  id <- as.numeric(id)
+  participant_data <- df %>% filter(id == id)
+  if (nrow(participant_data) == 0) {
+    stop(paste("No df available for participant ID:", id))
+  }
+  participant_data$daterated <- as.Date(participant_data$daterated, format = "%m/%d/%Y")
+  if (all(is.na(participant_data$daterated))) {
+    stop("Error: daterated column could not be converted to Date type")
+  }
+  participant_data$date_numeric <- as.numeric(participant_data$daterated - min(participant_data$daterated, na.rm = TRUE))
+  non_na_counts <- participant_data %>%
+    summarise(across(c(E2, P4, LH, !!sym(outcome_var)), ~sum(!is.na(.))), total_days = n())
+  safe_scale <- function(x) {
+    if (all(is.na(x)) || length(unique(x)) == 1) return(rep(0, length(x)))
+    as.vector(scale(x))
+  }
+  participant_data <- participant_data %>%
+    mutate(across(c(E2, P4, LH, !!sym(outcome_var)), 
+                  list(z = ~safe_scale(.), z_roll = ~rollapply(safe_scale(.), 3, mean, fill = NA, align = "center")),
+                  .names = "{.col}_{.fn}")) %>%
+    mutate(across(ends_with("_z_roll"), list(d = ~c(NA, diff(.))), .names = "{.col}_{.fn}"))
+  safe_cor <- function(x, y) {
+    if (all(is.na(x)) || all(is.na(y)) || length(unique(x)) == 1 || length(unique(y)) == 1) return(NA)
+    cor(x, y, use = "pairwise.complete.obs")
+  }
+  corr_E2 <- safe_cor(participant_data$E2_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_P4 <- safe_cor(participant_data$P4_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_LH <- safe_cor(participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  corr_dE2 <- safe_cor(participant_data$E2_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  corr_dP4 <- safe_cor(participant_data$P4_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  corr_dLH <- safe_cor(participant_data$LH_z_roll_d, participant_data[[paste0(outcome_var, "_z_roll_d")]])
+  mondays <- participant_data$date_numeric[wday(participant_data$daterated) == 2]
+  all_y_values <- c(participant_data$P4_z_roll, participant_data$E2_z_roll, 
+                    participant_data$LH_z_roll, participant_data[[paste0(outcome_var, "_z_roll")]])
+  min_date <- min(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
+  max_date <- max(participant_data$date_numeric[!is.na(participant_data$date_numeric)])
+  if (is.infinite(min_date) || is.infinite(max_date) || is.na(min_date) || is.na(max_date)) {
+    stop("Error: 'min_date' or 'max_date' is invalid")
+  }
+
+  p <- ggplot(participant_data, aes(x = date_numeric)) +
+    geom_line(aes(y = P4_z_roll, color = "P4"), linewidth = 1) +
+    geom_point(aes(y = P4_z_roll), color = "#D62728", size = 3) +
+    geom_line(aes(y = E2_z_roll, color = "E2"), linewidth = 1) +
+    geom_point(aes(y = E2_z_roll), color = "#1F77B4", size = 3) +
+    geom_line(aes(y = LH_z_roll, color = "LH"), linewidth = 1) +
+    geom_point(aes(y = LH_z_roll), color = "#2CA02C", size = 3) +
+    geom_line(aes(y = .df[[paste0(outcome_var, "_z_roll")]], color = "Clinical Outcome"), linewidth = 2) +
+    geom_vline(xintercept = mondays, color = "gray", linetype = "dashed", alpha = 0.5) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+    scale_color_manual(values = c("P4" = "#D62728", "E2" = "#1F77B4", "LH" = "#2CA02C", "Clinical Outcome" = "black")) +
+    labs(title = paste("Menstrual Cycle Hormones and", outcome_label,"for Participant", id),
+         x = "Date", y = paste(outcome_label, "\nZ-scored, 3d Rolling Avg"), color = "Legend") +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 14, face = "bold"), axis.title = element_text(size = 12),
+          axis.text = element_text(size = 10), legend.title = element_blank(), legend.text = element_text(size = 10),
+          legend.position = "right", legend.box = "horizontal", legend.margin = margin(0, 0, 10, 0),
+          plot.margin = margin(10, 10, 30, 10)) +
+    scale_x_continuous(breaks = seq(min_date, max_date, by = 3),
+                       labels = format(min(participant_data$daterated) + seq(min_date, max_date, by = 3), "%b %d"),
+                       limits = c(min_date, max_date), expand = c(0.02, 0)) +
+    scale_y_continuous(limits = c(min(all_y_values[is.finite(all_y_values)], na.rm = TRUE) - 1,
+                                  max(all_y_values[is.finite(all_y_values)], na.rm = TRUE) + 1), expand = c(0.1, 0.1))
+
+  mens_dates <- participant_data$date_numeric[participant_data$mensdayonefirst == 1]
+  LH_dates <- participant_data$date_numeric[participant_data$LHposdayfirst == 1]
+
+  for (date in mens_dates) {
+    p <- p + annotate("rect", xmin = date, xmax = date + 4, ymin = -Inf, ymax = Inf, fill = "pink", alpha = 0.3)
+  }
+  for (date in LH_dates) {
+    p <- p + annotate("rect", xmin = date, xmax = date + 1, ymin = -Inf, ymax = Inf, fill = "#2CA02C", alpha = 0.3)
+  }
+
+  min_y <- min(all_y_values[is.finite(all_y_values)], na.rm = TRUE)
+  if (is.infinite(min_y) || is.na(min_y)) min_y <- -1
+  min_y <- min_y - 0.5
+
+  p <- p +
+    geom_point(df = df.frame(x = mens_dates, y = rep(min_y, length(mens_dates))),
+               aes(x = x, y = y), color = "#D62728", shape = 17, size = 4) +
+    geom_point(df = df.frame(x = LH_dates, y = rep(min_y, length(LH_dates))),
+               aes(x = x, y = y), color = "#2CA02C", shape = 17, size = 4)
+
+  format_corr <- function(corr) {
+    if (is.na(corr)) return("N/A")
+    return(sprintf("%.2f", corr))
+  }
+
+  correlation_text <- sprintf(
+    "Bivariate Correlations with %s:\nlevP4: r=%s, derP4: r=%s, levE2: r=%s, derE2: r=%s, levLH: r=%s, derLH: r=%s.",
+    outcome_label, format_corr(corr_P4), format_corr(corr_dP4), format_corr(corr_E2),
+    format_corr(corr_dE2), format_corr(corr_LH), format_corr(corr_dLH)
+  )
+
+  nonmissing_text <- sprintf(
+    "Available df for this Participant:\nP4=%d, E2=%d, LH=%d, %s=%d out of %d days.",
+    non_na_counts$P4, non_na_counts$E2, non_na_counts$LH, outcome_label, 
+    non_na_counts[[outcome_var]], non_na_counts$total_days
+  )
+
+  predictors <- c("P4_z_roll", "P4_z_roll_d", "E2_z_roll", "E2_z_roll_d")
+  valid_predictors <- predictors[sapply(predictors, function(var) {
+    sum(!is.na(participant_data[[var]])) > 1 && sd(participant_data[[var]], na.rm = TRUE) > 0
+  })]
+
+  predictor_labels <- c("P4_z_roll" = "levP4", "P4_z_roll_d" = "derP4",
+                        "E2_z_roll" = "levE2", "E2_z_roll_d" = "derE2")
+
+  reg_text <- "Regression results: Not enough valid df for regression."
+  if (length(valid_predictors) > 0) {
+    formula_str <- paste(outcome_var, "~", paste(valid_predictors, collapse = " + "))
+    model <- lm(as.formula(formula_str), df = participant_data)
+    model_summary <- summary(model)
+    if (!is.null(model_summary$coefficients) && nrow(model_summary$coefficients) > 0) {
+      coef_info <- model_summary$coefficients
+      format_coef <- function(coef, p_val) {
+        if (is.na(p_val)) return(sprintf("%.2f (NA)", coef))
+        if (p_val < 0.001) return(sprintf("%.2f***", coef))
+        if (p_val < 0.01) return(sprintf("%.2f**", coef))
+        if (p_val < 0.05) return(sprintf("%.2f*", coef))
+        if (p_val < 0.15) return(sprintf("%.2f+", coef))
+        return(sprintf("%.2f", coef))
+      }
+      reg_text <- paste(
+        "Regression results:",
+        paste(sapply(valid_predictors, function(var) {
+          label <- predictor_labels[[var]]
+          if (var %in% rownames(coef_info)) {
+            sprintf("%s: %s", label, format_coef(coef_info[var, "Estimate"], coef_info[var, "Pr(>|t|)"]))
+          } else {
+            sprintf("%s: N/A", label)
+          }
+        }), collapse = ", "),
+        sep = "\n"
+      )
+    }
+  }
+
+  combined_text <- paste(nonmissing_text, correlation_text, reg_text, sep = "\n")
+  print(combined_text)
+  text_grob <- textGrob(combined_text, x = 0.05, y = 0.5, just = "left", gp = gpar(fontsize = 9))
+  final_plot <- arrangeGrob(p, text_grob, ncol = 1, heights = c(4, 1))
+  grid.newpage()
+  grid.draw(final_plot)
+  ggsave(filename = file.path(output_dir, paste0("participant_", id, "_", outcome_var, "_hormplot.png")),
+         plot = final_plot, width = 12, height = 8, units = "in")
+  grid.draw(final_plot)
+}
+
+#TEST
+
+#dailydir <- '/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - df Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024_07_09'
+
+#plot_participant_data(df, 208, 'CSS_Fx_Total', "CSS Functional Impact", dailydir)
+
+
+```

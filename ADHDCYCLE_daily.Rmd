@@ -9,59 +9,279 @@ output:
 date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 ---
 
+# ---------------------------------------------------------------------------------- CACHED CHUNKS
+
+# ---- Store Functions ----
+Instructions: Please keep these chunks minimized when not in use. 
+
+## standardize_index_names(): Function to standardize index variable names
+- Inputs: Dataframe with misformatted "ID" or "date_rated" variables
+- Outputs: @id and @daterated
+#TODO: add hormones and other variables here, need to make it more flexible to pick up on other options
+```{r standardize_index_names, cache=TRUE}
+standardize_index_names <- function(df) {
+    df %>%
+        rename_with(~ gsub("([Dd]ate.?rated|daterated)", "daterated", .), # Standardize daterated column names
+                    matches("date|daterated")) %>% # Match date or daterated in the column name
+        rename_with(~ gsub("([Ii][Dd])", "id", .), matches("ID|id")) # Standardize id column names
+}
+
+```
+
+## count_rows_ids Function to count rows and unique ids
+- Inputs: Any Dataframe with @id variable
+- Outputs: Number of rows in the dataset, number of unique id values, and a list of unique id values
+```{r count_rows_ids, cache=TRUE}
+
+count_rows_ids <- function(df) {
+  cat("Number of rows: ", nrow(df), "\n")
+  cat("Number of unique ids: ", n_distinct(df$id), "\n")
+  
+  # Get a list of unique IDs in the dataset
+  id_list <- unique(df$id)
+
+  # Print the number of unique IDs and the list of unique IDs in a sentence
+  cat("The id values are:", "\n", "\n", paste(id_list, collapse = ", "), "\n", "\n")
+}
+
+```
+
+## print.variable.names() Function to print variable names
+- Inputs: Any Dataframe
+- Outputs: Names of all variables in the dataset
+```{r print.variable.names, cache=TRUE}
+print.variable.names <- function(df) {
+  variable_names <- names(df)
+  formatted_list <- paste(variable_names, collapse = ", ")
+cat("-------- Names of variables in the raw dataset --------   ", formatted_list)
+}
+
+```
+
+## create.person.metrics() Function to calculate person-level metrics for a given variable
+- Inputs: @df dataset, @alldailyvars list, @id id variable
+- Outputs: Dataframe with person-level metrics for the specified variable including: 
+-     .d, .zd, .3roll, .5roll, .d.3roll, .d.5roll, .zd.3roll, and .zd.5roll
+```{r create.person.metrics, cache=TRUE}
+
+# Create a function to calculate person-level metrics for a given variable
+create.person.metrics <- function(df, var, id) {
+  # Capture the variable name
+  var <- enquo(var)
+
+  # Create person means for the specified variable, grouped by the id
+  df <- df %>%
+    group_by({{ id }}) %>%
+    mutate(!!paste0(quo_name(var), ".m") := mean(!!var, na.rm = TRUE)) %>%
+    ungroup()
+
+  # Create person standard deviations for the specified variable, grouped by the id
+  df <- df %>%
+    group_by({{ id }}) %>%
+    mutate(!!paste0(quo_name(var), ".sd") := sd(!!var, na.rm = TRUE)) %>%
+    ungroup()
+
+  # Create person deviations from the mean for the specified variable
+  df <- df %>%
+    mutate(!!paste0(quo_name(var), ".d") := (!!var) - .data[[paste0(quo_name(var), ".m")]])
+
+  # Create person standardized values (z-scores) for the specified variable
+  df <- df %>%
+    mutate(!!paste0(quo_name(var), ".zd") := (.data[[quo_name(var)]] - .data[[paste0(quo_name(var), ".m")]]) / .data[[paste0(quo_name(var), ".sd")]])
+
+  # Return the modified dataframe with the new metrics
+  return(df)
+}
+
+```
+
+## create.rolling.avgs(): Function to create 3- and 5-day rolling averages on raw, .d, and .zd variables in alldailyvars list
+- Inputs: @df dataset, @alldailyvars list
+- Outputs: Dataframe with 3- and 5-day rolling averages for the specified variable
+```{r}
+create.rolling.avgs <- function(df, var) {
+  df %>%
+    group_by(id) %>%
+    mutate("{{var}}.3roll" := rollapply({{var}}, 3, function(x) mean(x, na.rm = TRUE), align="center", fill=NA, partial=TRUE), 
+           "{{var}}.5roll" := rollapply({{var}}, 5, function(x) mean(x, na.rm = TRUE), align="center", fill=NA, partial=TRUE))
+}
+```
 
 
+# ---- Store Global Lists of final variable names and labels ----
+- Create Lists of Variables for Analysis
+-   @dv_list: List of dependent variables for analysis
+-   @hormlist: List of hormone variables for analysis
+-   @alldailyvars: dv_list and hormlist combined
 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
-# NOTE: Decomposed into various pipeline files on 2024-10-17, do not use this file. 
+```{r make lists, cache=TRUE}
+
+dv_list <- c(
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count",
+  "DRSP_1",
+  "DRSP_2",
+  "DRSP_3",
+  "DRSP_4",
+  "DRSP_5",
+  "DRSP_6",
+  "DRSP_7",
+  "DRSP_8",
+  "DRSP_9",
+  "DRSP_10",
+  "DRSP_11",
+  "DRSP_12",
+  "DRSP_13",
+  "DRSP_14",
+  "DRSP_15",
+  "DRSP_16",
+  "DRSP_17",
+  "DRSP_18",
+  "DRSP_19",
+  "DRSP_20",
+  "DRSP_21",
+  "DRSP_22",
+  "DRSP_23"
+) %>% noquote()
 
 
+# Rename the variables based on DRSP items
+# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
+names(dv_list) <- c(
+  "Inattention Sx", 
+  "Hyperactivity/Imp Sx", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Resp Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyp/Imp Sx Count",
+  "Depressed Mood", # DRSP_1
+  "Hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Incr Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloat/Wt Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Imp", 
+  "Relational Imp"
+)
+
+# Rename the variables based on DRSP items
+names(dv_list) <- c(
+  "Depressed Mood", # DRSP_1
+  "hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Increased Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloating/Weight Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Impairment", 
+  "Relational Impairment",
+  "Inattention Symptoms", 
+  "Hyperactivity/Impulsivity Symptoms", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Response Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyperactivity/Impulsivity Sx Count"
+)
+
+hormlist <- c(
+  "E2",
+  "P4",
+  "LH"
+) %>% noquote()
+
+#Create another list that combines both dv_list and hormlist above
+alldailyvars <- c(dv_list, hormlist) %>% noquote()
+```
 
 
+# ---------------------------------------------------------------------------------- SETUP
 
-
-
-
-
-
-
-
-
-
-
-
-```{r Setup}
+# ---- Load Packages (no cache) ----
+```{r packages, warning=FALSE}
 
 # ---- Global Chunk Options and Settings ----
 
-knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
+# Setting options for knitr to display R code in output
+knitr::opts_chunk$set(echo = TRUE)
 
-options(scipen = 999) # Turn off scientific notation
+# Prevent scientific notation in outputs
+options(scipen = 999)
 
-  # ---- Data Manipulation and Cleaning ----
-
-library(cowplot)  # Needed for draw_label function
-library(patchwork) # Needed for align_plots function
-library(htmlwidgets) # Needed for saving plotly plots as HTML
-library(htmltools) # Needed for saving plotly plots as HTML
-library(plotly) # Needed for interactive plots
+# ---- Data Manipulation and Cleaning ----
 
 # Core tidyverse libraries for data manipulation and visualization
-
+library(dplyr)       # Data manipulation (part of tidyverse)
+library(tidyr)       # Data tidying (part of tidyverse)
 library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
 library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
 library(skimr)       # Summarize and inspect data quickly
+
 
 # ---- Reading and Working with Files ----
 
@@ -70,9 +290,11 @@ library(haven)       # For reading SPSS, Stata, and SAS files
 library(readxl)      # For reading Excel files
 library(readr)       # For reading CSV and other text files
 
+
 # ---- Plotting and Visualization ----
 
 # Core and extended libraries for data visualization
+library(ggplot2)     # Core plotting library
 library(ggdist)      # Visualizing distributions and uncertainty
 library(ggforce)     # Extending ggplot2 functionality with advanced features
 library(ggrepel)     # For adding non-overlapping text labels to ggplot2
@@ -82,10 +304,7 @@ library(corrplot)    # For creating correlation matrix visualizations
 library(grid)        # Base R graphics system for visual layout
 library(gridExtra)   # Arranging multiple plots in a grid
 library(see)         # Visualizing model checks and diagnostics
-library(DescTools)   # Descriptive statistics and visualization
-library(ggHoriPlot)  # Horizontal versions of common ggplot2 plots
-library(ggthemes)   # Additional themes for ggplot2
-
+library(DescTools)  # Descriptive statistics and plotting tools
 
 # ---- Time Series and Rolling Averages ----
 
@@ -109,11 +328,12 @@ library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed 
 library(mgcv)        # Fitting generalized additive models (GAMs)
 library(marginaleffects) # Tools for calculating marginal effects from regression models
 
+
 # ---- Statistical Tools ----
 
 # Libraries for specific statistical methods
-library(psych)       # Descriptive statistics and psychometrics
-library(GPArotation) # Factor analysis rotations (e.g., Varimax)
+#library(psych)       # Descriptive statistics and psychometrics
+#library(GPArotation) # Factor analysis rotations (e.g., Varimax)
 library(rmcorr)      # Repeated measures correlations
 #library(MASS)        # Functions for statistical methods, e.g., Mahalanobis distance
 library(careless)    # Detecting careless responses in surveys
@@ -125,78 +345,54 @@ library(responsePatterns) # Analyzing response patterns in data
 # Libraries for project and version control management
 library(usethis)     # Simplifies setting up GitHub repositories and managing projects
 library(gitcreds)    # Managing Git credentials for GitHub interactions
-library(renv)        # Manages dependencies for reproducible environments
-library(targets)     # Workflow management for reproducible research pipelines
+#library(renv)        # Manages dependencies for reproducible environments
+#library(targets)     # Workflow management for reproducible research pipelines
+```
+
+# ---- Check for Package Conflicts and Declare Preferences (no cache) ----
+```{r package conflicts, warning=FALSE}
+library(conflicted) # Managing conflicts between package namespaces
+
+conflict_scout() # Check for conflicts between package namespaces
+
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(tidyr::complete)
+conflicts_prefer(dplyr::lag)
+```
+
+# ---- Setup ----
+- Turns of Scientific Notation
+- Saves 'current_date' as a string in YYYYMMDD format
+- Sets the number of digits (3) to display in output
+- Sets the 'output_folder' as path to the output folder for saving files
+```{r setup}
+
+knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
+options(scipen = 999) # Turn off scientific notation
+options(digits = 3) # Set number of digits to display
+current_date <- format(Sys.Date(), "%Y%m%d")  # Produces date as YYYYMMDD
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/"
 
 ```
-           
-           
 
-```{r}
 
-# ---- Load Data ----
+# ---------------------------------------------------------------------------------- DATA PREPARATION AND CLEANING
+
+# ---- Load Raw Data (save it as both rawdf and df) ----
+```{r load data, message=FALSE, warning=FALSE}
 
 # Load your CSV file (adjust the path to your actual file location)
 
-df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") # Change the path to your file
+rawdf <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") # Change the path to your file
 
-#skim(df)
-#View(df)
-
-
-# Print Variable Names
-
-variable_names <- names(df)
-formatted_list <- paste(variable_names, collapse = ", ")
-cat(formatted_list)
-
+df<-rawdf
 ```
 
-
-
-
-```{r}
-
-# ---- Data Preprocessing ----
-# Convert date_rated to Date format using lubridate if necessary (ensure date format matches)
-df <- df %>%
-  mutate(date_rated = as.Date(mdy(date_rated)))  # If in mm/dd/yyyy format
-
-# Remove rows where all values are NA
-df <- df[rowSums(is.na(df)) != ncol(df), ]
-
-# Remove rows with NA in key columns (e.g., id, date_rated)
-df <- df %>%
-  filter(!is.na(id), !is.na(date_rated))
-
-# Display number of rows after cleaning
-cat("Number of rows after cleaning: ", nrow(df), "\n")
-
-# Sort by id and date_rated
-df <- df %>%
-  arrange(id, date_rated)
-
-
-# ---- Hard-Coded Fixes ----
-# Example of hard-coding changes based on manual review
-df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
-
-# Fix date issues for participant 210
-df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
-df$date_rated[df$id == 210 & df$date_rated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
-
-
-# ---- Placeholder for Missing Dates ----
-df <- df %>%
-  group_by(id) %>%
-  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
-  ungroup()
-
-# Display the number of rows after adding placeholders
-cat("Number of rows after adding placeholders: ", nrow(df), "\n")
-
-
-# ---- Rename Hormone Columns ----
+# ---- Standardize Variable Names ----
+- This includes standardizing the names of the index variables (id and daterated)
+- Also includes renaming to E2, P4, CSS_Inatt_Count, CSS_Hyp_Count, and CSS_Imp_Count
+```{r renaming variables}
+standardize_index_names(df)
 df <- df %>%
   rename(
     E2 = Estradiol,
@@ -204,31 +400,78 @@ df <- df %>%
     CSS_Inatt_Count = IA_Count, 
     CSS_Hyp_Count = Hyp_Count, 
     CSS_Imp_Count = Imp_Count)
-
-
-
-
 ```
+
+# ---- Sort df by id and daterated ----
+```{r sort df}
+df <- df %>%
+  arrange(id, daterated)
+```
+
+# ---- Add Placeholder for Missing Dates ----
+
+```{r add-placeholder-days}
+
+# Display the number of rows BEFORE adding placeholders
+cat("Before adding placeholder dates, this is the number of rows: ", nrow(df), "\n")
+
+df <- df %>%
+  group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated), max(daterated), by = "day")) %>%
+  ungroup()
+
+# Display the number of rows after adding placeholders
+cat("Placeholder dates added (i.e., added blank lines for days when there were no surveys but the participant was in the study). AFTER adding placeholder dates, this is the number of rows: ", nrow(df), "\n")
+```
+
+# ---- Removing rows with NA for all, for id, or for daterated  ----
+```{r removing NAs}
+# Remove rows where all values are NA
+df <- df[rowSums(is.na(df)) != ncol(df), ]
+
+# Remove rows with NA in key columns (e.g., id, daterated)
+df <- df %>%
+  filter(!is.na(id), !is.na(daterated))
+```
+
+# ---- Setting Variable Formats  ----
+- Convert daterated to Date format using lubridate if necessary (ensure date format matches)
+```{r updating formats, include=TRUE}
+
+# Convert daterated to Date format using lubridate if necessary (ensure date format matches)
+df <- df %>%
+  mutate(daterated = as.Date(mdy(daterated)))  # If in mm/dd/yyyy format
+```
+
+# ---- Hard-Coded Fixes ----
+```{r hard-coded-changes}
+# Hard-coding changes based on manual review
+
+df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
+# Fix date issues for participant 210
+df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
+df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
+
 
 
 # Add in missing menses onset dates from Urveesha
-<!-- Calculated menses onset (although almost all of these are recorded in the tracking sheet? Not sure why missing): -->
-<!-- 206 - 4/25/21 -->
-<!-- 208 - 2/27/21 -->
-<!-- 209 - 2/15/21 -->
-<!-- 255- 7/2/22 -->
-<!-- 258 - 7/11/22 -->
-<!-- 270 - 9/4/22 -->
-<!-- 279 - 10/27/22 -->
-<!-- 290 - 2/21/23 -->
-<!-- 291 - 2/10/23 -->
-<!-- 293 - 2/3/23 -->
-<!-- 312 - 7/4/23 -->
-<!-- 331 - 1/3/24 -->
-<!-- 332 - 1/21/24     -->
-```{r}
+# <!-- Calculated menses onset (although almost all of these are recorded in the tracking sheet? Not sure why missing): -->
+# <!-- 206 - 4/25/21 -->
+# <!-- 208 - 2/27/21 -->
+# <!-- 209 - 2/15/21 -->
+# <!-- 255- 7/2/22 -->
+# <!-- 258 - 7/11/22 -->
+# <!-- 270 - 9/4/22 -->
+# <!-- 279 - 10/27/22 -->
+# <!-- 290 - 2/21/23 -->
+# <!-- 291 - 2/10/23 -->
+# <!-- 293 - 2/3/23 -->
+# <!-- 312 - 7/4/23 -->
+# <!-- 331 - 1/3/24 -->
+# <!-- 332 - 1/21/24     -->
+
 # Convert the dates to Date format
-df[["date_rated"]] <- as.Date(df[["date_rated"]], format = "%m/%d/%y")
+df[["daterated"]] <- as.Date(df[["daterated"]], format = "%m/%d/%y")
 
 # Define a vector of IDs and their corresponding menses onset dates
 menses_onset_data <- data.frame(
@@ -240,76 +483,36 @@ menses_onset_data <- data.frame(
 
 # Update StartPeriod in df for these ID and date combinations
 for (i in 1:nrow(menses_onset_data)) {
-  df[["StartPeriod"]][df[["id"]] == menses_onset_data$id[i] & df[["date_rated"]] == menses_onset_data$onset_date[i]] <- 1
+  df[["StartPeriod"]][df[["id"]] == menses_onset_data$id[i] & df[["daterated"]] == menses_onset_data$onset_date[i]] <- 1
 }
+```
 
-# Optional: Check the updated data
-df[df[["StartPeriod"]] == 1, c("id", "date_rated", "StartPeriod")]
+# ---- Set E2, P4, LH to NA for patients with unusable hormone data (based on Tory and Ashley Eng inspection of salivary E2 and P4) ----
+- Note that their raw data can still be accessed in @rawdf
+- The variable @removed_from_horm_analysis is created and set to 1 for all observations from these IDs
+```{r}
+# List of IDs whose hormone data should be flagged for missingness due to poor quality
+
+badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
+
+# Add a new binary column `remove_from_horm_analysis` to flag the IDs
+
+df <- df %>%
+  mutate(removed_from_horm_analysis = ifelse(id %in% badhorm_ids, 1, 0))
+
+# For these ids, set variables E2 and P4 to missing
+df <- df %>%
+  mutate(E2 = ifelse(id %in% badhorm_ids, NA, E2),
+         P4 = ifelse(id %in% badhorm_ids, NA, P4),
+         LH = ifelse(id %in% badhorm_ids, NA, LH))
 
 ```
 
-
-#Using IA_Count (as a known measure of more sx) to check direction of variable coding
-
-```{r}
-
-#---- Checking BDEFS WM - Yes, higher is more sx r=.66 ----
-cor(df$CSS_Inatt_Count, df$BDEFS_WM_avg, use="pairwise.complete.obs")
-
-#---- Checking BDEFS RI - Yes, higher is more sx r=.57----
-cor(df$CSS_Inatt_Count, df$BDEFS_RI_avg, use="pairwise.complete.obs")
-
-#---- Checking RAW BDEFS  - Yes, higher is more sx for all ----
-cor(df$CSS_Inatt_Count, df$BDEFS_3, use="pairwise.complete.obs")
-
-#---- Checking UPPS raw variables - Yes, higher is more sx for all UPPS vars (incl 7 and 8) ----
-cor(df$CSS_Inatt_Count, df$UPPS_15, use="pairwise.complete.obs")
-
-#---- Checking DEBQ_avg - Yes, higher is more sx r=.28----
-cor(df$CSS_Inatt_Count, df$DEBQ_avg, use="pairwise.complete.obs")
-
-#---- Checking DRSP - Yes, higher is more sx ----
-cor(df$CSS_Inatt_Count, df$DRSP_1, use="pairwise.complete.obs")
-
-#---- Checking score_robot - NO, higher is lower sx, so we will recode ----
-cor(df$CSS_Inatt_Count, df$score_robot, use="pairwise.complete.obs")
-
-#---- Checking score_pinball - NO, higher is lower sx, so we will recode ----
-cor(df$CSS_Inatt_Count, df$score_pinball, use="pairwise.complete.obs")
-```
-#Notes re: how existing variables were coded --- but I'm not sure this is actually what was used because names don't match up 
-<!-- **************************************. -->
-<!-- Original Syntax by: Ashley Eng. -->
-<!-- **************************************. -->
-<!-- COMPUTE CSS_B_TotalIASymp=CSS_B_1 + CSS_B_3 + CSS_B_5 + CSS_B_7 + CSS_B_9 + CSS_B_11 + CSS_B_13 +  -->
-<!--     CSS_B_15 + CSS_B_17. -->
-<!-- VARIABLE LABELS CSS_B_TotalIASymp 'items 1, 3, 5, 7, 9. 11. 13. 15 .17'.  -->
-<!-- EXECUTE. -->
-<!-- COMPUTE CSS_B_TotalHISymp=CSS_B_2 + CSS_B_4 + CSS_B_6 + CSS_B_8 + CSS_B_10 + CSS_B_12 + CSS_B_14 +  -->
-<!--     CSS_B_16 + CSS_B_18. -->
-<!-- VARIABLE LABELS CSS_B_TotalHISymp 'items 2 4 6 8 10 12 14 16 18'.  -->
-<!-- EXECUTE. -->
-<!-- COMPUTE CSS_TotalFunction=CSS_Function_1 + CSS_Function_2 + CSS_Function_3 + CSS_Function_4 + CSS_Function_5 + CSS_Function_6 + CSS_Function_7 +  -->
-<!--     CSS_Function_8 + CSS_Function_9 + CSS_Function_10. -->
-<!-- EXECUTE. -->
-<!-- COMPUTE CSS_B2_Total=CSS_B2_1 + CSS_B2_2 + CSS_B2_3 + CSS_B2_4 + CSS_B2_5 + CSS_B2_6 + CSS_B2_7 +  -->
-<!--     CSS_B2_8. -->
-<!-- EXECUTE. -->
-<!-- COMPUTE DEBQ_Total=DEBQ_1 + DEBQ_2 + DEBQ_3 + DEBQ_4 + DEBQ_5 + DEBQ_6 + DEBQ_7 + DEBQ_8 + DEBQ_9 +  -->
-<!--     DEBQ_10 + DEBQ_11 + DEBQ_12 + DEBQ_13. -->
-<!-- EXECUTE. -->
-<!-- COMPUTE BDEFS_Total=BDEFS_1 + BDEFS_2 + BDEFS_3 + BDEFS_4 + BDEFS_5 + BDEFS_6. -->
-<!-- EXECUTE. -->
-<!-- RECODE UPPS_7 UPPS_8 (1=4) (2=3) (3=2) (4=1). -->
-<!-- EXECUTE. -->
-<!-- COMPUTE UPPS_Total=UPPS_1 + UPPS_2 + UPPS_3 + UPPS_4 + UPPS_5 + UPPS_6 + UPPS_7 + UPPS_8 + UPPS_9 +  -->
-<!--     UPPS_10 + UPPS_11 + UPPS_12 + UPPS_13 + UPPS_14 + UPPS_15. -->
-<!-- VARIABLE LABELS UPPS_Total 'After recoding items 7 and 8'. -->
-<!-- EXECUTE. -->
-
-
-```{r}
 # ---- Calculate ADHD, UPPS, BDEFS, and DEBQ Scores ----
+- reverse code pinball and robot
+- Score ADHD, UPPS, and BDEFS Scales
+#TODO add UPPS subscales here
+```{r score-rename-scales}
 
 df <- df %>%
   group_by(id) %>%
@@ -416,7 +619,6 @@ df$score_pinball <- max_pinball - df$score_pinball
 #hist(df$BDEFS_WM_avg, breaks = 10, main = "Histogram of BDEFS_WM_avg", xlab = "BDEFS_WM_avg", col = "lightblue")
 #hist(df$BDEFS_RI_avg)
 
-
 #hist(df$DEBQ_Total, breaks = 10, main = "Histogram of DEBQ_Total", xlab = "DEBQ_Total", col = "lightblue")
 
 # Checking direction - They are all positively correlated
@@ -425,321 +627,322 @@ df$score_pinball <- max_pinball - df$score_pinball
 #cor(df$BDEFS_Total, df$BDEFS_WM_avg, use="pairwise.complete.obs")
 #cor(df$BDEFS_WM_avg, df$score_pinball, use="pairwise.complete.obs")
 #cor(df$BDEFS_RI_avg, df$score_robot, use="pairwise.complete.obs")
+```
 
+# ---- Calculate Person Metrics .d, .zd, .m, and .sd for all daily variables ----
+```{r run person metrics}
 
-# Keeping only the variables I need 
+# Loop through each variable in alldailyvars list and create person-level metrics
 
-df <- df[, c("id", "date_rated", "E2", "P4", "LH", "StartPeriod", "PosLHTest", "TubeNumber",
-  "DEBQ_avg", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_Imp_Count", "CSS_Hyp_Count", "CSS_HypImp_Count", "CSS_Fx_Total",
-  "BDEFS_WM_avg", "BDEFS_RI_avg", "BDEFS_Total", "UPPS_NU_avg", 
-  "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "DEBQ_Total", "score_pinball", "score_robot", "DRSP_1", "DRSP_2", "DRSP_3", 
-  "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", 
-  "DRSP_16", "DRSP_17", "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", 
-  "DRSP_22", "DRSP_23")]
-
-
-
-# Print Variable Names
-
-variable_names <- names(df)
-formatted_list <- paste(variable_names, collapse = ", ")
-cat(formatted_list)
+for (var in alldailyvars) {
+  df <- create.person.metrics(df=df, var = !!sym(var), id = id)
+}
 
 ```
 
+# ---- Calculate 3- and 5-day Rolling averages on raw, .d, .zd for all daily variables ----
 
-## create outcome lists to loop through functions
-```{r echo=T}
+```{r run rolling avgs}
 
-#person-centered deviations
-outcomelist <- c(
-  "E2",
-  "P4",
-  "LH",
-  "CSS_Fx_Total",
-  "CSS_Inatt",
-  "CSS_HypImp",
-  "CSS_Inatt_Count",
-  "CSS_Hyp_Count",
-  "CSS_Imp_Count",
-  "CSS_HypImp_Count",
-  "score_pinball",
-  "score_robot",
-  "BDEFS_Total",
-  "BDEFS_WM_avg",
-  "BDEFS_RI_avg",
-  "UPPS_NU_avg",
-  "UPPS_PU_avg",
-  "UPPS_Premed_avg",
-  "UPPS_Persev_avg",
-  "UPPS_Sens_avg",
-  "DEBQ_Total",
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23"
-) %>% noquote()
+# Loop through each variable and create 3- and 5-day rolling averages for each RAW variable in alldailyvars
 
-# person-centered deviations
-outcomelist.d <- c(
-  "E2.d",
-  "P4.d",
-  "LH.d",
-  "CSS_Fx_Total.d",
-  "CSS_Inatt.d",
-  "CSS_HypImp.d",
-  "CSS_Inatt_Count.d",
-  "CSS_HypImp_Count.d",
-    "CSS_Hyp_Count.d",
-  "CSS_Imp_Count.d",
-  "score_pinball.d",
-  "score_robot.d",
-  "BDEFS_Total.d",
-  "BDEFS_WM_avg.d",
-  "BDEFS_RI_avg.d",
-  "UPPS_NU_avg.d",
-  "UPPS_PU_avg.d",
-  "UPPS_Premed_avg.d",
-  "UPPS_Persev_avg.d",
-  "UPPS_Sens_avg.d",
-  "DEBQ_Total.d",
-  "DRSP_1.d", "DRSP_2.d", "DRSP_3.d", "DRSP_4.d", "DRSP_5.d", "DRSP_6.d", "DRSP_7.d", "DRSP_8.d", "DRSP_9.d", 
-  "DRSP_10.d", "DRSP_11.d", "DRSP_12.d", "DRSP_13.d", "DRSP_14.d", "DRSP_15.d", "DRSP_16.d", "DRSP_17.d", 
-  "DRSP_18.d", "DRSP_19.d", "DRSP_20.d", "DRSP_21.d", "DRSP_22.d", "DRSP_23.d") %>% noquote()
+for (var in alldailyvars) {
+  df <- create.rolling.avgs(df, var = !!sym(var))
+}
 
-# rolling averages
-outcomelist.roll <- c(
-  "E2.roll",
-  "P4.roll",
-  "LH.roll",
-  "CSS_Fx_Total.roll",
-  "CSS_Inatt.roll",
-  "CSS_HypImp.roll",
-  "CSS_Inatt_Count.roll",
-  "CSS_HypImp_Count.roll",
-    "CSS_Hyp_Count.roll",
-  "CSS_Imp_Count.roll",
-  "score_pinball.roll",
-  "score_robot.roll",
-  "BDEFS_Total.roll",
-  "BDEFS_WM_avg.roll",
-  "BDEFS_RI_avg.roll",
-  "UPPS_NU_avg.roll",
-  "UPPS_PU_avg.roll",
-  "UPPS_Premed_avg.roll",
-  "UPPS_Persev_avg.roll",
-  "UPPS_Sens_avg.roll",
-  "DEBQ_Total.roll",
-    "DRSP_1.roll", "DRSP_2.roll", "DRSP_3.roll", "DRSP_4.roll", "DRSP_5.roll", "DRSP_6.roll", "DRSP_7.roll", "DRSP_8.roll", "DRSP_9.roll", 
-  "DRSP_10.roll", "DRSP_11.roll", "DRSP_12.roll", "DRSP_13.roll", "DRSP_14.roll", "DRSP_15.roll", "DRSP_16.roll", "DRSP_17.roll", 
-  "DRSP_18.roll", "DRSP_19.roll", "DRSP_20.roll", "DRSP_21.roll", "DRSP_22.roll", "DRSP_23.roll"
-) %>% noquote()
+# Loop through each variable and create 3- and 5-day rolling averages for each .d variable in alldailyvars
+for (var in alldailyvars) {
+  # Create the .d version of the variable name
+  var.d <- paste0(quo_name(var), ".d")
+  
+  # Pass the .d version as a symbol to the function
+  df <- create.rolling.avgs(df, var = !!sym(var.d))
+}
 
+# Loop through each variable and create 3- and 5-day rolling averages for each .zd variable in alldailyvars
+for (var in alldailyvars) {
+  # Create the .zd version of the variable name
+  var.zd <- paste0(quo_name(var), ".zd")
+  
+  # Pass the .d version as a symbol to the function
+  df <- create.rolling.avgs(df, var = !!sym(var.zd))
+}
 
-dv_list <- c(
-  "DRSP_1",
-  "DRSP_2",
-  "DRSP_3",
-  "DRSP_4",
-  "DRSP_5",
-  "DRSP_6",
-  "DRSP_7",
-  "DRSP_8",
-  "DRSP_9",
-  "DRSP_10",
-  "DRSP_11",
-  "DRSP_12",
-  "DRSP_13",
-  "DRSP_14",
-  "DRSP_15",
-  "DRSP_16",
-  "DRSP_17",
-  "DRSP_18",
-  "DRSP_19",
-  "DRSP_20",
-  "DRSP_21",
-  "DRSP_22",
-  "DRSP_23",
-  "CSS_Inatt",
-  "CSS_HypImp",
-  "score_pinball",
-  "score_robot",
-  "BDEFS_Total",
-  "BDEFS_WM_avg",
-  "BDEFS_RI_avg",
-  "UPPS_NU_avg",
-  "UPPS_PU_avg",
-  "UPPS_Premed_avg",
-  "UPPS_Persev_avg",
-  "UPPS_Sens_avg",
-  "DEBQ_Total",
-  "CSS_Inatt_Count",
-  "CSS_Hyp_Count",
-  "CSS_Imp_Count",
-  "CSS_HypImp_Count"
-) %>% noquote()
+# Confirm the calculation of new metrics .d.3roll, .d.5roll, .zd.3roll, and .zd.5roll
 
-# Rename the variables based on DRSP items
-names(dv_list) <- c(
-  "Depressed Mood", # DRSP_1
-  "hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Increased Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloating/Weight Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Impairment", 
-  "Relational Impairment",
-  "Inattention Symptoms", 
-  "Hyperactivity/Impulsivity Symptoms", 
-  "Pinball Score",
-  "Robot Score",
-  "BDEFS Total",
-  "BDEFS Working Memory",
-  "BDEFS Response Inhibition",
-  "Negative Urgency",
-  "Positive Urgency",
-  "Lack of Premeditation",
-  "Lack of Perseverance",
-  "Sensation Seeking",
-  "DEBQ Total",
-  "Inattention Sx Count",
-  "Hyperactivity Sx Count",
-  "Impulsivity Sx Count",
-  "Hyperactivity/Impulsivity Sx Count"
-)
+#DONE df %>% dplyr::select(id, daterated, DRSP_1, DRSP_1.d.3roll, DRSP_1.zd.3roll) %>% View()
 
+```
 
-#View(df)
+# ---------------------------------------------------------------------------------- PRINT DATA INFO
+
+# ---- Count Rows and Unique IDs ----
+```{r count rows and ids}
+count_rows_ids(df)
+```
+
+# ---- Evaluate N's and Missing Data ----        
+```{r eval-Ns-horm-surv}
+
+# Count the total number of "Days in Study" (total observations per ID)
+df_count <- df %>%
+  group_by(id) %>%
+  summarize(days_in_study = n())
+
+# Count the number of non-missing observations per ID for the variable DRSP_1
+df_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(number_of_observations = sum(!is.na(DRSP_1)))
+
+# Count the number of non-missing observations for the variable E2
+df_e2_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(e2_nonmissing = sum(!is.na(E2)))
+
+#### Handle Outliers ONLY for "Days in Study" ####
+
+# Outlier removal for "Days in Study"
+Q1 <- quantile(df_count$days_in_study, 0.25)
+Q3 <- quantile(df_count$days_in_study, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+df_no_outliers <- df_count %>%
+  filter(days_in_study >= lower_bound & days_in_study <= upper_bound)
+
+#### Determine Y-Axis Limits ####
+y_min <- min(df_no_outliers$days_in_study, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+y_max <- max(df_no_outliers$days_in_study, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+
+#### Plots ####
+
+# Plot "Days in Study" per ID (with outliers removed)
+plot1_no_outliers <- ggplot(df_no_outliers, aes(x = factor(1), y = days_in_study, label = id)) +
+  geom_violin(fill = "lightblue", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "blue", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Days in Study", title = "Days in Study per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of Observations" for DRSP_1 (without removing outliers)
+plot2_no_outliers <- ggplot(df_nonmissing_count, aes(x = factor(1), y = number_of_observations, label = id)) +
+  geom_violin(fill = "lightgreen", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "darkgreen", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing DRSP_1)", title = "Surveys per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of non-missing E2 observations" (without removing outliers)
+plot3_no_outliers <- ggplot(df_e2_nonmissing_count, aes(x = factor(1), y = e2_nonmissing, label = id)) +
+  geom_violin(fill = "lightcoral", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "red", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing E2)", title = "Hormone Days per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Combine the three plots on one page using grid.arrange from gridExtra
+observations_plot <- grid.arrange(plot1_no_outliers, plot2_no_outliers, plot3_no_outliers, ncol = 3)
+
+# Save the combined plot to a file with the current date
+ggsave(filename = paste0(output_folder, "N_observations_plot_", current_date, ".png"), 
+       plot = observations_plot, 
+       width = 8, 
+       height = 6)
 
 
 ```
 
-```{r}
+# ---- Specific Ns for Days in Study, Survey Data, and Hormone Data ----        
+```{r data N details}
 
-#ROLLING AVGS
+# Filter the data for non-missing E2 values and count unique ids
+non_missing_E2 <- df %>%
+  filter(!is.na(E2))
 
-outcomelist <- c(
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
-  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "DEBQ_Total"
-)
+non_missing_E2_count <- n_distinct(non_missing_E2$id)
+non_missing_E2_ids <- unique(non_missing_E2$id)
 
+# Get IDs with missing E2 values
+missing_E2_ids <- setdiff(unique(df$id), non_missing_E2_ids)
 
-#create rolling averages on RAW variables
-for (i in outcomelist) {
-  df <- create.3day.rolling.avg(df, !!sym({{i}}), 3)
+# Print the result for non-missing E2 values
+cat("Number of people WITH any hormones (E2):", non_missing_E2_count, "\n")
+cat("The id values are:", "\n", paste(non_missing_E2_ids, collapse = ", "), "\n", "\n")
+
+# Print the result for missing E2 values
+cat("Number of people WITHOUT hormone data:", length(missing_E2_ids), "\n")
+cat("Their id values are:", "\n", paste(missing_E2_ids, collapse = ", "), "\n", "\n")
+cat("Of those, these ids were removed due to non-cyclic/insufficient hormone data as reviewed by Tory Eisenlohr-Moul and Ashley Eng:", "\n", paste(badhorm_ids, collapse = ", "), "\n", "\n")
+
+# Filter the data for non-missing survey values and count unique ids
+non_missing_survey <- df %>%
+  filter(!is.na(DRSP_1))
+
+non_missing_survey_count <- n_distinct(non_missing_survey$id)
+non_missing_survey_ids <- unique(non_missing_survey$id)
+
+# Get IDs with missing survey values
+missing_survey_ids <- setdiff(unique(df$id), non_missing_survey_ids)
+
+# Print the result for non-missing survey values
+cat("Number of people WITH any surveys:", non_missing_survey_count, "\n")
+cat("Their id values are:", "\n", paste(non_missing_survey_ids, collapse = ", "), "\n", "\n")
+
+# Print the result for missing survey values
+cat("Number of people WITHOUT any surveys:", length(missing_survey_ids), "\n")
+cat("Their id values are:", "\n", paste(missing_survey_ids, collapse = ", "), "\n", "\n")
+
+# Find the intersection of available hormone data and available survey data
+intersection_ids <- intersect(non_missing_E2_ids, non_missing_survey_ids)
+intersection_count <- length(intersection_ids)
+
+# Print the result for the intersection of hormone and survey data
+cat("Number of people WITH both usable hormone and any survey data:", intersection_count, "\n")
+cat("Their id values are:", "\n", paste(intersection_ids, collapse = ", "), "\n", "\n")
+
+# Count the non-missing observations of DRSP_1 and E2 for people with both hormone and survey data
+non_missing_intersection <- df %>%
+  filter(id %in% intersection_ids, !is.na(DRSP_1), !is.na(E2))
+
+non_missing_intersection_count <- nrow(non_missing_intersection)
+
+# Print the result for non-missing observations of DRSP_1 and E2
+# NOTE THAT THERE WILL BE MORE PEOPLE WITH SCALED CYCLEDAY DATA
+cat("Number of non-missing observations of DRSP_1 and E2 for people with both hormone and survey data:", non_missing_intersection_count, "\n")
+
+# Create a list of IDs with the number of days with both E2 and DRSP
+usable_days_list <- non_missing_intersection %>%
+  group_by(id) %>%
+  summarise(usable_days = n()) %>%
+  arrange(usable_days)
+
+# Print the list of IDs with the number of days in words
+cat("List of IDs with the number of days having both E2 and DRSP (sorted by number of observations ascending):", "\n")
+for (i in 1:nrow(usable_days_list)) {
+  cat("id", usable_days_list$id[i], "has", usable_days_list$usable_days[i], "hormone-survey pairs.", "\n")
 }
-
-#MEANS
-
-#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
-for (i in outcomelist.roll) {
-  df <- create.person.mean(df, !!sym({{i}}), id)
-}
-
-#execute for loop: run create.person.mean() on everything in "outcomelist"
-for (i in outcomelist) {
-  df <- create.person.mean(df, !!sym({{i}}), id)
-}
-
-#PERSON-DEVIATIONS
-
-#for raw deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist) {
-  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-#for rolling avgs deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist.roll) {
-  df <- create.deviation(df, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-
-#----- DF_ALL
-
-
-#create rolling averages on RAW variables
-for (i in outcomelist) {
-  df_all <- create.3day.rolling.avg(df_all, !!sym({{i}}), 3)
-}
-
-#MEANS
-
-#execute for loop: run create.person.mean() on everything in "outcomelist.roll"
-for (i in outcomelist.roll) {
-  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
-}
-
-#execute for loop: run create.person.mean() on everything in "outcomelist"
-for (i in outcomelist) {
-  df_all <- create.person.mean(df_all, !!sym({{i}}), id)
-}
-
-#PERSON-DEVIATIONS
-
-#for raw deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist) {
-  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-#for rolling avgs deviations
-#execute for loop: run create.deviation() on everything in list
-for (i in outcomelist.roll) {
-  df_all <- create.deviation(df_all, !!sym({{i}}), !!sym(paste0({{i}}, ".m")))
-}
-
-
-#Check 
-
-#df_all %>% dplyr::select(id, E2, E2.m, E2.d, E2.roll, E2.roll.d) %>% View()
 
 ```
 
+# ---- Plot Overlap of Available Data  ----        
+# Plot days in study, nonmissing survey observations, and E2 observations per id 
+#TODO I want to add a venn diagram here. 
+```{r N details plot, message=FALSE, warning=FALSE}
+
+# Count the total number of "Days in Study" (total observations per ID)
+df_count <- df %>%
+  group_by(id) %>%
+  summarize(days_in_study = n())
+
+# Count the number of non-missing observations per ID for the variable DRSP_1
+df_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(number_of_observations = sum(!is.na(DRSP_1)))
+
+# Count the number of non-missing observations for the variable E2
+df_e2_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(e2_nonmissing = sum(!is.na(E2)))
+
+#### Handle Outliers ONLY for "Days in Study" ####
+
+# Outlier removal for "Days in Study"
+Q1 <- quantile(df_count$days_in_study, 0.25)
+Q3 <- quantile(df_count$days_in_study, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+df_no_outliers <- df_count %>%
+  filter(days_in_study >= lower_bound & days_in_study <= upper_bound)
+
+#### Determine Y-Axis Limits ####
+y_min <- min(df_no_outliers$days_in_study, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+y_max <- max(df_no_outliers$days_in_study, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+
+#### Plots ####
+
+# Plot "Days in Study" per ID (with outliers removed)
+plot1_no_outliers <- ggplot(df_no_outliers, aes(x = factor(1), y = days_in_study, label = id)) +
+  geom_violin(fill = "lightblue", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "blue", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Days in Study", title = "Days in Study per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of Observations" for DRSP_1 (without removing outliers)
+plot2_no_outliers <- ggplot(df_nonmissing_count, aes(x = factor(1), y = number_of_observations, label = id)) +
+  geom_violin(fill = "lightgreen", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "darkgreen", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing DRSP_1)", title = "Surveys per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of non-missing E2 observations" (without removing outliers)
+plot3_no_outliers <- ggplot(df_e2_nonmissing_count, aes(x = factor(1), y = e2_nonmissing, label = id)) +
+  geom_violin(fill = "lightcoral", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "red", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing E2)", title = "Hormone Days per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Combine the three plots on one page using grid.arrange from gridExtra
+observations_plot <- grid.arrange(plot1_no_outliers, plot2_no_outliers, plot3_no_outliers, ncol = 3)
+
+# Save the combined plot to a file with the current date
+ggsave(filename = paste0(output_folder, "N_observations_plot_", current_date, ".png"), 
+       plot = observations_plot, 
+       width = 8, 
+       height = 6)
 
 
-# Print Variable Names
-```{r printvars}
+# Loop through each variable and create person-level metrics for each variable in alldailyvars
 
-variable_names <- names(df)
-formatted_list <- paste(variable_names, collapse = ", ")
-cat(formatted_list)
+for (var in alldailyvars) {
+  df <- create.person.metrics(df, var = !!sym(var), id = id)
+}
+
+#Confirm the presence of new person-level metrics .m, .sd, .d, and .zd
+
+df %>% dplyr::select(id, daterated, ends_with(".m"), ends_with(".sd"), ends_with(".d"), ends_with(".zd")) %>% View()
 ```
+
+# ---- Print Variable Names ----
+```{r print variable names}
+print.variable.names(df)
+```
+
+# ---------------------------------------------------------------------------------- CYCLE PREP SECTION
 
 # Create dichotomous mensdayone/mensdayonefirst to indicate first day of period
-```{r }
+```{r create-mensdayonefirst}
 
-
-str(df$id) #check id format
-str(df$date_rated) #check date_rated format
+# Check the structure of the data
+#str(df$id) #check id format
+#str(df$daterated) #check daterated format
 
 df <- df %>%
   filter(!is.na(id))
 
 df <- df %>%
-  arrange(id, date_rated)
+  arrange(id, daterated)
 
 
 df$StartPeriod <- as.numeric(df$StartPeriod)
@@ -756,12 +959,12 @@ df <- df %>%
 
 # Process the data
 df <- df %>%
-  arrange(id, date_rated) %>%  # Arrange the data by id and date_rated
+  arrange(id, daterated) %>%  # Arrange the data by id and daterated
   group_by(id) %>%  # Group the data by id
   mutate(
     mensdayonefirst = case_when(
       is.na(mensdayone) ~ NA,
-      mensdayone == 1 & (lag(mensdayone, order_by = date_rated) != 1 | is.na(lag(mensdayone, order_by = date_rated))) ~ 1,
+      mensdayone == 1 & (lag(mensdayone, order_by = daterated) != 1 | is.na(lag(mensdayone, order_by = daterated))) ~ 1,
       row_number() == 1 & mensdayone == 1 ~ 1,
       TRUE ~ 0
     )
@@ -770,13 +973,13 @@ df <- df %>%
 
 #Check
 
-df %>% dplyr::select(id, date_rated, mensdayone, mensdayonefirst, PosLHTest) %>% View()
+#df %>% dplyr::select(id, daterated, mensdayone, mensdayonefirst, PosLHTest) %>% View()
 
 
 ```
 
 # Create "LHposday" (0/1/NA) that represents the positive LH day.
-```{r }
+```{r create LHposday}
 
 
 ###View(df)
@@ -794,24 +997,25 @@ df <- df %>%
 
 # Eliminate all but the first pos Ov day in a new variable called "LHposdayfirst"
 df <- df %>%
-  arrange(id, date_rated) %>%  # Arrange the data by id and date_rated
+  arrange(id, daterated) %>%  # Arrange the data by id and daterated
   group_by(id) %>%  # Group the data by id
   mutate(
     LHposdayfirst = case_when(
       is.na(LHposday) ~ NA_real_,
-      LHposday == 1 & lag(LHposday, order_by = date_rated) != 1 ~ 1,
+      LHposday == 1 & lag(LHposday, order_by = daterated) != 1 ~ 1,
       TRUE ~ 0
     )
   ) %>% 
   ungroup()  # Remove the grouping
 
 #Check vars
-df %>% dplyr::select(id, date_rated, mensdayonefirst, LHposdayfirst) %>% View()
+#DONE df %>% dplyr::select(id, daterated, mensdayonefirst, LHposdayfirst) %>% View()
 
 ```
 
 # TURNED OFF - Remove people who never had a positive LH test
-```{r}
+# This needs to be ON if we are going to use 5-phase cycle variable
+```{r remove-no-pos-LH}
 # 
 # # Create a person-level variable
 # idlhpos <- df %>%
@@ -832,13 +1036,12 @@ df %>% dplyr::select(id, date_rated, mensdayonefirst, LHposdayfirst) %>% View()
 #   filter(LHeverpos == 1)
 # 
 # #Check vars -
-# #df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst) %>% head()
+# #df %>% dplyr::select(id, LHeverpos, daterated, mensdayonefirst, LHposdayfirst) %>% head()
 
 ```
 
 # Code Cycle Day Forward + Backward count from menses onset
-```{r cycleday}
-
+```{r menses-count-vars}
 
 #make A as a variable copy of mensdayonefirst
 df$A <- df$mensdayonefirst
@@ -867,20 +1070,21 @@ df <- df %>% group_by(id) %>%
 ###View(df)
 
 #Check vars
-#df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, cycleday) %>% View()
+#df %>% dplyr::select(id, LHeverpos, daterated, mensdayonefirst, LHposdayfirst, cycleday) %>% View()
 
 ```
 
 # Review Data, looking for cycleday=0 and removing those who never had any menses onsets
-```{r}
+#TODO automate this somehow and provide report
+```{r review-data}
 
-#View in a separate window and manually scroll through
-df %>% dplyr::select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
+# Check the data 
+#DONE df %>% dplyr::select(id, daterated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
 
 #how many observations do you have for each cycle day?
 nobs <- df %>% group_by(cycleday) %>% summarize(n=n())
 
-View(nobs)
+#DONE; NONE; View(nobs)
 
 #do you have any observations that got assigned a cycle day of 0? this is wrong, and you should check who that happened for
 df %>% filter(cycleday==0) %>% pull(id)
@@ -888,10 +1092,10 @@ df %>% filter(cycleday==0) %>% pull(id)
 # NOTE 2024-07-09: There are 2 people with lots of zeroes (see Jordan's note above in chunk) and it looks to me like they did not report a menses in the daily dataset: 331, 332. They have no menses onset dates
 
 #View in a separate window and manually scroll through
-df %>% dplyr::select(id, date_rated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
+#Not needed?  df %>% dplyr::select(id, daterated, mensdayonefirst, cycleday, LHposdayfirst, cycleday) %>% View()
 
-# List of IDs to remove - people with no menses onsets
-ids_to_remove <- c(211, 292, 295, 296, 297, 298, 299, 302, 308, 313, 315, 331, 332, 333, 334, 336)
+# List of IDs to remove - people with no menses onsets - it looks like this overlaps with the people who never reported a positive LH test
+ids_w_no_menses_onset <- c(211, 292, 295, 296, 297, 298, 299, 302, 308, 313, 315, 331, 332, 333, 334, 336)
 
 # Remove rows with specified IDs
 df <- df %>% filter(!(id %in% ids_to_remove))
@@ -900,7 +1104,7 @@ df <- df %>% filter(!(id %in% ids_to_remove))
 ```
 
 # Make daycountLH, based on positive LH test (LH test day = 0)
-```{r daycountLH}
+```{r LH-count-vars}
 #make A a new temp column where pt received pos ov test
 df$L <- df$LHposdayfirst
 
@@ -926,70 +1130,59 @@ df<- df %>% group_by(id) %>%
 df <- df %>% dplyr::select(!L)
 
 #Check vars
-#df %>% dplyr::select(id, LHeverpos, date_rated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
+#df %>% dplyr::select(id, LHeverpos, daterated, mensdayonefirst, LHposdayfirst, daycountLH) %>% View()
 ```
-
-
-
-
 
 ############################################################################# CYCLE SCALING
 
-
 ## Using CYCLEDAY SCALING TEMPLATE - from Anisha updated September 14, 2024
 
-
-
 ```{r}
-
-# Renaming Variables
-df$ID <-df$id
-df$id <-df$id
-df$daterated <-df$date_rated
-
-
-#df$LHposdayfirst
-#df$mensdayonefirst
-```
-
-
-```{r}
-
-
+# Group the dataset by 'id', sort each group by 'daterated', and add a new column 'folmax' with NA values.
 df <- df %>%
-  group_by(id) %>%
-  arrange(daterated, .by_group = TRUE) %>%
-  mutate(folmax = NA)
+  group_by(id) %>%                          # Group the data by 'id' to ensure operations are performed within each individual.
+  arrange(daterated, .by_group = TRUE) %>%  # Arrange (sort) the data by 'daterated' within each group.
+  mutate(folmax = NA)                       # Add a new column named 'folmax' initialized with NA values.
 
-#create the variable 'A' which will represent menses onset
-df$A <- ifelse(df$cycleday == 1, 1, 0)
-df$A <- ifelse(is.na(df$A), 0, df$A)
-#ovtoday = LH + 1
-df$ovtoday = lag(df$LHposdayfirst) #changed this from "posovtest"
-#check data
-df %>% dplyr::select(daterated, ovtoday, LHposdayfirst)
+# Create a new column 'A' to indicate menses onset.
+# Set 'A' to 1 if 'cycleday' is equal to 1 (indicating menses onset), otherwise set to 0.
+df <- df %>%
+  mutate(A = ifelse(is.na(cycleday), 0, ifelse(cycleday == 1, 1, 0)))
+
+# Calculate 'ovtoday' by lagging the 'LHposdayfirst' within each group.
+# The 'lag' function retrieves the value from the previous row, allowing for the calculation of the ovulation day.
+df <- df %>%
+  mutate(ovtoday = dplyr::lag(LHposdayfirst))
+
+# (Optional) Check selected columns of the dataset for verification purposes.
+# Uncomment the following code to view the 'daterated', 'ovtoday', and 'LHposdayfirst' columns.
+# df %>%
+#   ungroup() %>% # Ungroup to avoid unnecessary grouping for this operation
+#   select(daterated, ovtoday, LHposdayfirst) %>%
+#   View()
+
 ```
 
+# Calculate Menses-to-Menses Cycle Lengths 
 
-# Calculate Menses-to-menses cycle lengths 
-
-## m2mcount and cyclelength 
+## Calculation of Cycle Lengths and Complete Cycles using 'mcyclength' function
 
 ```{r}
-
-#the mcyclength function, this will do forward count to give cycle lengths for menses-to-menses cycles, and count the number of complete cycles within a person 
-
+# Use the 'calculate_mcyclength' function to determine menses-to-menses cycle lengths for each individual in the dataset.
+# This function will also count the number of complete cycles for each person.
 df <- calculate_mcyclength(df)
 
-#-Inf will occur if the cycle is incomplete (no bookend menses onset date) so we will change to NA
-df$mcyclength = ifelse(df$mcyclength == -Inf , NA, df$mcyclength)
+# Replace '-Inf' values in the 'mcyclength' column with 'NA'.
+# '-Inf' can occur if the cycle is incomplete (missing a bookend menses onset date).
+df$mcyclength <- ifelse(df$mcyclength == -Inf, NA, df$mcyclength)
 
-#if cyclenum is NA, set cycle_incomplete to 1 
-df$cycle_incomplete = ifelse(is.na(df$cyclenum), 1, df$cycle_incomplete)
+# Mark incomplete cycles by setting 'cycle_incomplete' to 1 if 'cyclenum' is NA.
+df$cycle_incomplete <- ifelse(is.na(df$cyclenum), 1, df$cycle_incomplete)
 
-#check data
-df %>% dplyr::select(id, daterated, A, m2mcount, ovtoday, cyclenum, mcyclength, cycle_incomplete) 
-
+# (Optional) Check selected columns of the dataset for verification purposes.
+# View the columns to ensure proper calculation of cycle information.
+df %>% 
+  dplyr::select(id, daterated, A, m2mcount, ovtoday, cyclenum, mcyclength, cycle_incomplete)
 ```
 
 
@@ -1001,6 +1194,9 @@ Here, I am doing scaling for baseline, washout, and PBO condition
 ```{r}
 # this is based on NC dataset 
 
+  
+  
+  
 df <- df %>% 
   mutate(lutlength_impute = case_when(mcyclength == 20 ~ (mcyclength* 0.46),
                                       mcyclength == 21 ~ (mcyclength*.476),
@@ -1525,7 +1721,7 @@ badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
 #Filtering for sensitivity analyses: 
 
 # Create a new dataset removing IDs with bad hormones
-df_all <- df
+df <- df
 
 df <- df %>% filter(!(id %in% badhorm_ids))
 
@@ -1554,7 +1750,7 @@ cat("Number of rows BEFORE adding placeholders: ", nrow(df), "\n")
 
 df <- df %>%
   group_by(id) %>%
-  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
+  complete(daterated = seq.Date(min(daterated), max(daterated), by = "day")) %>%
   ungroup()
 
 # Display the number of rows after adding placeholders
@@ -1610,6 +1806,9 @@ df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/0
 # Check Association between cycleday variable and days since starting
 
 ```{r}
+
+df$TubeNumber <- as.numeric(df$TubeNumber) # Convert TubeNumber to numeric
+
 df_first <- df %>%
   group_by(id) %>%
   filter(TubeNumber == 1) %>%
@@ -1653,7 +1852,7 @@ hist(df_first$scaled_cycleday, breaks = 30)
 #colorspace::hcl_palettes() # Lists available HCL palettes.
 
 
-horiz_plot <-df_all %>%  
+horiz_plot <-df %>%  
   ggplot() +  # Start the ggplot chain with the dataset `df`
   
   # Create a horizon plot using the geom_horizon function
@@ -1717,7 +1916,7 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
        width = 8, 
        height = 6)
 
-horiz_plot <-df_all %>%  
+horiz_plot <-df %>%  
   ggplot() +  # Start the ggplot chain with the dataset `df`
   
   # Create a horizon plot using the geom_horizon function
@@ -2236,6 +2435,89 @@ plot_DVs_M2M(dv_list, df, output_folder)
 
 # FITTING GAMMs 
 
+# run_gamm_for_outcome(): This function runs a GAMM model for scaled_cycleday for a given outcome variable--  
+# it logs the outcome, fits the model, performs hierarchical partitioning, 
+# and saves both the model summary and partitioning output to a file.
+
+```{r}
+
+# Function to run GAMM for each outcome and save results
+run_gamm_for_outcome <- function(outcome_var, df, output_dir) {
+  # Step 1: Log-transform the outcome variable
+  # The log transformation helps stabilize variance and normalize the data
+  df[[paste0(outcome_var, "log")]] <- log(df[[outcome_var]] + 1)
+  
+  # Step 2: Fit a GAMM model
+  # The model is fit using the log-transformed outcome variable.
+  # The formula specifies random effects (bs = 're') for 'id' and 'scaled_cycleday',
+  # and a smooth function (s) to capture the non-linear effect of scaled_cycleday.
+  gamm_model <- gam(
+    as.formula(paste0(outcome_var, "log ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 20)")),
+    data = df,
+    method = "REML"  # REML (Restricted Maximum Likelihood) is used for model fitting
+  )
+  
+  # Step 3: Output the model summary
+  # The summary provides detailed information about the model fit,
+  # including the significance of terms, smooth terms, and model diagnostics.
+  model_summary <- summary(gamm_model)
+  print(model_summary)
+  
+  # Step 4: Perform hierarchical partitioning
+  # Hierarchical partitioning calculates the relative contribution of each predictor to the model fit.
+  var_part <- gam.hp::gam.hp(gamm_model)
+  print(var_part$hierarchical.partitioning)
+  
+  # Step 5: Capture the output for both model summary and hierarchical partitioning
+  # The capture.output function stores the printed output in a character vector
+  # that can be written to a file.
+  summary_output <- capture.output(model_summary)
+  partitioning_output <- capture.output(var_part$hierarchical.partitioning)
+  
+  # Step 6: Combine the model summary and hierarchical partitioning results
+  # Here, both outputs are combined into a single object to be saved together.
+  combined_output <- c(summary_output, "", "Hierarchical Partitioning:", partitioning_output)
+  
+  # Step 7: Define the output file path
+  # The output file is saved with a name corresponding to the outcome variable.
+  summary_file_path <- file.path(output_dir, paste0(outcome_var, "model.txt"))
+  
+  # Step 8: Save the combined output to a text file
+  # This writes the model summary and hierarchical partitioning into the text file.
+  writeLines(combined_output, summary_file_path)
+  cat("Model summary and hierarchical partitioning saved to:", summary_file_path, "\n")
+  
+  # Step 9: Plot the GAMM model results
+  # The plot shows the smooth term for 'scaled_cycleday' and its relationship with the outcome.
+  # Select = 3 means we're selecting the smooth term corresponding to scaled_cycleday.
+  plot.gam(gamm_model, select = 3)
+  
+  # Return the model object for further analysis if needed
+  return(gamm_model)
+}
+
+# Example Usage:
+# dv_list is a list of dependent variables (outcomes) for which the model will be run.
+# These variables should be present in the dataset (df).
+test_list <- c("E2", "P4")  # Replace with actual outcome names
+
+# Define the directory where the output files will be saved
+# This should be an existing directory on your system.
+output_directory <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/"
+
+# Step 10: Apply the function to each outcome in the list
+# This will run the GAMM model for each outcome and save the results.
+lapply(test_list, run_gamm_for_outcome, df = df, output_dir = output_directory)
+
+```
+
+
+
+
+
+
+
+
 
 # GAMM and initial plot - E2 - Ov to Ov
 ```{r}
@@ -2248,14 +2530,17 @@ gamm_E2 <- gam(E2log ~ s(id, bs = "re") +
                  s(scaled_cycleday, id, bs = "re") + 
                  s(scaled_cycleday, k = 20), data = df, method = "REML")
 
-summary(gamm_e2)
+summary(gamm_E2)
 
 
 # Save the model summary as a text file
-summary_output <- capture.output(summary(gamm_e2))
-summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/E2model.txt"
+summary_output <- capture.output(summary(gamm_E2))
+summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2model.txt"
 writeLines(summary_output, summary_file_path)
 cat("Model summary saved to:", summary_file_path, "\n")
+
+var.part = gam.hp::gam.hp(gamm_E2)
+var.part$hierarchical.partitioning
 
 plot.gam(gamm_e2, select = 3)
 
@@ -2300,26 +2585,85 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 ```
 
 
+# Load required libraries
+library(VennDiagram)
+library(ggplot2)
+library(gam.hp)
 
 # GAMM and initial plot - LH
 ```{r}
-hist(df$LH)
-df$LHlog <- log(df$LH+1)
-hist(df$LHlog)
-gamm_LH <- gam(LHlog ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re")  + s(scaled_cycleday, k = 20), data = df, method = "REML")
-
-summary(gamm_LH)
+hist(df$LH) # Check the distribution of the LH variable
+df$LHlog <- log(df$LH+1) # Log-transform the LH variable
+hist(df$LHlog) # Check the distribution of the log-transformed LH variable
 
 
-# Save the model summary as a text file
+
+# Fit the model and save the summary
+gamm_LH <- gam(LHlog ~ s(id, bs = "re") + s(scaled_cycleday, id, bs = "re") + s(scaled_cycleday, k = 20), data = df, method = "REML")
 summary_output <- capture.output(summary(gamm_LH))
 summary_file_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/LHmodel.txt"
 writeLines(summary_output, summary_file_path)
 cat("Model summary saved to:", summary_file_path, "\n")
 
-plot.gam(gamm_LH, select = 3)
+# Perform variance partitioning and extract data
+var.part <- gam.hp::gam.hp(gamm_LH)
+var_partition_data <- as.data.frame(var.part$hierarchical.partitioning)
+data <- data.frame(Term = rownames(var_partition_data), I_perc = var_partition_data[, "I.perc(%)"])
 
-hist(df$LH)
+# Create a bar plot using ggplot
+ggplot(data, aes(x = Term, y = I_perc, fill = Term)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Percentage Contribution of Terms", x = "Term", y = "I.perc (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Extract variance contributions and overlaps for Venn diagram
+venn_data <- setNames(as.list(var_partition_data[, "I.perc(%)"]), rownames(var_partition_data))
+n12 <- var_partition_data[grep("s\(id, bs = \"re\"\)", rownames(var_partition_data)), "Average.share"]
+n13 <- var_partition_data[grep("s\(scaled_cycleday, k = 20\)", rownames(var_partition_data)), "Average.share"]
+n23 <- var_partition_data[grep("s\(scaled_cycleday, id, bs = \"re\"\)", rownames(var_partition_data)), "Average.share"]
+n123 <- min(n12, n13, n23)
+
+# Create and save the Venn diagram
+png(filename = "variance_partitioning_venn.png", width = 800, height = 600)
+draw.triple.venn(
+  area1 = venn_data[[1]],
+  area2 = venn_data[[2]],
+  area3 = venn_data[[3]],
+  n12 = n12,
+  n13 = n13,
+  n23 = n23,
+  n123 = n123,
+  category = names(venn_data),
+  fill = c("red", "blue", "green"),
+  lty = "blank",
+  cex = 1.5,
+  cat.cex = 1.5,
+  main = "Variance Partitioning Venn Diagram"
+)
+dev.off()
+
+# Display the Venn diagram in the RStudio viewer
+grid::grid.newpage()
+draw.triple.venn(
+  area1 = venn_data[[1]],
+  area2 = venn_data[[2]],
+  area3 = venn_data[[3]],
+  n12 = n12,
+  n13 = n13,
+  n23 = n23,
+  n123 = n123,
+  category = names(venn_data),
+  fill = c("red", "blue", "green"),
+  lty = "blank",
+  cex = 1.5,
+  cat.cex = 1.5,
+  main = "Variance Partitioning Venn Diagram"
+)
+
+
+
 ```
 
 
@@ -3870,7 +4214,7 @@ lapply(outcomelist, save_gamm_summary)
 
 BDEFS_1, BDEFS_2, BDEFS_3, BDEFS_4, BDEFS_5, BDEFS_6, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DRSP_9, DRSP_10, DRSP_11, DRSP_12, DRSP_13, DRSP_14, DRSP_15, DRSP_16, DRSP_17, DRSP_18, DRSP_19, DRSP_20, DRSP_21, DRSP_22, DRSP_23, CSS_B_1, CSS_B_2, CSS_B_3, CSS_B_4, CSS_B_5, CSS_B_6, CSS_B_7, CSS_B_8, CSS_B_9, CSS_B_10, CSS_B_11, CSS_B_12, CSS_B_13, CSS_B_14, CSS_B_15, CSS_B_16, CSS_B_17, CSS_B_18, CSS_Function_1, CSS_Function_2, CSS_Function_3, CSS_Function_4, CSS_Function_5, CSS_Function_6, CSS_Function_7, CSS_Function_8, CSS_Function_9, CSS_Function_10, CSS_B2_1, CSS_B2_2, CSS_B2_3, CSS_B2_4, CSS_B2_5, CSS_B2_6, CSS_B2_7, CSS_B2_8, UPPS_1, UPPS_2, UPPS_3, UPPS_4, UPPS_5, UPPS_6, UPPS_9, UPPS_10, UPPS_11, UPPS_12, UPPS_13, UPPS_14, UPPS_15, DEBQ_1, DEBQ_2, DEBQ_3, DEBQ_4, DEBQ_5, DEBQ_6, DEBQ_7, DEBQ_8, DEBQ_9, DEBQ_10, DEBQ_11, DEBQ_12, DEBQ_13
 
-BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, game_pinball, game_name_pinball, score_pinball, user_level_pinball, session_level_pinball, game_nth_pinball, game_lpi_pinball, RecordedDate_pinball, recorded_date_pinball, hour_recorded_pinball, midnight_to_seven_pinball, game_type_pinball, date_rated_dontuse_pinball, game_robot, game_name_robot, score_robot, user_level_robot, session_level_robot, game_nth_robot, game_lpi_robot, RecordedDate_robot, recorded_date_robot, hour_recorded_robot, midnight_to_seven_robot, game_type_robot, date_rated_dontuse_robot, nth_pinball_squared, nth_robot_squared, RES_robot, RES_pinball,
+BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, game_pinball, game_name_pinball, score_pinball, user_level_pinball, session_level_pinball, game_nth_pinball, game_lpi_pinball, RecordedDate_pinball, recorded_date_pinball, hour_recorded_pinball, midnight_to_seven_pinball, game_type_pinball, daterated_dontuse_pinball, game_robot, game_name_robot, score_robot, user_level_robot, session_level_robot, game_nth_robot, game_lpi_robot, RecordedDate_robot, recorded_date_robot, hour_recorded_robot, midnight_to_seven_robot, game_type_robot, daterated_dontuse_robot, nth_pinball_squared, nth_robot_squared, RES_robot, RES_pinball,
 
 
 DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DRSP_9, DRSP_10, DRSP_11, DRSP_12, DRSP_13, DRSP_14, DRSP_15, DRSP_16, DRSP_17, DRSP_18, DRSP_19, DRSP_20, DRSP_21, DRSP_22, DRSP_23, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg
@@ -3972,7 +4316,7 @@ df <- df %>%
 hist(df$E2zd)
 hist(df$P4zd)
 
-df_all <- df_all %>%
+df <- df %>%
   group_by(id) %>%
   mutate(
     logE2= log(E2+1), 
@@ -4010,15 +4354,15 @@ df_all <- df_all %>%
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
+create_gamm_models <- function(outcomelist, df, save_dir) {
   for (outcome in outcomelist) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+    df[[outcome_log]] <- log(df[[outcome]] + 1)
 
     # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+    hist(df[[outcome]], main = paste("Histogram of", outcome))
+    hist(df[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
 
     # GAMM model with hormone z-scores and derivatives
     gamm_formula <- as.formula(paste0(
@@ -4029,7 +4373,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model <- gam(
       gamm_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4057,7 +4401,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model_simple <- gam(
       gamm_simple_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4065,13 +4409,13 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the grid for contour plot
     grid <- expand.grid(
       E2zd = seq(
-        min(df_all$E2zd, na.rm = TRUE),
-        max(df_all$E2zd, na.rm = TRUE),
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
         length.out = 100
       ),
       P4zd = seq(
-        min(df_all$P4zd, na.rm = TRUE),
-        max(df_all$P4zd, na.rm = TRUE),
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
         length.out = 100
       )
     )
@@ -4087,7 +4431,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     contour_plot <- ggplot() +
       geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
       geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
       scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
       labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
       theme_minimal() +
@@ -4118,15 +4462,15 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 ```{r}
 
 
-hist(df_all$CSS_Inatt)
-df_all$CSS_Inattlog <- log(df_all$CSS_Inatt+1)
-hist(df_all$CSS_Inattlog)
+hist(df$CSS_Inatt)
+df$CSS_Inattlog <- log(df$CSS_Inatt+1)
+hist(df$CSS_Inattlog)
 
 gamm_hormzd_CSS_Inatt <- gam(
   CSS_Inattlog ~ s(id, bs = "re") + s(E2zd) + s(E2zd, id, bs = "re") +
     s(P4zd) + s(P4zd, id, bs = "re") + ti(E2zd, P4zd) +
     s(E2zch) + s(E2zch, id, bs = "re") + s(P4zch) + s(P4zch, id, bs = "re"),
-  data = df_all,
+  data = df,
   family = gaussian,
   method = "REML"
 )
@@ -4150,7 +4494,7 @@ plot.gam(gamm_hormzd_CSS_Inatt, select=8) #Progesterone CHANGE
 # Simpler model without random effects for visualization
 gamm_horm_CSS_Inatt_simple <- gam(
   CSS_Inattlog ~ s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
-  data = df_all,
+  data = df,
   family = gaussian,
   method = "REML"
 )
@@ -4212,15 +4556,15 @@ library(plotly)
 library(htmlwidgets)
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
+create_gamm_models <- function(outcomelist, df, save_dir) {
   for (outcome in outcomelist) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+    df[[outcome_log]] <- log(df[[outcome]] + 1)
 
     # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+    hist(df[[outcome]], main = paste("Histogram of", outcome))
+    hist(df[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
 
     # GAMM model with hormone z-scores and derivatives
     gamm_formula <- as.formula(paste0(
@@ -4229,7 +4573,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model <- gam(
       gamm_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4257,7 +4601,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model_simple <- gam(
       gamm_simple_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4265,13 +4609,13 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the grid for contour plot
     grid <- expand.grid(
       E2zd = seq(
-        min(df_all$E2zd, na.rm = TRUE),
-        max(df_all$E2zd, na.rm = TRUE),
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
         length.out = 100
       ),
       P4zd = seq(
-        min(df_all$P4zd, na.rm = TRUE),
-        max(df_all$P4zd, na.rm = TRUE),
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
         length.out = 100
       )
     )
@@ -4287,7 +4631,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     contour_plot <- ggplot() +
       geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
       geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
       scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
       labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
       theme_minimal() +
@@ -4303,8 +4647,8 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
      # Create the 3D surface plot using Plotly
     grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
     surface_plot <- plot_ly(
-      x = seq(min(df_all$E2zd, na.rm = TRUE), max(df_all$E2zd, na.rm = TRUE), length.out = 100),
-      y = seq(min(df_all$P4zd, na.rm = TRUE), max(df_all$P4zd, na.rm = TRUE), length.out = 100),
+      x = seq(min(df$E2zd, na.rm = TRUE), max(df$E2zd, na.rm = TRUE), length.out = 100),
+      y = seq(min(df$P4zd, na.rm = TRUE), max(df$P4zd, na.rm = TRUE), length.out = 100),
       z = ~grid_matrix
     ) %>%
       add_surface() %>%
@@ -4345,15 +4689,15 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
+create_gamm_models <- function(outcomelist, df, save_dir) {
   for (outcome in outcomelist) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+    df[[outcome_log]] <- log(df[[outcome]] + 1)
 
     # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+    hist(df[[outcome]], main = paste("Histogram of", outcome))
+    hist(df[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
 
     # GAMM model with hormone z-scores and derivatives
     gamm_formula <- as.formula(paste0(
@@ -4362,7 +4706,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model <- gam(
       gamm_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4390,7 +4734,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model_simple <- gam(
       gamm_simple_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4398,13 +4742,13 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the grid for contour plot
     grid <- expand.grid(
       E2 = seq(
-        min(df_all$E2, na.rm = TRUE),
-        max(df_all$E2, na.rm = TRUE),
+        min(df$E2, na.rm = TRUE),
+        max(df$E2, na.rm = TRUE),
         length.out = 100
       ),
       P4 = seq(
-        min(df_all$P4, na.rm = TRUE),
-        max(df_all$P4, na.rm = TRUE),
+        min(df$P4, na.rm = TRUE),
+        max(df$P4, na.rm = TRUE),
         length.out = 100
       )
     )
@@ -4420,7 +4764,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     contour_plot <- ggplot() +
       geom_tile(data = grid, aes(x = E2, y = P4, fill = predicted)) +
       geom_contour(data = grid, aes(x = E2, y = P4, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = E2, y = P4), color = "black", alpha = 0.25) +
+      geom_point(data = df, aes(x = E2, y = P4), color = "black", alpha = 0.25) +
       scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
       labs(x = "E2", y = "P4", fill = "Outcome") +
       theme_minimal() +
@@ -4452,15 +4796,15 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
+create_gamm_models <- function(outcomelist, df, save_dir) {
   for (outcome in outcomelist) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
-    df_all[[outcome_log]] <- log(df_all[[outcome]] + 1)
+    df[[outcome_log]] <- log(df[[outcome]] + 1)
 
     # Plot histogram for transformed outcome
-    hist(df_all[[outcome]], main = paste("Histogram of", outcome))
-    hist(df_all[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+    hist(df[[outcome]], main = paste("Histogram of", outcome))
+    hist(df[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
 
     # GAMM model with hormone z-scores and derivatives
     gamm_formula <- as.formula(paste0(
@@ -4469,7 +4813,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model <- gam(
       gamm_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4497,7 +4841,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model_simple <- gam(
       gamm_simple_formula,
-      data = df_all,
+      data = df,
       family = gaussian,
       method = "REML"
     )
@@ -4505,13 +4849,13 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the grid for contour plot
     grid <- expand.grid(
       logE2  = seq(
-        min(df_all$logE2 , na.rm = TRUE),
-        max(df_all$logE2 , na.rm = TRUE),
+        min(df$logE2 , na.rm = TRUE),
+        max(df$logE2 , na.rm = TRUE),
         length.out = 100
       ),
       logP4 = seq(
-        min(df_all$logP4, na.rm = TRUE),
-        max(df_all$logP4, na.rm = TRUE),
+        min(df$logP4, na.rm = TRUE),
+        max(df$logP4, na.rm = TRUE),
         length.out = 100
       )
     )
@@ -4527,7 +4871,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     contour_plot <- ggplot() +
       geom_tile(data = grid, aes(x = logE2 , y = logP4, fill = predicted)) +
       geom_contour(data = grid, aes(x = logE2 , y = logP4, z = predicted), color = "black") +
-      geom_point(data = df_all, aes(x = logE2 , y = logP4), color = "black", alpha = 0.25) +
+      geom_point(data = df, aes(x = logE2 , y = logP4), color = "black", alpha = 0.25) +
       scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
       labs(x = "logE2 ", y = "logP4", fill = "Outcome") +
       theme_minimal() +
@@ -4583,19 +4927,19 @@ library(plotly)
 library(htmlwidgets)
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df_all, save_dir) {
+create_gamm_models <- function(outcomelist, df, save_dir) {
   for (outcome in outcomelist) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
-    df_all <- df_all %>% mutate(!!outcome_log := log(!!sym(outcome) + 1))
+    df <- df %>% mutate(!!outcome_log := log(!!sym(outcome) + 1))
 
     # Plot histogram for transformed outcome using ggplot2
-    hist_orig <- ggplot(df_all, aes(x = !!sym(outcome))) +
+    hist_orig <- ggplot(df, aes(x = !!sym(outcome))) +
       geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
       labs(title = paste("Histogram of", outcome), x = outcome, y = "Count") +
       theme_minimal()
 
-    hist_log <- ggplot(df_all, aes(x = !!sym(outcome_log))) +
+    hist_log <- ggplot(df, aes(x = !!sym(outcome_log))) +
       geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
       labs(title = paste("Histogram of Log-transformed", outcome), x = paste0(outcome, " (log)"), y = "Count") +
       theme_minimal()
@@ -4613,7 +4957,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model <- gam(
       gamm_formula,
-      data = df_all,
+      data = df,
       family = gaussian(),
       method = "REML"
     )
@@ -4635,7 +4979,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 
     gamm_model_simple <- gam(
       gamm_simple_formula,
-      data = df_all,
+      data = df,
       family = gaussian(),
       method = "REML"
     )
@@ -4643,13 +4987,13 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the grid for contour plot
     grid <- expand_grid(
       logE2 = seq(
-        min(df_all$logE2, na.rm = TRUE),
-        max(df_all$logE2, na.rm = TRUE),
+        min(df$logE2, na.rm = TRUE),
+        max(df$logE2, na.rm = TRUE),
         length.out = 100
       ),
       logP4 = seq(
-        min(df_all$logP4, na.rm = TRUE),
-        max(df_all$logP4, na.rm = TRUE),
+        min(df$logP4, na.rm = TRUE),
+        max(df$logP4, na.rm = TRUE),
         length.out = 100
       )
     )
@@ -4678,8 +5022,8 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
     # Create the 3D surface plot using Plotly
     grid_matrix <- matrix(grid$predicted, nrow = 100, byrow = TRUE)
     surface_plot <- plot_ly(
-      x = seq(min(df_all$logE2, na.rm = TRUE), max(df_all$logE2, na.rm = TRUE), length.out = 100),
-      y = seq(min(df_all$logP4, na.rm = TRUE), max(df_all$logP4, na.rm = TRUE), length.out = 100),
+      x = seq(min(df$logE2, na.rm = TRUE), max(df$logE2, na.rm = TRUE), length.out = 100),
+      y = seq(min(df$logP4, na.rm = TRUE), max(df$logP4, na.rm = TRUE), length.out = 100),
       z = ~grid_matrix
     ) %>%
       add_surface() %>%
@@ -4700,7 +5044,7 @@ create_gamm_models <- function(outcomelist, df_all, save_dir) {
 }
 
 # CALL THE LOOP
-create_gamm_models(outcomelist, df_all, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
 ```
 

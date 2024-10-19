@@ -1,0 +1,170 @@
+---
+title: "ADHDCYC_FailedFunctions"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+#prep_cycle_LH_mens(): Process Data Function for Menstrual and LH Variable Preparation
+
+# Example usage
+# df <- prep_cycle_LH_mens(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE)
+
+
+# This function processes a data frame containing participant menstrual and LH test data. It performs the following operations:
+# 1. Creates variables to identify first day of menses and first positive LH test.
+# 2. Removes participants based on optional criteria (e.g., no positive LH test, no menses onset).
+# 3. Calculates cycle days relative to menses onset and LH test.
+# 4. Logs participant removals, potential issues, and outputs descriptive information.
+
+# Parameters:
+# - df: The data frame containing participant data. Must have columns: 'id', 'daterated', 'StartPeriod', 'LHposday'.
+# - remove_participants_no_menses (default TRUE): If TRUE, removes participants without any menses onset.
+# - remove_participants_no_LH (default TRUE): If TRUE, removes participants without any positive LH test.
+# - test_mode (default FALSE): If TRUE, only processes a small subset of the data for testing purposes.
+
+# Required Columns:
+# - id: Unique identifier for each participant.
+# - daterated: Date of the rating, must be in 'YYYY-MM-DD' format.
+# - StartPeriod: Numeric flag indicating the start of the menstrual period (1 for start, otherwise 0).
+# - LHposday: Numeric flag indicating a positive LH test (1 for positive, otherwise 0).
+
+
+```{r prep_cycle_LH_mens}
+
+prep_cycle_LH_mens <- function(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE) {
+  # Input Validation
+  if (!all(c("id", "daterated", "StartPeriod", "PosLHTest") %in% names(df))) {
+    stop("Error: Missing one or more required columns in the input data.")
+  }
+
+  df <- df %>%
+    mutate(
+      id = as.character(id),
+      daterated = as.Date(daterated, format = "%Y-%m-%d"),
+      StartPeriod = as.numeric(StartPeriod),
+      LHposday = as.numeric(PosLHTest)
+    )
+
+  if (test_mode) {
+    df <- df %>% sample_n(100)  # Process only a subset for testing
+  }
+
+  # Step 1: Create first_day_of_menses variable (1 if first day of period, otherwise 0 or NA)
+  log_message("Step 1: Creating first_day_of_menses variable")
+  df <- df %>%
+    filter(!is.na(id)) %>%
+    arrange(id, daterated) %>%
+    mutate(
+      first_day_of_menses = ifelse(StartPeriod == 1, 1, 0),
+      mensdayone = first_day_of_menses  # Original variable name for compatibility
+    )
+  log_message(paste("Step 1 completed: Number of unique participant IDs remaining:", length(unique(df$id))))
+
+  # Step 2: Create first_menses_day_flag variable (only the first menses onset day per participant)
+  log_message("Step 2: Creating first_menses_day_flag variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      first_menses_day_flag = ifelse(
+        first_day_of_menses == 1 & (lag(first_day_of_menses, default = 0) != 1),
+        1, 0
+      ),
+      mensdayonefirst = first_menses_day_flag  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  # Step 3: Create positive_LH_test_day variable (1 if positive LH test, otherwise 0 or NA)
+  log_message("Step 3: Creating positive_LH_test_day variable")
+  df <- df %>%
+    mutate(
+      positive_LH_test_day = ifelse(LHposday == 1, 1, 0),
+      LHposday = positive_LH_test_day  # Original variable name for compatibility
+    )
+
+  # Step 4: Create first_positive_LH_test_day_flag variable (only the first positive LH test day per participant)
+  log_message("Step 4: Creating first_positive_LH_test_day_flag variable")
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      first_positive_LH_test_day_flag = ifelse(
+        positive_LH_test_day == 1 & (lag(positive_LH_test_day, default = 0) != 1),
+        1, 0
+      ),
+      LHposdayfirst = first_positive_LH_test_day_flag  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  # Step 5: Create participant_level_positive_LH_test variable
+  log_message("Step 5: Creating participant_level_positive_LH_test variable")
+  participant_LH_test_summary <- df %>%
+    group_by(id) %>%
+    summarise(participant_level_positive_LH_test = ifelse(sum(first_positive_LH_test_day_flag, na.rm = TRUE) > 0, 1, 0)) %>%
+    ungroup()
+
+  df <- df %>%
+    left_join(participant_LH_test_summary, by = "id")
+
+  # Step 6: Optionally remove participants with no positive LH test
+  if (remove_participants_no_LH) {
+    log_message("Step 6: Removing participants with no positive LH test")
+    participants_with_LH <- participant_LH_test_summary %>%
+      filter(participant_level_positive_LH_test == 1) %>%
+      pull(id)
+    df <- df %>% filter(id %in% participants_with_LH)
+  }
+
+  # Step 7: Create cycle_day_from_menses variable (count forward and backward from first menses onset)
+  log_message("Step 7: Creating cycle_day_from_menses variable")
+  backward_limit <- -15
+  forward_limit <- 11
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      cycle_day_from_menses = ifelse(first_menses_day_flag == 1, 0, NA),
+      cycle_day_from_menses = cumsum(!is.na(cycle_day_from_menses)) - 1,
+      cycle_day_from_menses = ifelse(cycle_day_from_menses < backward_limit | cycle_day_from_menses > forward_limit, NA, cycle_day_from_menses),
+      cycleday = cycle_day_from_menses  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  # Step 8: Optionally remove participants with no menses onset
+  if (remove_participants_no_menses) {
+    log_message("Step 8: Removing participants with no menses onset")
+    participants_with_menses <- df %>%
+      group_by(id) %>%
+      summarise(has_menses = any(first_menses_day_flag == 1)) %>%
+      filter(has_menses) %>%
+      pull(id)
+    df <- df %>% filter(id %in% participants_with_menses)
+  }
+
+  # Step 9: Create cycle_day_from_positive_LH variable (count forward and backward from first positive LH test)
+  log_message("Step 9: Creating cycle_day_from_positive_LH variable")
+  lh_backward_limit <- -7
+  lh_forward_limit <- 15
+  df <- df %>%
+    group_by(id) %>%
+    mutate(
+      cycle_day_from_positive_LH = ifelse(first_positive_LH_test_day_flag == 1, 0, NA),
+      cycle_day_from_positive_LH = cumsum(!is.na(cycle_day_from_positive_LH)) - 1,
+      cycle_day_from_positive_LH = ifelse(cycle_day_from_positive_LH < lh_backward_limit | cycle_day_from_positive_LH > lh_forward_limit, NA, cycle_day_from_positive_LH),
+      daycountLH = cycle_day_from_positive_LH  # Original variable name for compatibility
+    ) %>%
+    ungroup()
+
+  return(df)
+}
+
+# Helper function for logging messages to console and optionally to a file
+log_message <- function(message) {
+  cat(message, "\n")
+  # Uncomment the line below to log messages to a file
+  # write(message, file = "process_data_log.txt", append = TRUE)
+}
+
+# Example usage
+df <- prep_cycle_LH_mens(df, remove_participants_no_menses = TRUE, remove_participants_no_LH = TRUE, test_mode = FALSE)
+
+# Check the resulting variables
+df %>% dplyr::select(id, daterated, first_menses_day_flag, first_positive_LH_test_day_flag, cycle_day_from_menses, cycle_day_from_positive_LH) %>% View()

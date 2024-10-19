@@ -1,0 +1,33 @@
+---
+title: "ADHDCYC_Initial-Descriptives"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+# Check Association between cycleday variable and days since starting
+
+```{r}
+df_first <- df %>%
+  group_by(id) %>%
+  filter(TubeNumber == 1) %>%
+  ungroup()
+
+hist(df_first$scaled_cycleday, breaks = 30)
+
+
+#cor(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
+
+#plot(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
+
+```
+
+
+

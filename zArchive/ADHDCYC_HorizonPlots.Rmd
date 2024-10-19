@@ -1,0 +1,271 @@
+---
+title: "ADHDCYC_HorizonPlots"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 2024-10-17 - HORIZON PLOTS OF RAW DATA
+
+<!-- HCL palettes -->
+
+<!-- Type:  Qualitative  -->
+<!-- Names: Pastel 1, Dark 2, Dark 3, Set 2, Set 3, Warm, Cold, Harmonic, Dynamic -->
+
+<!-- Type:  Sequential (single-hue)  -->
+<!-- Names: Grays, Light Grays, Blues 2, Blues 3, Purples 2, Purples 3, Reds 2, Reds 3, Greens 2, Greens 3, -->
+<!--        Oslo -->
+
+<!-- Type:  Sequential (multi-hue)  -->
+<!-- Names: Purple-Blue, Red-Purple, Red-Blue, Purple-Orange, Purple-Yellow, Blue-Yellow, Green-Yellow, -->
+<!--        Red-Yellow, Heat, Heat 2, Terrain, Terrain 2, Viridis, Plasma, Inferno, Rocket, Mako, Dark -->
+<!--        Mint, Mint, BluGrn, Teal, TealGrn, Emrld, BluYl, ag_GrnYl, Peach, PinkYl, Burg, BurgYl, -->
+<!--        RedOr, OrYel, Purp, PurpOr, Sunset, Magenta, SunsetDark, ag_Sunset, BrwnYl, YlOrRd, YlOrBr, -->
+<!--        OrRd, Oranges, YlGn, YlGnBu, Reds, RdPu, PuRd, Purples, PuBuGn, PuBu, Greens, BuGn, GnBu, -->
+<!--        BuPu, Blues, Lajolla, Turku, Hawaii, Batlow -->
+
+<!-- Type:  Diverging  -->
+<!-- Names: Blue-Red, Blue-Red 2, Blue-Red 3, Red-Green, Purple-Green, Purple-Brown, Green-Brown, Blue-Yellow -->
+<!--        2, Blue-Yellow 3, Green-Orange, Cyan-Magenta, Tropic, Broc, Cork, Vik, Berlin, Lisbon, -->
+<!--        Tofino -->
+
+```{r warning=FALSE}
+
+#colorspace::hcl_palettes() # Lists available HCL palettes.
+
+
+horiz_plot <-df_all %>%  
+  ggplot() +  # Start the ggplot chain with the dataset `df`
+  
+  # Create a horizon plot using the geom_horizon function
+  # The 'aes' function specifies the x and y aesthetics for the plot.
+  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
+  # and 'E2' (estradiol levels) is mapped to the y-axis.
+  geom_horizon(aes(scaled_cycleday_ov, 
+                   E2zd), # Use the 'E2zd' variable for the y-axis.
+               # The 'origin' argument defines the baseline for splitting positive/negative values.
+               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
+               
+               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
+               horizonscale = 7) +  # Use 4 levels of shading.
+  
+  # Add a color scale using the HCL color palette ('BluGrn').
+  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
+  
+  scale_fill_hcl(palette = 'Heat', reverse = T) + 
+  
+  
+  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
+  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
+  facet_grid(id~.) +
+  
+  # Apply the 'theme_few' theme for a clean, minimal look.
+  theme_few() +
+  
+  # Customize the theme further:
+  theme(
+    # Set the vertical spacing between panels to zero lines.
+    panel.spacing.y = unit(0, "lines"),
+    
+    # Customize the text of the facet strips (which show the participant IDs).
+    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
+    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
+    
+    # Remove the legend from the plot.
+    legend.position = 'right',
+    
+    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
+    axis.text.y = element_blank(),  # No y-axis text.
+    axis.title.y = element_blank(),  # No y-axis title.
+    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
+    
+    # Remove the border around each panel.
+    panel.border = element_blank()
+  ) +
+  
+  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
+  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
+  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
+  
+  # Add a title to the plot.
+  ggtitle('Person-Std E2 Across (Menses to Menses) Cycle by ID') +
+  
+  # Add a label to the x-axis.
+  xlab('Scaled Cycleday (Ovulation at 0)')
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_mens-mens.png", 
+       plot = horiz_plot, 
+       width = 8, 
+       height = 6)
+
+horiz_plot <-df_all %>%  
+  ggplot() +  # Start the ggplot chain with the dataset `df`
+  
+  # Create a horizon plot using the geom_horizon function
+  # The 'aes' function specifies the x and y aesthetics for the plot.
+  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
+  # and 'E2' (estradiol levels) is mapped to the y-axis.
+  geom_horizon(aes(scaled_cycleday, 
+                   E2zd), # Use the 'E2zd' variable for the y-axis.
+               # The 'origin' argument defines the baseline for splitting positive/negative values.
+               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
+               
+               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
+               horizonscale = 7) +  # Use 4 levels of shading.
+  
+  # Add a color scale using the HCL color palette ('BluGrn').
+  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
+  
+  scale_fill_hcl(palette = 'Heat', reverse = T) + 
+  
+  
+  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
+  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
+  facet_grid(id~.) +
+  
+  # Apply the 'theme_few' theme for a clean, minimal look.
+  theme_few() +
+  
+  # Customize the theme further:
+  theme(
+    # Set the vertical spacing between panels to zero lines.
+    panel.spacing.y = unit(0, "lines"),
+    
+    # Customize the text of the facet strips (which show the participant IDs).
+    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
+    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
+    
+    # Remove the legend from the plot.
+    legend.position = 'right',
+    
+    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
+    axis.text.y = element_blank(),  # No y-axis text.
+    axis.title.y = element_blank(),  # No y-axis title.
+    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
+    
+    # Remove the border around each panel.
+    panel.border = element_blank()
+  ) +
+  
+  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
+  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
+  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
+  
+  # Add a title to the plot.
+  ggtitle('Person-Std E2 Across (Ov to Ov) Cycle by ID') +
+  
+  # Add a label to the x-axis.
+  xlab('Scaled Cycleday (Menses at 0)')
+
+ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_ov-ov.png", 
+       plot = horiz_plot, 
+       width = 8, 
+       height = 6)
+
+```
+
+```{r}
+# Function to create horizon plots for a list of outcomes (menses to menses cycle)
+horizon_plot_menses_to_menses_list <- function(df, outcomes, filename_prefix) {
+  # Loop through each outcome in the list of outcomes
+  for (outcome in outcomes) {
+    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
+    outcome.zd <- paste0(outcome, '.zd')
+    # Create the filename for saving the plot
+    filename <- paste0(filename_prefix, outcome, '_horizon_plot_mens-mens.png')
+    
+    # Generate the plot
+    plot <- df %>%  
+      ggplot() +
+      # Create a horizon plot for the given outcome
+      geom_horizon(aes(scaled_cycleday_ov, .data[[outcome.zd]]),
+                   origin = 'midpoint',  # Set the baseline at the midpoint
+                   horizonscale = 7) +  # Set the number of shading levels
+      # Set the color scale using the HCL 'Heat' palette
+      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
+      # Facet by participant ID to create individual panels for each participant
+      facet_grid(id~.) +
+      # Use a minimal theme for the plot
+      theme_few() +
+      # Customize the theme further
+      theme(
+        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
+        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
+        legend.position = 'right',  # Place the legend on the right side
+        axis.text.y = element_blank(),  # Remove y-axis text
+        axis.title.y = element_blank(),  # Remove y-axis title
+        axis.ticks.y = element_blank(),  # Remove y-axis ticks
+        panel.border = element_blank()  # Remove panel borders
+      ) +
+      # Add a title to the plot
+      ggtitle(paste('Person-Std', outcome, 'Across (Menses to Menses) Cycle by ID')) +
+      # Add a label to the x-axis
+      xlab('Scaled Cycleday (Ovulation at 0)')
+    
+    # Save the plot to the specified filename (using the old file path)
+    ggsave(filename = filename, plot = plot, width = 8, height = 6)
+  }
+}
+
+# Function to create horizon plots for a list of outcomes (ovulation to ovulation cycle)
+horizon_plot_ovulation_to_ovulation_list <- function(df, outcomes, filename_prefix) {
+  # Loop through each outcome in the list of outcomes
+  for (outcome in outcomes) {
+    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
+    outcome.zd <- paste0(outcome, '.zd')
+    # Create the filename for saving the plot
+    filename <- paste0(filename_prefix, outcome, '_horizon_plot_ov-ov.png')
+    
+    # Generate the plot
+    plot <- df %>%  
+      ggplot() +
+      # Create a horizon plot for the given outcome
+      geom_horizon(aes(scaled_cycleday, .data[[outcome.zd]]),
+                   origin = 'midpoint',  # Set the baseline at the midpoint
+                   horizonscale = 7) +  # Set the number of shading levels
+      # Set the color scale using the HCL 'Heat' palette
+      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
+      # Facet by participant ID to create individual panels for each participant
+      facet_grid(id~.) +
+      # Use a minimal theme for the plot
+      theme_few() +
+      # Customize the theme further
+      theme(
+        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
+        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
+        legend.position = 'right',  # Place the legend on the right side
+        axis.text.y = element_blank(),  # Remove y-axis text
+        axis.title.y = element_blank(),  # Remove y-axis title
+        axis.ticks.y = element_blank(),  # Remove y-axis ticks
+        panel.border = element_blank()  # Remove panel borders
+      ) +
+      # Add a title to the plot
+      ggtitle(paste('Person-Std', outcome, 'Across (Ov to Ov) Cycle by ID')) +
+      # Add a label to the x-axis
+      xlab('Scaled Cycleday (Menses at 0)')
+    
+    # Save the plot to the specified filename (using the old file path)
+    ggsave(filename = filename, plot = plot, width = 8, height = 6)
+  }
+}
+
+outcomelist <- c(
+  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
+  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
+  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
+  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
+  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
+  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
+  "UPPS_Total", "DEBQ_Total"
+)
+
+horizon_plot_menses_to_menses_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
+
+horizon_plot_ovulation_to_ovulation_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
+
+```
