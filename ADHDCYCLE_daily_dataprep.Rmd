@@ -572,6 +572,7 @@ names(dv_list) <- c(
   "Relational Imp"
 )
 
+
 # Rename the variables based on DRSP items
 names(dv_list) <- c(
   "Depressed Mood", # DRSP_1

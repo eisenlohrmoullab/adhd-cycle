@@ -5,8 +5,278 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+
+# ---------------------------------------------------------------------------------- SETUP
+
+
+# ---- Setup ----
+- Turns of Scientific Notation
+- Saves 'current_date' as a string in YYYYMMDD format
+- Sets the number of digits (3) to display in output
+- Saves Current Date as a string in YYYYMMDD format
+- Sets the 'output_folder' as path to the output folder for saving files
+```{r setup}
+
+knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
+options(scipen = 999) # Turn off scientific notation
+options(digits = 3) # Set number of digits to display
+
+current_date <- format(Sys.Date(), "%Y%m%d")  # Produces date as YYYYMMDD
+
+output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-20/"
+
+```
+
+
+# ---- Load Packages (no cache) ----
+```{r packages, warning=FALSE}
+
+# ---- Global Chunk Options and Settings ----
+
+# Setting options for knitr to display R code in output
 knitr::opts_chunk$set(echo = TRUE)
+
+# Prevent scientific notation in outputs
+options(scipen = 999)
+
+# ---- Data Manipulation and Cleaning ----
+
+# Core tidyverse libraries for data manipulation and visualization
+library(dplyr)       # Data manipulation (part of tidyverse)
+library(tidyr)       # Data tidying (part of tidyverse)
+library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
+library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
+library(skimr)       # Summarize and inspect data quickly
+
+
+# ---- Reading and Working with Files ----
+
+# Libraries for reading various file formats
+library(haven)       # For reading SPSS, Stata, and SAS files
+library(readxl)      # For reading Excel files
+library(readr)       # For reading CSV and other text files
+
+
+# ---- Plotting and Visualization ----
+
+# Core and extended libraries for data visualization
+library(ggplot2)     # Core plotting library
+library(ggdist)      # Visualizing distributions and uncertainty
+library(ggforce)     # Extending ggplot2 functionality with advanced features
+library(ggrepel)     # For adding non-overlapping text labels to ggplot2
+library(visdat)      # Visualizing missing data and data structure
+library(sjPlot)      # Plotting for statistical models (e.g., mixed models)
+library(corrplot)    # For creating correlation matrix visualizations
+library(grid)        # Base R graphics system for visual layout
+library(gridExtra)   # Arranging multiple plots in a grid
+library(see)         # Visualizing model checks and diagnostics
+library(DescTools)  # Descriptive statistics and plotting tools
+
+# ---- Time Series and Rolling Averages ----
+
+# Libraries for time series data and handling dates
+library(zoo)         # Working with rolling means/averages and time series
+library(lubridate)   # Date and time manipulation
+
+
+# ---- Mixed-Effects Models and Analysis ----
+
+# Libraries for mixed-effects models and related analysis
+library(lme4)        # Fitting mixed-effects models (linear and generalized)
+library(lmerTest)    # Adds p-values for lme4 models
+library(nlme)        # Linear and nonlinear mixed-effects models
+library(emmeans)     # Compute estimated marginal means (EMMs) for model outputs
+library(broom.mixed) # Tidying mixed model results into tidy data frames
+library(performance) # Model performance metrics (e.g., R-squared for mixed models)
+library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed models
+
+# Generalized additive models and marginal effects
+library(mgcv)        # Fitting generalized additive models (GAMs)
+library(marginaleffects) # Tools for calculating marginal effects from regression models
+
+
+# ---- Statistical Tools ----
+
+# Libraries for specific statistical methods
+#library(psych)       # Descriptive statistics and psychometrics
+#library(GPArotation) # Factor analysis rotations (e.g., Varimax)
+library(rmcorr)      # Repeated measures correlations
+#library(MASS)        # Functions for statistical methods, e.g., Mahalanobis distance
+library(careless)    # Detecting careless responses in surveys
+library(responsePatterns) # Analyzing response patterns in data
+
+
+# ---- GitHub, Project Management, and Reproducibility ----
+
+# Libraries for project and version control management
+library(usethis)     # Simplifies setting up GitHub repositories and managing projects
+library(gitcreds)    # Managing Git credentials for GitHub interactions
+#library(renv)        # Manages dependencies for reproducible environments
+#library(targets)     # Workflow management for reproducible research pipelines
+```
+
+# ---- Check for Package Conflicts and Declare Preferences (no cache) ----
+```{r package conflicts, warning=FALSE}
+library(conflicted) # Managing conflicts between package namespaces
+
+conflict_scout() # Check for conflicts between package namespaces
+
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(tidyr::complete)
+conflicts_prefer(dplyr::lag)
+```
+
+
+# ---- Store Global Lists of final variable names and labels ----
+- Create Lists of Variables for Analysis
+-   @dv_list: List of dependent variables for analysis
+-   @hormlist: List of hormone variables for analysis
+-   @alldailyvars: dv_list and hormlist combined
+
+```{r make lists, cache=TRUE}
+
+dv_list <- c(
+  "CSS_Inatt",
+  "CSS_HypImp",
+  "score_pinball",
+  "score_robot",
+  "BDEFS_Total",
+  "BDEFS_WM_avg",
+  "BDEFS_RI_avg",
+  "UPPS_NU_avg",
+  "UPPS_PU_avg",
+  "UPPS_Premed_avg",
+  "UPPS_Persev_avg",
+  "UPPS_Sens_avg",
+  "DEBQ_Total",
+  "CSS_Inatt_Count",
+  "CSS_Hyp_Count",
+  "CSS_Imp_Count",
+  "CSS_HypImp_Count",
+  "DRSP_1",
+  "DRSP_2",
+  "DRSP_3",
+  "DRSP_4",
+  "DRSP_5",
+  "DRSP_6",
+  "DRSP_7",
+  "DRSP_8",
+  "DRSP_9",
+  "DRSP_10",
+  "DRSP_11",
+  "DRSP_12",
+  "DRSP_13",
+  "DRSP_14",
+  "DRSP_15",
+  "DRSP_16",
+  "DRSP_17",
+  "DRSP_18",
+  "DRSP_19",
+  "DRSP_20",
+  "DRSP_21",
+  "DRSP_22",
+  "DRSP_23"
+) %>% noquote()
+
+
+
+# Rename the variables based on DRSP items
+# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
+names(dv_list) <- c(
+  "Inattention Sx", 
+  "Hyperactivity/Imp Sx", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Resp Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyp/Imp Sx Count",
+  "Depressed Mood", # DRSP_1
+  "Hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Incr Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloat/Wt Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Imp", 
+  "Relational Imp"
+)
+
+# Rename the variables based on DRSP items
+names(dv_list) <- c(
+  "Depressed Mood", # DRSP_1
+  "hopelessness", # DRSP_2
+  "Worthlessness/Guilt", # DRSP_3
+  "Anxiety/Tension", # DRSP_4
+  "Mood Swings", # DRSP_5
+  "Rejection Sensitivity", # DRSP_6
+  "Anger/Irritability", # DRSP_7
+  "Interpersonal Conflict", # DRSP_8
+  "Less Interest", # DRSP_9
+  "Difficulty Concentrating", # DRSP_10
+  "Lethargy/Fatigue", # DRSP_11
+  "Increased Appetite/Overate", # DRSP_12
+  "Food Cravings", # DRSP_13
+  "Hypersomnia", # DRSP_14
+  "Insomnia", # DRSP_15
+  "Overwhelm/Can't Cope", # DRSP_16
+  "Out of Control", # DRSP_17
+  "Breast Tenderness", # DRSP_18
+  "Swelling/Bloating/Weight Gain", # DRSP_19
+  "Joint/Muscle Pain", # DRSP_20
+  "Headache", # DRSP_21
+  "Work/School Impairment", 
+  "Relational Impairment",
+  "Inattention Symptoms", 
+  "Hyperactivity/Impulsivity Symptoms", 
+  "Pinball Score",
+  "Robot Score",
+  "BDEFS Total",
+  "BDEFS Working Memory",
+  "BDEFS Response Inhibition",
+  "Negative Urgency",
+  "Positive Urgency",
+  "Lack of Premeditation",
+  "Lack of Perseverance",
+  "Sensation Seeking",
+  "DEBQ Total",
+  "Inattention Sx Count",
+  "Hyperactivity Sx Count",
+  "Impulsivity Sx Count",
+  "Hyperactivity/Impulsivity Sx Count"
+)
+
+hormlist <- c(
+  "E2",
+  "P4",
+  "LH"
+) %>% noquote()
+
+#Create another list that combines both dv_list and hormlist above
+alldailyvars <- c(dv_list, hormlist) %>% noquote()
 ```
 
 
@@ -17,11 +287,29 @@ knitr::opts_chunk$set(echo = TRUE)
 df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241020.csv")
 ```
 
+# ---- Setting Variable Formats  ----
+- Convert daterated to Date format using lubridate if necessary (ensure date format matches)
+```{r updating formats, include=TRUE}
 
+# Convert daterated to Date format using lubridate if necessary (ensure date format matches)
+df <- df %>%
+  mutate(daterated = case_when(
+    !is.na(mdy(daterated)) ~ as.Date(mdy(daterated)),  # If mm/dd/yyyy
+    !is.na(dmy(daterated)) ~ as.Date(dmy(daterated)),  # If dd/mm/yyyy
+    !is.na(ymd(daterated)) ~ as.Date(ymd(daterated)),  # If yyyy-mm-dd
+    TRUE ~ NA_Date_  # If parsing fails, set to NA
+  ))
+```
+
+# ---- Sort df by id and daterated ----
+```{r sort df}
+df <- df %>%
+  arrange(id, daterated)
+```
 
 # Check Association between cycleday variable and days since starting
 
-```{r}
+```{r, cache=TRUE}
 
 df$TubeNumber <- as.numeric(df$TubeNumber) # Convert TubeNumber to numeric
 
@@ -39,276 +327,18 @@ hist(df_first$scaled_cycleday, breaks = 30)
 
 ```
 
-# 2024-10-17 - HORIZON PLOTS OF RAW DATA
 
-<!-- HCL palettes -->
+# 2024-10-20 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
 
-<!-- Type:  Qualitative  -->
-<!-- Names: Pastel 1, Dark 2, Dark 3, Set 2, Set 3, Warm, Cold, Harmonic, Dynamic -->
+# Saved in 2024/10-20 folder
 
-<!-- Type:  Sequential (single-hue)  -->
-<!-- Names: Grays, Light Grays, Blues 2, Blues 3, Purples 2, Purples 3, Reds 2, Reds 3, Greens 2, Greens 3, -->
-<!--        Oslo -->
-
-<!-- Type:  Sequential (multi-hue)  -->
-<!-- Names: Purple-Blue, Red-Purple, Red-Blue, Purple-Orange, Purple-Yellow, Blue-Yellow, Green-Yellow, -->
-<!--        Red-Yellow, Heat, Heat 2, Terrain, Terrain 2, Viridis, Plasma, Inferno, Rocket, Mako, Dark -->
-<!--        Mint, Mint, BluGrn, Teal, TealGrn, Emrld, BluYl, ag_GrnYl, Peach, PinkYl, Burg, BurgYl, -->
-<!--        RedOr, OrYel, Purp, PurpOr, Sunset, Magenta, SunsetDark, ag_Sunset, BrwnYl, YlOrRd, YlOrBr, -->
-<!--        OrRd, Oranges, YlGn, YlGnBu, Reds, RdPu, PuRd, Purples, PuBuGn, PuBu, Greens, BuGn, GnBu, -->
-<!--        BuPu, Blues, Lajolla, Turku, Hawaii, Batlow -->
-
-<!-- Type:  Diverging  -->
-<!-- Names: Blue-Red, Blue-Red 2, Blue-Red 3, Red-Green, Purple-Green, Purple-Brown, Green-Brown, Blue-Yellow -->
-<!--        2, Blue-Yellow 3, Green-Orange, Cyan-Magenta, Tropic, Broc, Cork, Vik, Berlin, Lisbon, -->
-<!--        Tofino -->
-
-```{r warning=FALSE}
-
-#colorspace::hcl_palettes() # Lists available HCL palettes.
-
-
-horiz_plot <-df %>%  
-  ggplot() +  # Start the ggplot chain with the dataset `df`
-  
-  # Create a horizon plot using the geom_horizon function
-  # The 'aes' function specifies the x and y aesthetics for the plot.
-  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
-  # and 'E2' (estradiol levels) is mapped to the y-axis.
-  geom_horizon(aes(scaled_cycleday_ov, 
-                   E2zd), # Use the 'E2zd' variable for the y-axis.
-               # The 'origin' argument defines the baseline for splitting positive/negative values.
-               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
-               
-               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
-               horizonscale = 7) +  # Use 4 levels of shading.
-  
-  # Add a color scale using the HCL color palette ('BluGrn').
-  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
-  
-  scale_fill_hcl(palette = 'Heat', reverse = T) + 
-  
-  
-  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
-  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
-  facet_grid(id~.) +
-  
-  # Apply the 'theme_few' theme for a clean, minimal look.
-  theme_few() +
-  
-  # Customize the theme further:
-  theme(
-    # Set the vertical spacing between panels to zero lines.
-    panel.spacing.y = unit(0, "lines"),
-    
-    # Customize the text of the facet strips (which show the participant IDs).
-    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
-    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
-    
-    # Remove the legend from the plot.
-    legend.position = 'right',
-    
-    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
-    axis.text.y = element_blank(),  # No y-axis text.
-    axis.title.y = element_blank(),  # No y-axis title.
-    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
-    
-    # Remove the border around each panel.
-    panel.border = element_blank()
-  ) +
-  
-  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
-  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
-  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
-  
-  # Add a title to the plot.
-  ggtitle('Person-Std E2 Across (Menses to Menses) Cycle by ID') +
-  
-  # Add a label to the x-axis.
-  xlab('Scaled Cycleday (Ovulation at 0)')
-
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_mens-mens.png", 
-       plot = horiz_plot, 
-       width = 8, 
-       height = 6)
-
-horiz_plot <-df %>%  
-  ggplot() +  # Start the ggplot chain with the dataset `df`
-  
-  # Create a horizon plot using the geom_horizon function
-  # The 'aes' function specifies the x and y aesthetics for the plot.
-  # 'scaled_cycleday' is mapped to the x-axis (indicating cycle days),
-  # and 'E2' (estradiol levels) is mapped to the y-axis.
-  geom_horizon(aes(scaled_cycleday, 
-                   E2zd), # Use the 'E2zd' variable for the y-axis.
-               # The 'origin' argument defines the baseline for splitting positive/negative values.
-               origin = 'midpoint',  # Split the plot at the midpoint between positive and negative values.
-               
-               # 'horizonscale' defines how many layers (shades) the plot will have to represent different ranges.
-               horizonscale = 7) +  # Use 4 levels of shading.
-  
-  # Add a color scale using the HCL color palette ('BluGrn').
-  # 'reverse = T' reverses the color scheme so that lower values have darker colors and higher values are lighter.
-  
-  scale_fill_hcl(palette = 'Heat', reverse = T) + 
-  
-  
-  # Create a faceted plot with individual panels for each 'id' (participant ID) along the y-axis.
-  # '~.' specifies that there's only faceting on the y-axis (id~.). Each ID will get its own horizontal plot.
-  facet_grid(id~.) +
-  
-  # Apply the 'theme_few' theme for a clean, minimal look.
-  theme_few() +
-  
-  # Customize the theme further:
-  theme(
-    # Set the vertical spacing between panels to zero lines.
-    panel.spacing.y = unit(0, "lines"),
-    
-    # Customize the text of the facet strips (which show the participant IDs).
-    # Size is set to 7, text is horizontal (angle = 0), and aligned to the left (hjust = 0).
-    strip.text.y = element_text(size = 6, angle = 0, hjust = 0),
-    
-    # Remove the legend from the plot.
-    legend.position = 'right',
-    
-    # Remove the y-axis labels (numbers/text), the y-axis title, and the y-axis ticks.
-    axis.text.y = element_blank(),  # No y-axis text.
-    axis.title.y = element_blank(),  # No y-axis title.
-    axis.ticks.y = element_blank(),  # No ticks on the y-axis.
-    
-    # Remove the border around each panel.
-    panel.border = element_blank()
-  ) +
-  
-  # Optionally, you could uncomment the line below if you want to format the x-axis to display date labels.
-  # Here, 'scale_x_date' expands the x-axis to avoid clipping at the ends and sets a date format with daily breaks.
-  # scale_x_date(expand=c(0,0), date_breaks = "1 da", date_labels = "%b") +
-  
-  # Add a title to the plot.
-  ggtitle('Person-Std E2 Across (Ov to Ov) Cycle by ID') +
-  
-  # Add a label to the x-axis.
-  xlab('Scaled Cycleday (Menses at 0)')
-
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/E2_horizon_plot_ov-ov.png", 
-       plot = horiz_plot, 
-       width = 8, 
-       height = 6)
-
-```
-
-```{r}
-# Function to create horizon plots for a list of outcomes (menses to menses cycle)
-horizon_plot_menses_to_menses_list <- function(df, outcomes, filename_prefix) {
-  # Loop through each outcome in the list of outcomes
-  for (outcome in outcomes) {
-    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
-    outcome.zd <- paste0(outcome, '.zd')
-    # Create the filename for saving the plot
-    filename <- paste0(filename_prefix, outcome, '_horizon_plot_mens-mens.png')
-    
-    # Generate the plot
-    plot <- df %>%  
-      ggplot() +
-      # Create a horizon plot for the given outcome
-      geom_horizon(aes(scaled_cycleday_ov, .data[[outcome.zd]]),
-                   origin = 'midpoint',  # Set the baseline at the midpoint
-                   horizonscale = 7) +  # Set the number of shading levels
-      # Set the color scale using the HCL 'Heat' palette
-      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
-      # Facet by participant ID to create individual panels for each participant
-      facet_grid(id~.) +
-      # Use a minimal theme for the plot
-      theme_few() +
-      # Customize the theme further
-      theme(
-        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
-        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
-        legend.position = 'right',  # Place the legend on the right side
-        axis.text.y = element_blank(),  # Remove y-axis text
-        axis.title.y = element_blank(),  # Remove y-axis title
-        axis.ticks.y = element_blank(),  # Remove y-axis ticks
-        panel.border = element_blank()  # Remove panel borders
-      ) +
-      # Add a title to the plot
-      ggtitle(paste('Person-Std', outcome, 'Across (Menses to Menses) Cycle by ID')) +
-      # Add a label to the x-axis
-      xlab('Scaled Cycleday (Ovulation at 0)')
-    
-    # Save the plot to the specified filename (using the old file path)
-    ggsave(filename = filename, plot = plot, width = 8, height = 6)
-  }
-}
-
-# Function to create horizon plots for a list of outcomes (ovulation to ovulation cycle)
-horizon_plot_ovulation_to_ovulation_list <- function(df, outcomes, filename_prefix) {
-  # Loop through each outcome in the list of outcomes
-  for (outcome in outcomes) {
-    # Create the standardized outcome variable name (e.g., 'E2' -> 'E2.zd')
-    outcome.zd <- paste0(outcome, '.zd')
-    # Create the filename for saving the plot
-    filename <- paste0(filename_prefix, outcome, '_horizon_plot_ov-ov.png')
-    
-    # Generate the plot
-    plot <- df %>%  
-      ggplot() +
-      # Create a horizon plot for the given outcome
-      geom_horizon(aes(scaled_cycleday, .data[[outcome.zd]]),
-                   origin = 'midpoint',  # Set the baseline at the midpoint
-                   horizonscale = 7) +  # Set the number of shading levels
-      # Set the color scale using the HCL 'Heat' palette
-      scale_fill_hcl(palette = 'Heat', reverse = TRUE) + 
-      # Facet by participant ID to create individual panels for each participant
-      facet_grid(id~.) +
-      # Use a minimal theme for the plot
-      theme_few() +
-      # Customize the theme further
-      theme(
-        panel.spacing.y = unit(0, "lines"),  # Remove vertical spacing between panels
-        strip.text.y = element_text(size = 6, angle = 0, hjust = 0),  # Customize facet strip text
-        legend.position = 'right',  # Place the legend on the right side
-        axis.text.y = element_blank(),  # Remove y-axis text
-        axis.title.y = element_blank(),  # Remove y-axis title
-        axis.ticks.y = element_blank(),  # Remove y-axis ticks
-        panel.border = element_blank()  # Remove panel borders
-      ) +
-      # Add a title to the plot
-      ggtitle(paste('Person-Std', outcome, 'Across (Ov to Ov) Cycle by ID')) +
-      # Add a label to the x-axis
-      xlab('Scaled Cycleday (Menses at 0)')
-    
-    # Save the plot to the specified filename (using the old file path)
-    ggsave(filename = filename, plot = plot, width = 8, height = 6)
-  }
-}
-
-outcomelist <- c(
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
-  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "UPPS_Total", "DEBQ_Total"
-)
-
-horizon_plot_menses_to_menses_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
-
-horizon_plot_ovulation_to_ovulation_list(df, outcomelist, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/")
-
-```
-
-
-
-# 2024-09-25 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
-```{r}
+```{r, warning=FALSE, cache=TRUE}
 
 # Define the function to generate plots for a list of DVs
-plot_DVs <- function(DV_list, df) {
+plot_DVs <- function(dv_list, df) {
   
   # Create person-standardized (z-scored within each participant) versions of each DV
-  for (DV in DV_list) {
+  for (DV in dv_list) {
     zd_var <- paste0(DV, ".zd")  # Name for the person-standardized version
     
     # Add the person-standardized columns for each DV
@@ -328,7 +358,7 @@ plot_DVs <- function(DV_list, df) {
   # Indicators for menstrual bleeding
   bleeding_indicator <- data.frame(xmin = .5, xmax = 0.7, ymin = -Inf, ymax = Inf)
   
-  for (DV in DV_list) {
+  for (DV in dv_list) {
     
     if (DV %in% c("E2", "P4", "LH")) {
       # Raw plot for E2, P4, LH
@@ -457,7 +487,7 @@ plot_DVs <- function(DV_list, df) {
 
       
       # Rolling deviations plot
-      roll_dev_var <- paste0(DV, ".roll.d")
+      roll_dev_var <- paste0(DV, ".d.5roll")
       dv <- df %>%
         group_by(cycleday_10perc) %>%
         summarise(mean_value = mean(!!sym(roll_dev_var), na.rm = TRUE),
@@ -489,27 +519,16 @@ plot_DVs <- function(DV_list, df) {
   }
 }
 
-# Define the folder location for saving the plots
-output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03"
-
-
-plot_DVs(outcomelist, df)
-
-
-
-
+plot_DVs(dv_list, df)
 
 ```
 
-# 2024-09-25 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
+# 2024-10-20 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
 
-```{r warning=TRUE}
+# Saved in 2024/10-20 folder
 
-# Load necessary libraries
-library(dplyr)   # Data manipulation
-library(ggplot2) # Plotting
-library(rlang)   # Symbolic programming utilities
-library(here)    # Constructing file paths
+```{r, warning=FALSE, cache=TRUE}
+
 
 # Define the function to generate plots for a list of DVs
 # Args:
@@ -591,55 +610,6 @@ print(p3)
   }
 }
 
-# Rename the variables based on DRSP items
-# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
-names(dv_list) <- c(
-  "Depressed Mood", # DRSP_1
-  "Hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Incr Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloat/Wt Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Imp", 
-  "Relational Imp",
-  "Inattention Sx", 
-  "Hyperactivity/Imp Sx", 
-  "Pinball Score",
-  "Robot Score",
-  "BDEFS Total",
-  "BDEFS Working Memory",
-  "BDEFS Resp Inhibition",
-  "Negative Urgency",
-  "Positive Urgency",
-  "Lack of Premeditation",
-  "Lack of Perseverance",
-  "Sensation Seeking",
-  "DEBQ Total",
-  "Inattention Sx Count",
-  "Hyperactivity Sx Count",
-  "Impulsivity Sx Count",
-  "Hyp/Imp Sx Count"
-)
-
-# Define the folder location for saving the plots
-# Define the folder location for saving the plots
-output_folder <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10"
-
 # Call the function with the dataframe and output folder
 plot_DVs_M2M(dv_list, df, output_folder)
 
@@ -655,10 +625,12 @@ plot_DVs_M2M(dv_list, df, output_folder)
 # it logs the outcome, fits the model, performs hierarchical partitioning, 
 # and saves both the model summary and partitioning output to a file.
 
+# Saved in 2024/10-20 folder
+
 ```{r}
 
 # Function to run GAMM for each outcome and save results
-run_gamm_for_outcome <- function(outcome_var, df, output_dir) {
+run_gamm_for_outcome <- function(outcome_var, df, output_folder) {
   # Step 1: Log-transform the outcome variable
   # The log transformation helps stabilize variance and normalize the data
   df[[paste0(outcome_var, "log")]] <- log(df[[outcome_var]] + 1)
@@ -696,7 +668,7 @@ run_gamm_for_outcome <- function(outcome_var, df, output_dir) {
   
   # Step 7: Define the output file path
   # The output file is saved with a name corresponding to the outcome variable.
-  summary_file_path <- file.path(output_dir, paste0(outcome_var, "model.txt"))
+  summary_file_path <- file.path(output_folder, paste0(outcome_var, "model.txt"))
   
   # Step 8: Save the combined output to a text file
   # This writes the model summary and hierarchical partitioning into the text file.
@@ -706,24 +678,16 @@ run_gamm_for_outcome <- function(outcome_var, df, output_dir) {
   # Step 9: Plot the GAMM model results
   # The plot shows the smooth term for 'scaled_cycleday' and its relationship with the outcome.
   # Select = 3 means we're selecting the smooth term corresponding to scaled_cycleday.
-  plot.gam(gamm_model, select = 3)
+  #TODO: THIS IS OFF RIGHT NOW
+  #plot.gam(gamm_model, select = 3)
   
   # Return the model object for further analysis if needed
   return(gamm_model)
 }
 
-# Example Usage:
-# dv_list is a list of dependent variables (outcomes) for which the model will be run.
-# These variables should be present in the dataset (df).
-test_list <- c("E2", "P4")  # Replace with actual outcome names
-
-# Define the directory where the output files will be saved
-# This should be an existing directory on your system.
-output_directory <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-17/"
-
 # Step 10: Apply the function to each outcome in the list
 # This will run the GAMM model for each outcome and save the results.
-lapply(test_list, run_gamm_for_outcome, df = df, output_dir = output_directory)
+lapply(dv_list, run_gamm_for_outcome, df = df, output_folder = output_folder)
 
 ```
 
@@ -1053,10 +1017,10 @@ output_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR 
 plot_path <- file.path(output_path, "GAMMplots_k30")
 
 # List of outcomes to loop through (replace with your actual outcomes)
-# already exists as "outcomelist" above
+# already exists as "dv_list" above
 
 # Loop through each outcome and apply the GAMM function
-for (outcome in outcomelist) {
+for (outcome in dv_list) {
   gamm_model_loop(outcome, df, output_path, plot_path)  # Apply the function to each outcome
 }
 
@@ -1171,14 +1135,8 @@ pred_data$conf.high <- scale(pred_data$conf.high)
 output_path <- "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/"
 plot_path <- file.path(output_path, "Plots with Hormone Overlays")
 
-# List of outcomes to loop through (replace with your actual outcomes)
-outcomelist_test <- c("CSS_Inatt")
-
-outcomelist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total",  "CSS_Inatt_Count", "CSS_HypImp_Count", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_7")
-
 # Loop through each outcome and apply the GAMM function
-for (outcome in outcomelist) {
+for (outcome in dv_list) {
   gamm_model_loop(outcome, df, output_path, plot_path)  # Apply the function to each outcome
 }
 
@@ -2389,19 +2347,9 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 
 ```{r}
 
-outcomelist <- c(
-  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7", "DRSP_8", "DRSP_9", 
-  "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", 
-  "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21", "DRSP_22", "DRSP_23", 
-  "UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "UPPS_Total", "DEBQ_Total"
-)
-
 
 # Define your list of outcomes
-print(outcomelist)
+print(dv_list)
 
 # Function to save summary of GAMM models to a file
 save_gamm_summary <- function(outcome) {
@@ -2416,7 +2364,7 @@ save_gamm_summary <- function(outcome) {
 }
 
 # Loop over each outcome and save the summary
-lapply(outcomelist, save_gamm_summary)
+lapply(dv_list, save_gamm_summary)
 
 ```
 
@@ -2570,8 +2518,8 @@ df <- df %>%
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df, save_dir) {
-  for (outcome in outcomelist) {
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
     df[[outcome_log]] <- log(df[[outcome]] + 1)
@@ -2666,7 +2614,7 @@ create_gamm_models <- function(outcomelist, df, save_dir) {
 
 #OutcomeList already exists above
 
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots")
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots")
 
 ```
 
@@ -2772,8 +2720,8 @@ library(plotly)
 library(htmlwidgets)
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df, save_dir) {
-  for (outcome in outcomelist) {
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
     df[[outcome_log]] <- log(df[[outcome]] + 1)
@@ -2887,12 +2835,7 @@ create_gamm_models <- function(outcomelist, df, save_dir) {
 
 # CALL THE LOOP
 
-outcomelist <- c("UPPS_NU_avg", "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg", 
-  "CSS_Fx_Total", "CSS_Inatt", "CSS_HypImp", "CSS_Inatt_Count", "CSS_HypImp_Count", 
-  "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", 
-  "UPPS_Total", "DEBQ_Total")
-
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/")
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-10/")
 
 ```
 
@@ -2905,8 +2848,8 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df, save_dir) {
-  for (outcome in outcomelist) {
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
     df[[outcome_log]] <- log(df[[outcome]] + 1)
@@ -3002,7 +2945,7 @@ create_gamm_models <- function(outcomelist, df, save_dir) {
 
 #OutcomeList already exists above
 
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
 ```
 
@@ -3012,8 +2955,8 @@ create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorag
 ```{r}
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df, save_dir) {
-  for (outcome in outcomelist) {
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
     df[[outcome_log]] <- log(df[[outcome]] + 1)
@@ -3107,7 +3050,7 @@ create_gamm_models <- function(outcomelist, df, save_dir) {
 
 #OutcomeList already exists above
 
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
 # Simulate data for logE2, logP4, and outcome
 logE2 <- seq(-2, 2, length.out = 100)
@@ -3143,8 +3086,8 @@ library(plotly)
 library(htmlwidgets)
 
 # Function to Loop Through Outcomes and Generate GAMM Models
-create_gamm_models <- function(outcomelist, df, save_dir) {
-  for (outcome in outcomelist) {
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
     # Prepare variables dynamically
     outcome_log <- paste0(outcome, "log")
     df <- df %>% mutate(!!outcome_log := log(!!sym(outcome) + 1))
@@ -3260,7 +3203,7 @@ create_gamm_models <- function(outcomelist, df, save_dir) {
 }
 
 # CALL THE LOOP
-create_gamm_models(outcomelist, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-04/")
 
 ```
 
