@@ -8,10 +8,6 @@ output:
     number_sections: true
 ---
 
-
-# ---------------------------------------------------------------------------------- SETUP
-
-
 # ---- Setup ----
 - Turns of Scientific Notation
 - Saves 'current_date' as a string in YYYYMMDD format
@@ -33,7 +29,6 @@ if (!dir.exists(output_folder)) {
 }
 
 ```
-
 
 # ---- Load Packages (no cache) ----
 ```{r packages, warning=FALSE}
@@ -134,7 +129,6 @@ conflicts_prefer(dplyr::filter)
 conflicts_prefer(tidyr::complete)
 conflicts_prefer(dplyr::lag)
 ```
-
 
 # ---- Store Global Lists of final variable names and labels ----
 - Create Lists of Variables for Analysis
@@ -288,7 +282,6 @@ hormlist <- c(
 alldailyvars <- c(dv_list, hormlist) %>% noquote()
 ```
 
-
 # Input dataset - CLEAN AS OF 2024-10-20
 
 ```{r}
@@ -323,8 +316,9 @@ df <- df %>%
 ```
 
 
+# ---- END SETUP AND PREP  ----
 
-# ANALYSES STARTS HERE
+# ---- START ANALYSES   ----
 
 # Check Association between cycleday variable and days since starting
 
@@ -346,11 +340,8 @@ hist(df_first$scaled_cycleday, breaks = 30)
 
 ```
 
-
 # 2024-10-20 - PLOTS - LUTEAL then FOLLICULAR - (OVULATION to OVULATION)
-
 # Saved in 20241020 folder
-
 ```{r plot-ov-ov-means, eval=FALSE, cache=TRUE}
 
 # Define the function to generate plots for a list of DVs
@@ -543,9 +534,7 @@ plot_DVs(dv_list, df)
 ```
 
 # 2024-10-20 - PLOTS - FOLLICULAR then LUTEAL - (MENSES to MENSES)
-
 # Saved in 20241020 folder
-
 ```{r plot-mens-mens-means, eval=FALSE, cache=TRUE}
 
 
@@ -636,7 +625,6 @@ plot_DVs_M2M(dv_list, df, output_folder)
 
 
 # 2024-10-20 - FITTING GAMMs for E2, P4, LH - Have to do this first because otherwise the function below breaks
-
 # Saved in 20241020 Folder
 ```{r scaledcyc-horm-gamms-plots, eval=FALSE, cache=TRUE}
 
@@ -794,8 +782,6 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 
 ```
 
-
-
 # ---- Scaled Cycle Day GAMMs Predicting all outcomes on dv_list
 - For each variable in @dv_list, 
 - Runs GAMM and Hierarchical Variance partitioning hp.gamm()
@@ -952,7 +938,6 @@ for (dv in dv_list) {
 
 ```
 
-
 ## Prepare Hormones
 
 ```{r}
@@ -994,6 +979,7 @@ df <- df %>%
 # ---- E2 and P4 GAMMs Predicting all outcomes on dv_list
 - Several Variables were created in the dailyprep file: 
 - E2.m, E2.sd, E2.d, E2.zd, E2.zd.3roll, E2.zd.5roll (for E2, P4, and LH, as well as everything in @alldailyvars)
+-TODO: We need to add lags and consider derivatives and using rolling averages 
 -TODO:  HOWEVER, I need the winsorization below. We will need to add the winsorization to the dailyprep file and re-run it.
 
 # Looping through hormone effects - FIXED: E2zd, P4zd, E2zd*P4zd, E2zch, P4zch
@@ -1100,9 +1086,8 @@ create_gamm_models(dv_list, df, output_folder)
 
 ```
 
-
-
 # Looping through hormone effects - FIXED E2zd*P4zd TENSOR PRODUCT SMOOTH
+#TODO - need to figure out how to add the intercept back to the 3dplot because the estimates are wrong due to that
 
 ```{r}
 library(plotly)
