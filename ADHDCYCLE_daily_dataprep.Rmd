@@ -662,10 +662,17 @@ print.variable.names(df)
 # ---- Setting Variable Formats  ----
 - Convert daterated to Date format using lubridate if necessary (ensure date format matches)
 ```{r updating formats, include=TRUE}
+convert_date_if_needed <- function(df, date_column) {
+  # Check if the date column is in Date format
+  if (!inherits(df[[date_column]], "Date")) {
+    df <- df %>%
+      mutate({{ date_column }} := lubridate::mdy(!!sym(date_column))) # Convert to mm/dd/yyyy format if not already in Date format
+  }
+  return(df)
+}
 
-# Convert daterated to Date format using lubridate if necessary (ensure date format matches)
-df <- df %>%
-  mutate(daterated = as.Date(mdy(daterated)))  # If in mm/dd/yyyy format
+# Call
+df <- convert_date_if_needed(df, "daterated")
 ```
 
 # ---- Sort df by id and daterated ----

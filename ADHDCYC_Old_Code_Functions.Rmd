@@ -168,3 +168,110 @@ df <- prep_cycle_LH_mens(df, remove_participants_no_menses = TRUE, remove_partic
 
 # Check the resulting variables
 df %>% dplyr::select(id, daterated, first_menses_day_flag, first_positive_LH_test_day_flag, cycle_day_from_menses, cycle_day_from_positive_LH) %>% View()
+
+
+
+
+# Looping through hormone effects - FIXED: E2.zd, P4.zd, E2.zd*P4.zd, E2zch, P4zch
+
+```{r}
+
+# Function to Loop Through Outcomes and Generate GAMM Models
+create_gamm_models <- function(dv_list, df, save_dir) {
+  for (outcome in dv_list) {
+    # Prepare variables dynamically
+    outcome_log <- paste0(outcome, "log")
+    df[[outcome_log]] <- log(df[[outcome]] + 1)
+
+    # Plot histogram for transformed outcome
+    hist(df[[outcome]], main = paste("Histogram of", outcome))
+    hist(df[[outcome_log]], main = paste("Histogram of Log-transformed", outcome))
+
+    # GAMM model with hormone z-scores and derivatives
+    gamm_formula <- as.formula(paste0(
+      outcome_log, " ~ s(id, bs = \"re\") + s(E2.zd) +",
+      " s(P4.zd)  + ti(E2.zd, P4.zd) +",
+      " s(E2zch) + s(P4zch)"
+    ))
+
+    gamm_model <- gam(
+      gamm_formula,
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Summary and plot of the model
+    model_summary <- summary(gamm_model)
+    print(model_summary)
+
+    # Save the model summary as a text file
+    summary_output <- capture.output(model_summary)
+    summary_file_path <- file.path(save_dir, paste0(outcome, "_fixed__wzch_85_model_EP_summary.txt"))
+    writeLines(summary_output, summary_file_path)
+    cat("Model summary saved to:", summary_file_path, "\n")
+
+    # Plot the GAMM effects
+    plot.gam(gamm_model, select = 2, main = paste("Estrogen Effect on", outcome))
+    plot.gam(gamm_model, select = 3, main = paste("Progesterone Effect on", outcome))
+   plot.gam(gamm_model, select = 5, main = paste("Estrogen Change Effect on", outcome))
+   plot.gam(gamm_model, select = 6, main = paste("Progesterone Change Effect on", outcome))
+
+    # Simpler model without random effects for visualization
+    gamm_simple_formula <- as.formula(paste0(
+      outcome_log, " ~ s(E2.zd) + s(P4.zd) + ti(E2.zd, P4.zd)"
+    ))
+
+    gamm_model_simple <- gam(
+      gamm_simple_formula,
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+
+    # Create the grid for contour plot
+    grid <- expand.grid(
+      E2.zd = seq(
+        min(df$E2.zd, na.rm = TRUE),
+        max(df$E2.zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      P4.zd = seq(
+        min(df$P4.zd, na.rm = TRUE),
+        max(df$P4.zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response",
+                              transform = function(x) exp(x) - 1)
+
+    # Contour plot
+    plot_title <- paste("Predicting", outcome, "from E2 and P4 (Person Standardized)")
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2.zd, y = P4.zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2.zd, y = P4.zd, z = predicted), color = "black") +
+      geom_point(data = df, aes(x = E2.zd, y = P4.zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2.zd", y = "P4.zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+    # Save the contour plot
+    plot_file_path <- file.path(save_dir, paste0(outcome, "_85_wzch_fixed.png"))
+    ggsave(filename = plot_file_path, plot = contour_plot, width = 8, height = 6)
+    cat("Contour plot saved to:", plot_file_path, "\n")
+  }
+}
+
+# CALL THE LOOP
+
+
+create_gamm_models(dv_list, df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2024-10-03/EP_Models_Plots")
+
+```
