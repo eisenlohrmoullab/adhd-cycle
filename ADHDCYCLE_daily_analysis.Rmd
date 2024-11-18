@@ -30,6 +30,8 @@ if (!dir.exists(output_folder)) {
 
 ```
 
+
+
 # ---- Load Packages (no cache) ----
 ```{r packages, warning=FALSE}
 
@@ -313,6 +315,100 @@ df <- convert_date_if_needed(df, "daterated")
 ```{r sort df}
 df <- df %>%
   arrange(id, daterated)
+
+count_rows_ids(df)
+```
+
+
+# Cristina Pinheiro EF Analyses
+
+```{r sort df}
+# Count nonmissing values of pinball and robot scores
+df %>%
+  count(!is.na(score_pinball))
+
+# How many unique ids have at least 10 nonmissing pinball observations? 
+
+df %>%
+  group_by(id) %>%
+  summarise(n_pinball = sum(!is.na(score_pinball))) %>%
+  filter(n_pinball >= 10) %>%
+  nrow()
+
+# How many unique ids have at least 10 nonmissing robot observations?
+df %>%
+  group_by(id) %>%
+  summarise(n_robot = sum(!is.na(score_robot))) %>%
+  filter(n_robot >= 10) %>%
+  nrow()
+
+
+# ---- Histograms ----
+
+hist(df$score_pinball)
+hist(df$score_robot)
+hist(df$BDEFS_WM_avg)
+hist(df$BDEFS_RI_avg)
+
+# Example list of variables
+variable_list <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
+
+# ---- Repeated Measures Correlations ----
+
+# Set all measures in a list to numeric
+df[variable_list] <- lapply(df[variable_list], as.numeric)
+
+# Initialize an empty matrix to store correlations
+n <- length(variable_list)
+
+# Compute repeated measures correlations for all pairs of variables
+within_matrix <- matrix(NA, nrow = n, ncol = n, dimnames = list(variable_list, variable_list))
+
+# Loop through unique pairs of variables
+for (i in 1:(n - 1)) {
+  for (j in (i + 1):n) {
+    var1 <- variable_list[i]
+    var2 <- variable_list[j]
+    
+    # Compute repeated measures correlation
+    result <- rmcorr(participant = id, 
+                     measure1 = df[[var1]], 
+                     measure2 = df[[var2]], 
+                     dataset = df)
+    
+    # Store the correlation coefficient in the matrix
+    within_matrix[i, j] <- result$r
+    within_matrix[j, i] <- result$r  # Fill symmetric position
+  }
+}
+
+# Display the repeated measures correlation matrix
+print(within_matrix)
+
+
+# Save to output_folder as text file
+write.table(within_matrix, file = paste0(output_folder, "/rmcorr_correlations.txt"), sep = "\t", quote = FALSE)
+
+
+# ---- Person Mean Correlations ----
+
+# Create a new dataset keeping only the first observation per id
+df_first <- df %>%
+  group_by(id) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+variable_list.m <- c("score_pinball.m", "score_robot.m", "BDEFS_WM_avg.m", "BDEFS_RI_avg.m")
+
+
+# Calculate correlation matrix of score_pinball.m, score_robot.m, BDEFS_WM_avg.m, and BDEFS_RI_avg.m
+between_matrix <- cor(df_first[variable_list.m], use = "complete.obs")
+
+between_matrix
+
+# Save to output_folder as text file
+write.table(between_matrix, file = paste0(output_folder, "/person_mean_correlations.txt"), sep = "\t", quote = FALSE)
+
 ```
 
 
@@ -635,9 +731,12 @@ hist(df$E2)
 df$E2log <- log(df$E2+1)
 hist(df$E2log)
 
+# Set id as factor
+df$id <- as.factor(df$id)
+
 gamm_E2 <- gam(E2log ~ s(id, bs = "re") + 
-                 s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20), data = df, method = "REML")
+                 s(id, scaled_cycleday, bs = "fs") + 
+                 s(scaled_cycleday), data = df, method = "REML")
 
 summary(gamm_E2)
 
