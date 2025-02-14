@@ -15,9 +15,10 @@ output:
 - Saves Current Date as a string in YYYYMMDD format
 - Sets the 'output_folder' as path to the output folder for saving files
 ```{r setup}
-knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
-options(scipen = 999) # Turn off scientific notation
-options(digits = 3) # Set number of digits to display
+
+source("scripts/options_packages.R")
+source("scripts/set-output-folder.R")
+
 ```
 
 
@@ -31,102 +32,6 @@ if (!dir.exists(output_folder)) {
 ```
 
 
-
-
-# ---- Load Packages (no cache) ----
-```{r packages, warning=FALSE}
-
-# ---- Global Chunk Options and Settings ----
-
-# Setting options for knitr to display R code in output
-knitr::opts_chunk$set(echo = TRUE)
-
-# Prevent scientific notation in outputs
-options(scipen = 999)
-
-# ---- Data Manipulation and Cleaning ----
-
-# Core tidyverse libraries for data manipulation and visualization
-library(dplyr)       # Data manipulation (part of tidyverse)
-library(tidyr)       # Data tidying (part of tidyverse)
-library(tidyverse)   # Meta-package, includes dplyr, tidyr, ggplot2, and others
-library(janitor)     # For cleaning data, e.g., renaming columns, removing empty rows
-library(skimr)       # Summarize and inspect data quickly
-
-
-# ---- Reading and Working with Files ----
-
-# Libraries for reading various file formats
-library(haven)       # For reading SPSS, Stata, and SAS files
-library(readxl)      # For reading Excel files
-library(readr)       # For reading CSV and other text files
-
-
-# ---- Plotting and Visualization ----
-
-# Core and extended libraries for data visualization
-library(ggplot2)     # Core plotting library
-library(ggdist)      # Visualizing distributions and uncertainty
-library(ggforce)     # Extending ggplot2 functionality with advanced features
-library(ggrepel)     # For adding non-overlapping text labels to ggplot2
-library(visdat)      # Visualizing missing data and data structure
-library(sjPlot)      # Plotting for statistical models (e.g., mixed models)
-library(corrplot)    # For creating correlation matrix visualizations
-library(grid)        # Base R graphics system for visual layout
-library(gridExtra)   # Arranging multiple plots in a grid
-library(see)         # Visualizing model checks and diagnostics
-library(DescTools)  # Descriptive statistics and plotting tools
-library(cowplot)    # For creating complex plots with multiple panels
-
-
-# ---- Time Series and Rolling Averages ----
-
-# Libraries for time series data and handling dates
-library(zoo)         # Working with rolling means/averages and time series
-library(lubridate)   # Date and time manipulation
-
-
-# ---- Mixed-Effects Models and Analysis ----
-
-# Libraries for mixed-effects models and related analysis
-library(lme4)        # Fitting mixed-effects models (linear and generalized)
-library(lmerTest)    # Adds p-values for lme4 models
-library(nlme)        # Linear and nonlinear mixed-effects models
-library(emmeans)     # Compute estimated marginal means (EMMs) for model outputs
-library(broom.mixed) # Tidying mixed model results into tidy data frames
-library(performance) # Model performance metrics (e.g., R-squared for mixed models)
-library(pbkrtest)    # Parametric bootstrap and Kenward-Roger methods for mixed models
-
-# Generalized additive models and marginal effects
-library(mgcv)        # Fitting generalized additive models (GAMs)
-library(marginaleffects) # Tools for calculating marginal effects from regression models
-
-
-# ---- Statistical Tools ----
-
-# Libraries for specific statistical methods
-#library(psych)       # Descriptive statistics and psychometrics
-#library(GPArotation) # Factor analysis rotations (e.g., Varimax)
-library(rmcorr)      # Repeated measures correlations
-#library(MASS)        # Functions for statistical methods, e.g., Mahalanobis distance
-library(careless)    # Detecting careless responses in surveys
-library(responsePatterns) # Analyzing response patterns in data
-
-
-# ---- GitHub, Project Management, and Reproducibility ----
-
-# Libraries for project and version control management
-library(usethis)     # Simplifies setting up GitHub repositories and managing projects
-library(gitcreds)    # Managing Git credentials for GitHub interactions
-#library(renv)        # Manages dependencies for reproducible environments
-#library(targets)     # Workflow management for reproducible research pipelines
-```
-
-# ---- Check for Package Conflicts and Declare Preferences (no cache) ----
-```{r package conflicts, warning=FALSE}
-
-source("scripts/options_packages.R")
-```
 
 # ---- Store Global Lists of final variable names and labels ----
 - Create Lists of Variables for Analysis
@@ -287,6 +192,10 @@ alldailyvars <- c(dv_list, hormlist) %>% noquote()
 df <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241020.csv")
 source("scripts/print.variable.names.R")
 print.variable.names(df)
+
+str(df$id)
+ #set id as factor
+df$id <- as.factor(df$id)
 ```
 
 # ---- Setting Variable Formats  ----
@@ -317,309 +226,7 @@ count_rows_ids(df)
 ```
 
 
-# Cristina Pinheiro EF Analyses
-
-```{r sort df}
-# Count nonmissing values of pinball and robot scores
-df %>%
-  count(!is.na(score_pinball))
-
-# How many unique ids have at least 10 nonmissing pinball observations? 
-
-df %>%
-  group_by(id) %>%
-  summarise(n_pinball = sum(!is.na(score_pinball))) %>%
-  filter(n_pinball >= 10) %>%
-  nrow()
-
-# How many unique ids have at least 10 nonmissing robot observations?
-df %>%
-  group_by(id) %>%
-  summarise(n_robot = sum(!is.na(score_robot))) %>%
-  filter(n_robot >= 10) %>%
-  nrow()
-
-
-# ---- Histograms ----
-
-hist(df$score_pinball)
-hist(df$score_robot)
-hist(df$BDEFS_WM_avg)
-hist(df$BDEFS_RI_avg)
-
-# Example list of variables
-variable_list <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
-
-# ---- Repeated Measures Correlations ----
-
-# Set all measures in a list to numeric
-df[variable_list] <- lapply(df[variable_list], as.numeric)
-
-# Initialize an empty matrix to store correlations
-n <- length(variable_list)
-
-# Compute repeated measures correlations for all pairs of variables
-within_matrix <- matrix(NA, nrow = n, ncol = n, dimnames = list(variable_list, variable_list))
-
-# Loop through unique pairs of variables
-for (i in 1:(n - 1)) {
-  for (j in (i + 1):n) {
-    var1 <- variable_list[i]
-    var2 <- variable_list[j]
-    
-    # Compute repeated measures correlation
-    result <- rmcorr(participant = id, 
-                     measure1 = df[[var1]], 
-                     measure2 = df[[var2]], 
-                     dataset = df)
-    
-    # Store the correlation coefficient in the matrix
-    within_matrix[i, j] <- result$r
-    within_matrix[j, i] <- result$r  # Fill symmetric position
-  }
-}
-
-# Display the repeated measures correlation matrix
-print(within_matrix)
-
-# Save to output_folder as text file 
-write.table(within_matrix, file = paste0(output_folder, "/rmcorr_correlations.txt"), sep = "\t", quote = FALSE)
-
-
-# ---- Person Mean Correlations ----
-
-# Create a new dataset keeping only the first observation per id
-df_first <- df %>%
-  group_by(id) %>%
-  filter(row_number() == 1) %>%
-  ungroup()
-
-variable_list.m <- c("score_pinball.m", "score_robot.m", "BDEFS_WM_avg.m", "BDEFS_RI_avg.m")
-
-
-# Calculate correlation matrix of score_pinball.m, score_robot.m, BDEFS_WM_avg.m, and BDEFS_RI_avg.m
-between_matrix <- cor(df_first[variable_list.m], use = "complete.obs")
-
-between_matrix
-
-# Save to output_folder as text file
-write.table(between_matrix, file = paste0(output_folder, "/person_mean_correlations.txt"), sep = "\t", quote = FALSE)
-
-```
-
-```{r}
-
-
-
-
-# Load required packages
-library(dplyr)
-library(rmcorr)
-
-# ---- Count Nonmissing Values ----
-
-# Count nonmissing values of pinball and robot scores
-df %>%
-  count(!is.na(score_pinball))
-
-# How many unique ids have at least 10 nonmissing pinball observations?
-df %>%
-  group_by(id) %>%
-  summarise(n_pinball = sum(!is.na(score_pinball))) %>%
-  filter(n_pinball >= 10) %>%
-  nrow()
-
-# How many unique ids have at least 10 nonmissing robot observations?
-df %>%
-  group_by(id) %>%
-  summarise(n_robot = sum(!is.na(score_robot))) %>%
-  filter(n_robot >= 10) %>%
-  nrow()
-
-# ---- Histograms ----
-
-hist(df$score_pinball)
-hist(df$score_robot)
-hist(df$BDEFS_WM_avg)
-hist(df$BDEFS_RI_avg)
-
-# ---- Variable List ----
-variable_list <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "")
-
-# Set all measures in a list to numeric
-df[variable_list] <- lapply(df[variable_list], as.numeric)
-
-# ---- Repeated Measures Correlations ----
-
-# Initialize an empty data frame for repeated measures correlations
-rmcorr_results <- data.frame(
-  Variable1 = character(),
-  Variable2 = character(),
-  r = numeric(),
-  p_value = numeric(),
-  stringsAsFactors = FALSE
-)
-
-# Loop through unique pairs of variables
-n <- length(variable_list)
-for (i in 1:(n - 1)) {
-  for (j in (i + 1):n) {
-    var1 <- variable_list[i]
-    var2 <- variable_list[j]
-    
-    # Compute repeated measures correlation
-    result <- rmcorr(participant = id, 
-                     measure1 = df[[var1]], 
-                     measure2 = df[[var2]], 
-                     dataset = df)
-    
-    # Append results
-    rmcorr_results <- rbind(
-      rmcorr_results,
-      data.frame(
-        Variable1 = var1,
-        Variable2 = var2,
-        r = result$r,
-        p_value = result$p
-      )
-    )
-  }
-}
-
-# Add significance asterisks based on p-values
-rmcorr_results <- rmcorr_results %>%
-  mutate(Significance = case_when(
-    p_value < 0.001 ~ "***",
-    p_value < 0.01 ~ "**",
-    p_value < 0.05 ~ "*",
-    TRUE ~ ""
-  ))
-
-# Save repeated measures correlation table
-write.table(
-  rmcorr_results, 
-  file = paste0(output_folder, "/rmcorr_results.txt"), 
-  sep = "\t", 
-  quote = FALSE, 
-  row.names = FALSE
-)
-
-rmcorr_results
-
-# ---- Person-Mean Correlations ----
-
-# Create a new dataset keeping only the first observation per id
-df_first <- df %>%
-  group_by(id) %>%
-  filter(row_number() == 1) %>%
-  ungroup()
-
-variable_list.m <- c("score_pinball.m", "score_robot.m", "BDEFS_WM_avg.m", "BDEFS_RI_avg.m")
-
-# Calculate correlations and p-values for person-mean correlations
-person_mean_results <- data.frame(
-  Variable1 = character(),
-  Variable2 = character(),
-  r = numeric(),
-  p_value = numeric(),
-  stringsAsFactors = FALSE
-)
-
-for (i in 1:(length(variable_list.m) - 1)) {
-  for (j in (i + 1):length(variable_list.m)) {
-    var1 <- variable_list.m[i]
-    var2 <- variable_list.m[j]
-    
-    # Compute correlation and p-value
-    cor_test <- cor.test(df_first[[var1]], df_first[[var2]], use = "complete.obs")
-    
-    # Append results
-    person_mean_results <- rbind(
-      person_mean_results,
-      data.frame(
-        Variable1 = var1,
-        Variable2 = var2,
-        r = cor_test$estimate,
-        p_value = cor_test$p.value
-      )
-    )
-  }
-}
-
-# Add significance asterisks based on p-values
-person_mean_results <- person_mean_results %>%
-  mutate(Significance = case_when(
-    p_value < 0.001 ~ "***",
-    p_value < 0.01 ~ "**",
-    p_value < 0.05 ~ "*",
-    TRUE ~ ""
-  ))
-
-# Save person-mean correlation table
-write.table(
-  person_mean_results, 
-  file = paste0(output_folder, "/person_mean_results.txt"), 
-  sep = "\t", 
-  quote = FALSE, 
-  row.names = FALSE
-)
-
-# ---- Outputs ----
-# View correlation tables
-print(rmcorr_results)
-print(person_mean_results)
-
-```
-
-
-```{r}
-# Load required packages
-library(lme4)
-
-# Example list of within-person variables
-variable_list <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
-
-# Initialize an empty data frame to store results
-icc_results <- data.frame(
-  Variable = character(),
-  ICC = numeric(),
-  stringsAsFactors = FALSE
-)
-
-# Loop through each variable in the list
-for (variable in variable_list) {
-  # Fit a random intercept model
-  model <- lmer(as.formula(paste(variable, "~ 1 + (1 | id)")), data = df, REML = TRUE)
-  
-  # Extract variance components
-  var_components <- as.data.frame(VarCorr(model))
-  id_variance <- var_components[var_components$grp == "id", "vcov"]
-  residual_variance <- var_components[var_components$grp == "Residual", "vcov"]
-  
-  # Compute ICC
-  icc <- id_variance / (id_variance + residual_variance)
-  
-  # Append results to the data frame
-  icc_results <- rbind(
-    icc_results,
-    data.frame(Variable = variable, ICC = icc)
-  )
-}
-
-# Display the ICC results
-print(icc_results)
-
-# Save the results to a file
-output_folder <- "~/Desktop"
-write.table(
-  icc_results, 
-  file = paste0(output_folder, "/icc_results.txt"), 
-  sep = "\t", 
-  quote = FALSE, 
-  row.names = FALSE
-)
-
-```
+# NOTE: Cristina Pinheiro EF Analyses Happen about here; see RMD file. 
 
 
 
@@ -638,7 +245,9 @@ df_first <- df %>%
   filter(TubeNumber == 1) %>%
   ungroup()
 
-hist(df_first$scaled_cycleday, breaks = 30)
+hist(df_first$scaled_cycleday, breaks = 10)
+hist(df_first$scaled_cycleday_ov, breaks = 10)
+
 
 
 #cor(x=as.numeric(df$TubeNumber), y=df$scaled_cycleday, use="complete.obs")
@@ -931,166 +540,183 @@ plot_DVs_M2M(dv_list, df, output_folder)
 ```
 
 
-# 2024-10-20 - FITTING GAMMs for E2, P4, LH - Have to do this first because otherwise the function below breaks
-# Saved in 20241020 Folder
-```{r scaledcyc-horm-gamms-plots, eval=FALSE, cache=TRUE}
+# 2024-02-14 - FITTING GAMMs for E2, P4, LH - Have to do this first because otherwise the function below breaks
+# Saved in 20250214 Folder with same dataset as in October but with factor set to ID. 
 
-# E2
+```{r}
 
+#############################
+### 1. E2 Analysis Section ###
+#############################
 
-hist(df$E2)
-df$E2log <- log(df$E2+1)
-hist(df$E2log)
+# Plot and transform the E2 data
+hist(df$E2, main = "Histogram of E2", xlab = "E2")
+df$E2log <- log(df$E2 + 1)   # Log-transform E2
+hist(df$E2log, main = "Histogram of log(E2+1)", xlab = "log(E2+1)")
 
-# Set id as factor
+# Ensure 'id' is a factor
 df$id <- as.factor(df$id)
 
+# Fit the GAMM model
 gamm_E2 <- gam(E2log ~ s(id, bs = "re") + 
-                 s(id, scaled_cycleday, bs = "fs") + 
-                 s(scaled_cycleday), data = df, method = "REML")
+                 s(id, scaled_cycleday, bs = "re") + 
+                 s(scaled_cycleday), 
+               data = df, method = "REML")
 
-summary(gamm_E2)
+# Save model summary
+summary_E2 <- capture.output(summary(gamm_E2))
+writeLines(summary_E2, file.path(output_folder, "E2_gamm_summary.txt"))
 
+# Hierarchical partitioning
+var_part_E2 <- gam.hp::gam.hp(gamm_E2)
+var_part_E2_output <- capture.output(var_part_E2$hierarchical.partitioning)
+writeLines(var_part_E2_output, file.path(output_folder, "E2_var_partitioning.txt"))
 
-# Save the model summary as a text file
-summary_output <- capture.output(summary(gamm_E2))
+# Create a dataset for predictions
+E2dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+pred_E2 <- predictions(gamm_E2, newdata = E2dat, type = "response",
+                       transform = function(x) exp(x) - 1)
+E2dat$estimate <- pred_E2$estimate
+E2dat$conf.low <- pred_E2$conf.low
+E2dat$conf.high <- pred_E2$conf.high
 
-var.part = gam.hp::gam.hp(gamm_E2)
-var.part$hierarchical.partitioning
-
-E2dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
-                      id = 0) 
-
-# Predict using the model for each dataset and add predictions
-pred <- predictions(gamm_E2, newdata = E2dat, type = "response", transform = function(x) exp(x) - 1)
-
-#don't need to include anything for 'transform' if your outcome is not log-transformed. This undoes the logtransform so model-implied values are not on the log scale 
-
-E2dat$estimate = pred$estimate
-E2dat$conf.low = pred$conf.low
-E2dat$conf.high = pred$conf.high
-
-# Plotting
+# Create the E2 plot
 E2plot <- ggplot(E2dat, aes(x = scaled_cycleday, y = estimate)) +
-  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  scale_x_continuous(
+    limits = c(-1, 1),
+    breaks = seq(-1, 1, by = 0.50),
+    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+  ) +
   labs(x = "", y = "Salivary Estradiol") +
-  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
             fill = "grey70", alpha = 0.2, color = "white") +
-  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
             fill = "grey87", alpha = 0.2, color = "white") +
-  #geom_point(size = 3) +
   geom_line(size = 1, show.legend = TRUE) +
-  theme_minimal()
+  theme_minimal(base_size = 16)
 
-E2plot
+print(E2plot)
+ggsave(
+  filename = file.path(output_folder, "E2_gamm_plot.png"),
+  plot = E2plot,
+  width = 10,
+  height = 8,
+  dpi = 300,
+  device = ragg::agg_png,
+  bg = "white"
+)
 
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/20241020/E2_gamm_plot.png",
-       plot = last_plot(), 
-       width = 8, 
-       height = 6)
+#############################
+### 2. P4 Analysis Section ###
+#############################
 
-# P4
-
-hist(df$P4)
-df$P4log <- log(df$P4+1)
-hist(df$P4log)
+hist(df$P4, main = "Histogram of P4", xlab = "P4")
+df$P4log <- log(df$P4 + 1)
+hist(df$P4log, main = "Histogram of log(P4+1)", xlab = "log(P4+1)")
 
 gamm_P4 <- gam(P4log ~ s(id, bs = "re") + 
                  s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20), data = df, method = "REML")
+                 s(scaled_cycleday, k = 20),
+               data = df, method = "REML")
 
-summary(gamm_P4)
+summary_P4 <- capture.output(summary(gamm_P4))
+writeLines(summary_P4, file.path(output_folder, "P4_gamm_summary.txt"))
 
+var_part_P4 <- gam.hp::gam.hp(gamm_P4)
+var_part_P4_output <- capture.output(var_part_P4$hierarchical.partitioning)
+writeLines(var_part_P4_output, file.path(output_folder, "P4_var_partitioning.txt"))
 
-# Save the model summary as a text file
-summary_output <- capture.output(summary(gamm_P4))
+P4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+pred_P4 <- predictions(gamm_P4, newdata = P4dat, type = "response",
+                       transform = function(x) exp(x) - 1)
+P4dat$estimate <- pred_P4$estimate
+P4dat$conf.low <- pred_P4$conf.low
+P4dat$conf.high <- pred_P4$conf.high
 
-var.part = gam.hp::gam.hp(gamm_P4)
-var.part$hierarchical.partitioning
-
-P4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
-                      id = 0) 
-
-# Predict using the model for each dataset and add predictions
-pred <- predictions(gamm_P4, newdata = P4dat, type = "response", transform = function(x) exp(x) - 1)
-
-#don't need to include anything for 'transform' if your outcome is not log-transformed. This undoes the logtransform so model-implied values are not on the log scale 
-
-P4dat$estimate = pred$estimate
-P4dat$conf.low = pred$conf.low
-P4dat$conf.high = pred$conf.high
-
-# Plotting
 P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
-  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  scale_x_continuous(
+    limits = c(-1, 1),
+    breaks = seq(-1, 1, by = 0.50),
+    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+  ) +
   labs(x = "", y = "Salivary Progesterone") +
-  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
             fill = "grey70", alpha = 0.2, color = "white") +
-  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
             fill = "grey87", alpha = 0.2, color = "white") +
-  #geom_point(size = 3) +
   geom_line(size = 1, show.legend = TRUE) +
-  theme_minimal()
+  theme_minimal(base_size = 16)
 
-P4plot
+print(P4plot)
+ggsave(
+  filename = file.path(output_folder, "P4_gamm_plot.png"),
+  plot = P4plot,
+  width = 10,
+  height = 8,
+  dpi = 300,
+  device = ragg::agg_png,
+  bg = "white"
+)
 
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/20241020/P4_gamm_plot.png",
-       plot = last_plot(), 
-       width = 8, 
-       height = 6)
+#############################
+### 3. LH Analysis Section ###
+#############################
 
-
-# LH
-
-hist(df$LH)
-df$LHlog <- log(df$LH+1)
-hist(df$LHlog)
+hist(df$LH, main = "Histogram of LH", xlab = "LH")
+df$LHlog <- log(df$LH + 1)
+hist(df$LHlog, main = "Histogram of log(LH+1)", xlab = "log(LH+1)")
 
 gamm_LH <- gam(LHlog ~ s(id, bs = "re") + 
                  s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20), data = df, method = "REML")
+                 s(scaled_cycleday, k = 20),
+               data = df, method = "REML")
 
-summary(gamm_LH)
+summary_LH <- capture.output(summary(gamm_LH))
+writeLines(summary_LH, file.path(output_folder, "LH_gamm_summary.txt"))
 
+var_part_LH <- gam.hp::gam.hp(gamm_LH)
+var_part_LH_output <- capture.output(var_part_LH$hierarchical.partitioning)
+writeLines(var_part_LH_output, file.path(output_folder, "LH_var_partitioning.txt"))
 
-# Save the model summary as a text file
-summary_output <- capture.output(summary(gamm_LH))
+LHdat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+pred_LH <- predictions(gamm_LH, newdata = LHdat, type = "response",
+                       transform = function(x) exp(x) - 1)
+LHdat$estimate <- pred_LH$estimate
+LHdat$conf.low <- pred_LH$conf.low
+LHdat$conf.high <- pred_LH$conf.high
 
-var.part = gam.hp::gam.hp(gamm_LH)
-var.part$hierarchical.partitioning
-
-LHdat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1),
-                      id = 0) 
-
-# Predict using the model for each dataset and add predictions
-pred <- predictions(gamm_LH, newdata = LHdat, type = "response", transform = function(x) exp(x) - 1)
-
-#don't need to include anything for 'transform' if your outcome is not log-transformed. This undoes the logtransform so model-implied values are not on the log scale 
-
-LHdat$estimate = pred$estimate
-LHdat$conf.low = pred$conf.low
-LHdat$conf.high = pred$conf.high
-
-# Plotting
 LHplot <- ggplot(LHdat, aes(x = scaled_cycleday, y = estimate)) +
-  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  scale_x_continuous(
+    limits = c(-1, 1),
+    breaks = seq(-1, 1, by = 0.50),
+    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+  ) +
   labs(x = "", y = "Salivary Progesterone") +
-  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
             fill = "grey70", alpha = 0.2, color = "white") +
-  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+  geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
             fill = "grey87", alpha = 0.2, color = "white") +
-  #geom_point(size = 3) +
   geom_line(size = 1, show.legend = TRUE) +
-  theme_minimal()
+  theme_minimal(base_size = 16)
 
-LHplot
+print(LHplot)
+ggsave(
+  filename = file.path(output_folder, "LH_gamm_plot.png"),
+  plot = LHplot,
+  width = 10,
+  height = 8,
+  dpi = 300,
+  device = ragg::agg_png,
+  bg = "white"
+)
 
-ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/20241020/LH_gamm_plot.png",
-       plot = last_plot(), 
-       width = 8, 
-       height = 6)
+
 
 ```
+
+
+
+
 
 # ---- Scaled Cycle Day GAMMs Predicting all outcomes on dv_list
 - For each variable in @dv_list, 
@@ -1099,154 +725,142 @@ ggsave(filename = "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLE
 - Creates two plots for each variable in @dv_list:
   - Plot 1: Predicted values and confidence intervals for the variable
   - Plot 2: Z-Scored predicted values and confidence intervals for the variable with E2 and P4 curves overlaid
-```{r gamm_models_plots, cache=TRUE, eval=FALSE, include=TRUE}
+```{r gamm_models_plots}
+install.packages("cowplot")  # Install cowplot if needed
+library(cowplot)             # Load cowplot for annotations
 
 gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   
-  # Step 1: Create a histogram for the dv variable to check its distribution
-  hist(df[[dv]], main = paste0("Histogram of", dv), xlab = dv)
-  
-  # Step 2: Log-transform the dv variable to deal with skewness
-  log_dv <- paste0(dv, "log")  
+  # Step 1: Log-transform variable
+  log_dv <- paste0(dv, "_log")
   df[[log_dv]] <- log(df[[dv]] + 1)  
-  hist(df[[log_dv]], main = paste("Histogram of Log-Transformed", dv), xlab = log_dv)
-  
-  # Step 3: Fit a GAMM
-  gamm_model <- gam(as.formula(paste0(log_dv, " ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 30)")), data = df, method = "REML")
-  
-  # Step 4: Summary of GAMM
+
+  # Step 2: Fit GAMM model
+  gamm_model <- gam(as.formula(paste0(log_dv, " ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 30)")), 
+                     data = df, method = "REML")
+
+  # Step 3: Extract model summary & hierarchical partitioning
   model_summary <- summary(gamm_model)
+  var_part <- gam.hp::gam.hp(gamm_model)
   
-  # Step 4a: Extract p-value and edf for scaled_cycleday from model_summary
+  # Extract p-value and EDF
   scaled_cycleday_row <- which(rownames(model_summary$s.table) == "s(scaled_cycleday)")
   p_value <- model_summary$s.table[scaled_cycleday_row, "p-value"]
   edf <- model_summary$s.table[scaled_cycleday_row, "edf"]
 
   # Determine significance symbol
-  significance <- ""
-  if (p_value < 0.001) {
-    significance <- "***"
-  } else if (p_value < 0.01) {
-    significance <- "**"
-  } else if (p_value < 0.05) {
-    significance <- "*"
-  } else if (p_value < 0.15) {
-    significance <- "†"
-  }
-  
-  # Step 5: Perform hierarchical partitioning
-  var_part <- gam.hp::gam.hp(gamm_model)
-  print(model_summary)
-  print(var_part$hierarchical.partitioning)
+  significance <- ifelse(p_value < 0.001, "***", 
+                  ifelse(p_value < 0.01, "**", 
+                  ifelse(p_value < 0.05, "*", 
+                  ifelse(p_value < 0.15, "†", ""))))
 
-  # Step 6: Capture the output for both model summary and hierarchical partitioning
+  # Save model summary and partitioning results to a file
   summary_output <- capture.output(model_summary)
   partitioning_output <- capture.output(var_part$hierarchical.partitioning)
-
-  # Step 7: Combine the model summary and hierarchical partitioning results
   combined_output <- c(summary_output, "", "Hierarchical Partitioning:", partitioning_output)
+  writeLines(combined_output, file.path(output_folder, paste0("gamm_hp_", dv, ".txt")))
 
-  # Step 8: Write to file
-  summary_file_path <- file.path(output_folder, paste0("gamm_hp_", dv, ".txt"))
-  writeLines(combined_output, summary_file_path)
-
-  # Step 9: Create a dataset for predictions from the model
+  # Step 4: Create dataset for predictions
   pred_data <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
-pred <- predictions(gamm_model, newdata = pred_data, type = "response", transform = function(x) exp(x) - 1)
+  pred <- predictions(gamm_model, newdata = pred_data, type = "response", transform = function(x) exp(x) - 1)
 
-  # Calculate confidence intervals
+  # Add predictions and confidence intervals
   pred_data$estimate <- scale(pred$estimate)
   pred_data$conf.low <- scale(pred$conf.low)
   pred_data$conf.high <- scale(pred$conf.high)
 
-  # Step 10: Plot predicted values and confidence intervals for the dv and add E2 curve
+  # Step 5: Create ggplot for predictions
   dv_plot <- ggplot(pred_data, aes(x = scaled_cycleday)) +
     scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
                        labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
     labs(x = "Cycle Day (Scaled)", y = paste0(dv, " (Z, Pred)")) +
-    geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
-              fill = "grey70", alpha = 0.2, color = "white") +
-    geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
-              fill = "grey87", alpha = 0.2, color = "white") +
     
-    # Confidence ribbons for the dv estimates
+    # Background shading for key regions
+    geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf), fill = "grey70", alpha = 0.2) +
+    geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf), fill = "grey87", alpha = 0.2) +
+    
+    # Confidence intervals
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "black", alpha = 0.1) +
     
-    # Line plot for dv
-    geom_line(aes(y = estimate, color = "dv"), size = 1, show.legend = TRUE) +
+    # Main predicted line
+    geom_line(aes(y = estimate, color = "dv"), size = 1) +
     
-    # Add E2 and P4 curves on top (using E2dat and P4dat)
+    # Add E2 and P4 curves
     geom_line(data = E2dat, aes(x = scaled_cycleday, y = scale(estimate), color = "E2"), size = 1, linetype = "dashed") +
     geom_line(data = P4dat, aes(x = scaled_cycleday, y = scale(estimate), color = "P4"), size = 1, linetype = "dashed") +
     
-    # Customize legend with desired order
+    # Customize legend
     scale_color_manual(name = "Key", 
                        values = c("dv" = "black", "E2" = "forestgreen", "P4" = "red"),
                        labels = c("dv" = dv, "E2" = "E2", "P4" = "P4"),
                        breaks = c("dv", "E2", "P4")) +
+    
+    # Styling with balanced text sizes
     theme_minimal() +
-    theme(legend.position = "right")
+    theme(
+      axis.text = element_text(size = 14),    # Slightly reduced from 18
+      axis.title = element_text(size = 16),   # Slightly reduced from 20
+      legend.text = element_text(size = 14),  # Reduced for better fit
+      legend.title = element_text(size = 16)  # Keep title slightly larger
+    )
 
-  # Create a label for EDF and p-value, and add it below the legend
+  # Step 6: Annotate with EDF & p-value
   annotation_text <- paste("EDF:", round(edf, 2), significance)
   annotated_plot <- ggdraw(dv_plot) +
     draw_label(annotation_text, x = 0.85, y = 0.2, hjust = 0, size = 10, fontface = "bold")
 
-  # Display the plot with annotation
-  print(annotated_plot)
-
-  # Step 11: Save the plot to a file
-  plot_file_path <- file.path(plot_path, paste0(dv, "_scaled_with_horm.png"))
-  ggsave(filename = plot_file_path, plot = annotated_plot, width = 8, height = 6)
+  # Save the plot as PDF with slightly increased size
+  plot_file_path <- file.path(plot_path, paste0(dv, "_scaled_with_horm.pdf"))
+  ggsave(filename = plot_file_path, plot = annotated_plot, width = 10, height = 7.5, device = cairo_pdf)
   cat("Plot with Hormone overlays saved to:", plot_file_path, "\n")
-  
-  # Calculate confidence intervals
+
+  # Step 7: Create another plot without scaling
   pred_data$estimate <- pred$estimate
   pred_data$conf.low <- pred$conf.low
   pred_data$conf.high <- pred$conf.high
 
-  # Step 10: Plot predicted values and confidence intervals for the dv and add E2 curve
-  dv_plot <- ggplot(pred_data, aes(x = scaled_cycleday)) +
+  dv_plot_orig <- ggplot(pred_data, aes(x = scaled_cycleday)) +
     scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
                        labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
-    labs(x = "Cycle Day (Scaled)", y = paste0(dv, " (Orig Scale)")) +
-    geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
-              fill = "grey70", alpha = 0.2, color = "white") +
-    geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
-              fill = "grey87", alpha = 0.2, color = "white") +
+    labs(x = "Cycle Day (Scaled)", y = paste0(dv, " (Original Scale)")) +
     
-    # Confidence ribbons for the dv estimates
+    # Background shading
+    geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf), fill = "grey70", alpha = 0.2) +
+    geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf), fill = "grey87", alpha = 0.2) +
+    
+    # Confidence intervals
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "black", alpha = 0.1) +
     
-    # Line plot for dv
-geom_line(aes(y = estimate), color = "black", size = 1, show.legend = FALSE) +
+    # Main predicted line
+    geom_line(aes(y = estimate), color = "black", size = 1) +
     
-    theme_minimal() 
+    theme_minimal() +
+    theme(
+      axis.text = element_text(size = 14),
+      axis.title = element_text(size = 16)
+    )
 
-  # Create a label for EDF and p-value, and add it below the legend
-  annotation_text <- paste("EDF:", round(edf, 2), significance)
-  annotated_plot <- ggdraw(dv_plot) +
-    draw_label(annotation_text, x = 0.85, y = 0.2, hjust = 0, size = 10, fontface = "bold")
-
-  # Display the plot with annotation
-  print(annotated_plot)
-
-  # Step 11: Save the plot to a file
-  plot_file_path <- file.path(plot_path, paste0(dv, "_origscale.png"))
-  ggsave(filename = plot_file_path, plot = annotated_plot, width = 8, height = 6)
-  cat("Original Scale Plot saved to:", plot_file_path, "\n")
-
+  # Save as PDF
+  plot_file_path_orig <- file.path(plot_path, paste0(dv, "_origscale.pdf"))
+  ggsave(filename = plot_file_path_orig, plot = dv_plot_orig, width = 10, height = 7.5, device = cairo_pdf)
+  cat("Original Scale Plot saved to:", plot_file_path_orig, "\n")
 }
 
-# Example usage
+# Example Usage
 plot_path <- file.path(output_folder, "GAMM_Plots")
-
-# Loop through each dv and apply the GAMM function
 for (dv in dv_list) {
   gamm_models_plots(dv, df, output_folder, plot_path)
 }
 
+
+
 ```
+
+
+
+
+
+
 
 ## Prepare Hormones
 
