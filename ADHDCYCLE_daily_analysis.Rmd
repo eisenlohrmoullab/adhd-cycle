@@ -19,7 +19,18 @@ output:
 source("scripts/options_packages.R")
 source("scripts/set-output-folder.R")
 
+<<<<<<< Updated upstream
 ```
+=======
+# Create a new output folder with the current date
+current_date <- format(Sys.Date(), "%Y%m%d")  # Produces date as YYYYMMDD
+output_folder <- paste0(
+  "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/UKALC/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/",
+  current_date
+) # Define the output folder with the current date
+# State the output folder
+cat("Output folder set as: ", output_folder, "\n")
+>>>>>>> Stashed changes
 
 
 ```{r set-output-folder, quiet=TRUE, message=FALSE, warning=FALSE}
@@ -1148,3 +1159,524 @@ create_gamm_models(dv_list, df=df, save_dir=output_folder)
 
 ```
 
+
+
+
+
+
+Applying examples from "mixed_effects_gamms" repo
+
+
+```{r S_cycle, fig.width=8, fig.height=5}
+# Set id as factor
+df$id <- as.factor(df$id)
+
+S_model <- gam(score_pinball ~ s(scaled_cycleday, bs = "cc") +
+                       s(id, bs = "re") +
+                       ti(scaled_cycleday, id, bs = c("cc", "re")),
+                     data = df, knots=list(scaled_cycleday=c(-1, 1)),
+                     family = gaussian(), 
+                     method = "REML")
+
+summary(S_model)
+gam.check(S_model)
+
+
+
+```
+
+# IV: Examples
+
+```{r part_4_preamble, include=FALSE}
+#### Code for IV: Examples ####
+```
+We now demonstrate two worked examples on one data set to highlight how to use HGAMs in practice, and to illustrate how to fit, test, and
+visualize each model. We will demonstrate how to use these models to fit community
+data, to show when using a global trend may or may not be justified, and to
+illustrate how to use these models to fit seasonal time series.
+
+For these examples, data are from a long-term study in seasonal dynamics of zooplankton, collected by the Richard Lathrop. The data were collected from a chain of lakes in Wisconsin (Mendota, Monona, Kegnonsa, and Waubesa) approximately bi-weekly from 1976 to 1994. They consist of samples of the zooplankton communities, taken from the deepest point of each lake via vertical tow. The data are provided by the Wisconsin Department of Natural Resources and their collection and processing are fully described in @lathrop_madison_2000. 
+
+
+Zooplankton in temperate lakes often undergo seasonal cycles, where the abundance of each species fluctuates up and down across the course of the year, with each species typically showing a distinct pattern of seasonal cycles. The inferential aims of these examples are to *(i)* estimate variability in seasonality among species in the community in a single lake (Mendota), and *(ii)* estimate among-lake variability for the most abundant taxon in the sample (*Daphnia mendotae*) across the four lakes. To enable evaluation of out-of-sample performance, we split the data into testing and training sets. As there are multiple years of data, we used data from the even years to fit (train) models, and the odd years to test the fit.
+
+Each record consists of counts of a given zooplankton taxon taken from a subsample from a single vertical net tow, which was then scaled to account for the relative volume of subsample versus the whole net sample and the area of the net tow, giving  population density per $m^2$.  Values are rounded to the nearest 1000. Observed densities span four orders of magnitude.  We modelled density using a Gamma distribution with a log-link. For any net tow sample where a given taxon was not observed, we set that taxon's density to 1000 (the minimum possible sample size)[^censored]. 
+To evaluate how well each model fits new data (not used to fit the model), we calculated the total deviance of the out-of-sample data that we had previously held out. The deviance is equal to two times the sum of the difference between the log-likelihood of the out-of-sample data (as predicted by each model) and a saturated model, that has one predictor for each data point, all multiplied by the scale parameter for the family of interest. It can be interpreted similarly to the residual sum of squares for a simple linear regression [@wood_generalized_2017, page 109]. 
+
+
+[^censored]: A more appropriate model for this data would be to assume that density is *left censored*, where 1000 is treated as a threshold which the data may lie below, but it is not possible to measure lower than this. However, **mgcv** does not currently have a left-censored family. The **brms** package, for Bayesian model fitting, can fit a left-censored Gamma distribution, so it would be possible to fit this model using that software. We discuss using HGAMs in **brms** in section V. 
+
+
+
+```{r view_zoo, include = FALSE, message=FALSE,  cache=TRUE}
+
+zooplankton <- read.csv("data/zooplankton_example.csv",stringsAsFactors = TRUE)%>%
+  mutate(year_f = factor(year))
+
+#This is what the data looks like:
+str(zooplankton)
+levels(zooplankton$taxon)
+levels(zooplankton$lake)
+
+# We'll now break it into testing and training data. The training data will be
+# used to fit the model, and the testing data will be used to evaluate model
+# fit.
+
+#the first training and testing data set will be used to compare dynamics of
+#plankton communities in Lake Mendota
+zoo_train <- subset(zooplankton, year%%2==0 & lake=="Mendota")
+zoo_test  <- subset(zooplankton, year%%2==1 & lake=="Mendota") 
+
+#The second training and testing set will compare Daphnia mendotae dynamics
+#among four lakes
+daphnia_train <- subset(zooplankton, year%%2==0 & taxon=="D. mendotae")
+daphnia_test  <- subset(zooplankton, year%%2==1 & taxon=="D. mendotae")
+
+#This function calculates the deviance of out-of-sample data,
+#conditional on their mean predicted value from the model
+get_deviance <- function(model, y_pred, y_obs, weights = NULL){
+  stopifnot(length(y_obs)==length(y_pred))
+  #We don't use the weights term in this paper, but it can be useful if
+  #how well the model matters more for some sample points than others
+  if(is.null(weights)) weights = rep(1, times= length(y_obs))
+  #this uses the deviance residual function from the model family to
+  #calculate deviances for individual points
+  dev_residuals = model$family$dev.resids(y_obs, y_pred, weights)
+  return(sum(dev_residuals))
+}
+```
+
+First, we demonstrate how to model community-level variability in seasonality, by regressing scaled density on day of year with species-specific curves. As we are not interested in average seasonal dynamics, we focus on models *S* and *I* (if we wanted to estimate the seasonal dynamics for rarer species, adding a global smooth term might be useful, so we could borrow information from the more common species). As the data are seasonal,  we use cyclic smoothers as the basis for seasonal dynamics.  Therefore we need to specify start and end points for our cycles using the `knots` argument to `gam()`, as well as specify this smoother type as a factor-smooth interaction term using the `xt` argument (the `xt` argument is how any extra information that a smoother might need is supplied; see `?mgcv::s` for more information). Note that we also include a random effect smoother for both `taxon` and `taxon:year_f`, where `year_f` is `year` transformed into a factor variable. This deals with the fact that average zooplankton densities can show large year-to-year variation. The argument `drop.unused.levels=FALSE` is also included so the `gam` function does not drop the year factor levels corresponding to those in the held-out test data set. 
+
+
+### Model *S*:
+
+```{r zoo_comm_modS, echo=TRUE, message=FALSE, cache=TRUE, fig.width=8, fig.height=5}
+
+zoo_comm_modS <- gam(density_adj ~ s(taxon, year_f, bs="re") + #random effect for each taxon
+                       s(day, taxon, bs="fs", k=10, xt=list(bs="cc")), # cyclic smoother for day that starts and ends at the same point and has 10 basis functions and a factor-smooth interaction term
+                     data=zoo_train, knots=list(day=c(0, 365)), 
+                     family=Gamma(link="log"), method="REML",
+                     drop.unused.levels=FALSE)
+```
+
+
+### Transferring/copying to our cycle effect example
+
+```{r S_cycle, fig.width=8, fig.height=5}
+# Set id as factor
+df$id <- as.factor(df$id)
+
+S_model <- gam(score_pinball ~ s(scaled_cycleday, bs = "cc") +
+                       s(id, bs = "re") +
+                       ti(scaled_cycleday, id, bs = c("cc", "re")),
+                     data = df, knots=list(scaled_cycleday=c(-1, 1)
+                     family = gaussian(), 
+                     method = "REML")
+
+summary(S_model)
+```
+
+
+### Model *I*:
+
+```{r zoo_comm_modI, echo=TRUE, message=FALSE,  cache=TRUE, fig.width=8, fig.height=5}
+
+# Note that s(taxon, bs="re") has to be explicitly included here, as the 
+# day by taxon smoother does not include an intercept
+zoo_comm_modI <- gam(density_adj ~ s(day, by=taxon, k=10, bs="cc") + 
+                       s(taxon, bs="re") + s(taxon, year_f, bs="re"),
+                     data=zoo_train, knots=list(day=c(0, 365)),
+                     family=Gamma(link="log"), method="REML",
+                     drop.unused.levels=FALSE)
+```
+
+At this stage of the analysis (prior to model comparisons), it is useful to determine if any of the fitted models adequately describe patterns in the data (i.e. goodness of fit testing). 
+**mgcv**'s `gam.check()` facilitates this model-checking. 
+This function creates a set of standard diagnostic plots: a QQ plot of the deviance residuals (see @wood_generalized_2017) compared to their theoretical expectation for the chosen family, a plot of response versus fitted values, a histogram of residuals, and a plot of residuals versus fitted values. It also conducts a test for each smooth term to determine if the number of degrees of freedom (`k`) for each smooth is adequate (see `?mgcv::gam.check` for details on how that test works). The code for checking model *S* and *I* for the community zooplankton model is: 
+
+```{r zoo_comm_modI_check_gam,eval = FALSE, echo=TRUE,  message=FALSE}
+
+gam.check(zoo_comm_modS)
+gam.check(zoo_comm_modI)
+```
+
+We have plotted QQ plots and fitted-versus residual plots for model *I* (fitted versus response plots are generally less useful for non-normally distributed data as it can be difficult to visually assess if the observed data shows more heteroskedasticity than expected). The results for model *S* are virtually indistinguishable to the naked eye. We have also used alternate QQ-plotting code from  the **gratia** package [@simpson_gratia_2018], using the `qq_plot()` function, as this function creates a **ggplot2** object that are easier to customize than the **base** plots from `gam.check()`. The code for generating these plots is in the supplemental material.
+These plots (Fig. \ref{fig:Fig14}) indicate that the Gamma distribution seems to fit the observed data well except at low values, where the deviance residuals are larger than predicted by the theoretical quantiles (Fig. \ref{fig:Fig14}A). 
+There also does not seem to be a pattern in the residual versus fitted values (Fig. \ref{fig:Fig14}B), except for a line of residuals at the lowest values, which correspond to all of those observations where a given taxon was absent from the sample.
+
+```{r Fig14, echo=FALSE, message=FALSE, warning=TRUE, cache=TRUE,results="markup", fig.width=8, fig.height=3, fig.cap = "\\label{fig:Fig14} Diagnostic plots for model *I* fitted to zooplankton community data in Lake Mendota. A) QQ-plot of residuals (black). Red line indicates the 1-1 line and grey bands correspond to the expected 95% CI for the QQ plot, assuming the distribution is correct.  B) Deviance residuals versus fitted values (on the link scale)."}
+
+#Checking residuals and qqplots for GAM fits
+
+#QQ-plot, using gratia's qq_plot function, with simulated confidence intervals.
+#We are removing the title and subtitle to simplify the figure
+plt1 <- qq_plot(zoo_comm_modI, method = "simulate") +
+  labs(title =NULL, subtitle =NULL)
+df <- data.frame(log_fitted = log(fitted(zoo_comm_modI)),
+                 residuals  = resid(zoo_comm_modI, type = "deviance"))
+
+#fitted versus deviance plot
+plt2 <- ggplot(df, aes(x = log_fitted, y = residuals)) +
+    geom_point() +
+    labs(x = "Linear predictor", y = "Deviance residual")
+plot_grid(plt1, plt2, ncol = 2, align = "hv", axis = "lrtb",labels=c("A","B"))
+```
+
+
+The `k.check()` test (Table \ref{tab:zoo_comm_check_k_kable}) shows that the default maximum degrees of freedom for the smoothers used in model *I* are sufficient for all species, as the effective degrees of freedom (EDF) for all estimated smoothers are well below their maximum possible value (k'), and the  p-value for the observed k-index (which measures pattern in the residuals) is not significant. 
+
+```{r zoo_comm_check_k, echo=FALSE,eval = FALSE, message=FALSE, warning=TRUE, cache=TRUE,results="markup"}
+
+#individual components of gam.check: the results for k.check
+round(k.check(zoo_comm_modI),2)
+```
+
+
+```{r zoo_comm_check_k_kable, echo=FALSE, message=FALSE, cache=TRUE, purl=FALSE}
+k.check_table <-round(k.check(zoo_comm_modI),2) %>%
+  as.data.frame()%>%
+  rownames_to_column()%>%
+  rename(`Model term` = rowname,
+         EDF = edf)
+
+kable(k.check_table, 
+      format = table_out_format,
+      caption='Results from running \\texttt{k.check()} on \\texttt{zoo\\_comm\\_modI}. Each row corresponds to a single model term. The notation for term names uses \\textbf{mgcv} syntax. For instance, "s(day):taxonC. sphaericus" refers to the the smoother for day for the taxon \\textit{C. sphaericus}.', 
+      booktabs = TRUE,
+      escape = TRUE)%>%
+  kable_styling(full_width = FALSE) %>%
+  row_spec(2:3,italic = FALSE) %>%
+  row_spec(2:3, italic = FALSE)
+  
+```
+
+
+In this table, each row corresponds to a single smooth term, k' corresponds to the number of basis functions used for that smoother in the fitted model (smaller than the specified `k` in the model itself, as some basis functions are automatically dropped to ensure the model is identifiable). The column EDF is the estimated Effective Degrees of Freedom for that smoother, the k-index is a measure of the remaining pattern in the residuals, and the p-value is calculated based on the distribution of the k-index after randomizing the order of the residuals. Note that there is no p-value for the random effects smoothers `s(taxon)` and `s(taxon,year_f)` as the p-value is calculated from simulation-based tests for autocorrelation of the residuals. As `taxon` and `year_f` are treated as simple random effects with no natural ordering, there is no meaningful way of checking for autocorrelation. 
+
+
+Differences between models *S* (shared smoothness between taxa) and *I* (different smoothness for each taxa) seem to be driven by the low seasonality of *L. siciloides* relative to the other species, and how this is captured by the more flexible model *I* (Fig. \ref{fig:Fig15}). Still, both models show very similar fits to the training data. This implies that the added complexity of different penalties for each species (model *I*) is unnecessary here, which is consistent with the fact that model *S* has a lower AIC (`r round(AIC(zoo_comm_modS), 0)`) than model *I* (`r round(AIC(zoo_comm_modI), 0)`), and that model *S* is somewhat better at predicting out-of-sample fits for all taxa than model *I* (Table \ref{tab:zoo_comm_outofsample_kable}). Both models show significant predictive improvement compared to the intercept-only model for all species except *K. cochlearis* (Table \ref{tab:zoo_comm_outofsample_kable}). This may be driven by changing timing of the spring bloom for this species between training  and out-of-sample years (Fig. \ref{fig:Fig15}). 
+
+
+```{r Fig15, echo=FALSE, message=FALSE, warning=TRUE, cache=TRUE,results="markup", fig.width=6, fig.height=6, fig.cap = "\\label{fig:Fig15}Species-specific seasonal dynamics for the eight zooplankon species tracked in Lake Mendota. Black points indicate individual plankton observations in the training data, and grey points are observations in held-out years used for model validation. Lines indicate predicted average values for model *S* (green) and model *I* (red). Ribbons indicate $\\pm$ 2 standard errors around the mean."}
+
+#Create synthetic data to use to compare predictions
+zoo_plot_data <- expand.grid(day = 1:365, 
+                             taxon = factor(levels(zoo_train$taxon)), 
+                             year_f = 1980)
+
+#extract predicted values and standard errors for both models. 
+#the exclude = "s(taxon,year_f)" term indicates that predictions should be made
+#excluding the effect of the taxon by year random effect (effectively setting
+#making predictions averaging over year-taxon effects).
+zoo_modS_fit <- predict(zoo_comm_modS, 
+                        zoo_plot_data, 
+                        se.fit = TRUE, 
+                        exclude = "s(taxon,year_f)")
+zoo_modI_fit <- predict(zoo_comm_modI, 
+                        zoo_plot_data, 
+                        se.fit = TRUE, 
+                        exclude = "s(taxon,year_f)")
+
+zoo_plot_data$modS_fit <- as.numeric(zoo_modS_fit$fit)
+zoo_plot_data$modI_fit <- as.numeric(zoo_modI_fit$fit)
+
+zoo_plot_data <- gather(zoo_plot_data, model, fit, modS_fit, modI_fit)
+zoo_plot_data <- mutate(zoo_plot_data, se= c(as.numeric(zoo_modS_fit$se.fit),
+                                             as.numeric(zoo_modI_fit$se.fit)),
+                        upper = exp(fit + (2 * se)),
+                        lower = exp(fit - (2 * se)),
+                        fit   = exp(fit))
+
+#Plot the model output, with means plus standard deviations for each model.
+zoo_plot_model_labels = paste("Model", c("S","I"))
+zoo_plot_model_labels = factor(zoo_plot_model_labels, 
+                               levels = zoo_plot_model_labels)
+
+zoo_plot <- ggplot(zoo_plot_data) +
+  facet_wrap(~taxon, nrow = 4,scales = "free_y")+
+  geom_ribbon(aes(x=day,
+                  ymin = lower,
+                  ymax = upper,
+                  fill = model),
+              alpha=0.2)+
+  geom_point(data= zoo_train, aes(x = day, y = density_adj),size=0.06)+
+  geom_point(data= zoo_test, aes(x = day, y = density_adj),
+             size=0.06,col="grey")+
+  geom_line(aes(x = day, y = fit, color = model))+
+  labs(y = expression(atop(Population~density,("10 000"~individuals~m^{-2}))), 
+       x = "Day of Year") +
+  scale_y_log10(breaks = c(0.1,1,10,100, 1000), 
+                labels = c("0.1","1","10","100","1000"))+
+  scale_fill_brewer(name = "", palette = "Dark2",
+                      labels = zoo_plot_model_labels) +
+  scale_colour_brewer(name = "",
+                        palette = "Dark2", labels = zoo_plot_model_labels)+
+  theme(legend.position = "top")
+
+zoo_plot
+```
+
+
+
+```{r zoo_comm_outofsample, echo=FALSE, message=FALSE, dependson='view_zoo', cache=TRUE}
+
+#Getting the out-of-sample predictions for both models:
+
+# we need to compare how well this model fits with a null model. here we'll use an
+# intercept-only model
+zoo_comm_mod0 <- gam(density_adj ~ s(taxon,bs="re"),
+                     data=zoo_train,
+                     knots = list(day =c(0, 365)),
+                     family = Gamma(link ="log"), 
+                     method = "REML",
+                     drop.unused.levels = FALSE)
+
+#Correlations between fitted and observed values for all species:
+#\n is in variable titles to add a line break in the printed table.
+zoo_test_summary = zoo_test %>%
+  mutate(
+    mod0 = predict(zoo_comm_mod0, ., type="response"),
+    modS = predict(zoo_comm_modS, ., type="response"),
+    modI = predict(zoo_comm_modI, ., type="response"))%>%
+  group_by(taxon)%>%
+  summarise(
+    `Intercept only` = format(get_deviance(zoo_comm_mod0, mod0, density_adj), 
+                              scientific = FALSE, 
+                              digits=3),
+    `Model S` = format(get_deviance(zoo_comm_modS, modS, density_adj), 
+                       scientific = FALSE, 
+                       digits=3),
+    `Model I` = format(get_deviance(zoo_comm_modI, modI, density_adj), 
+                       scientific = FALSE, 
+                       digits=3))
+
+```
+
+```{r zoo_comm_outofsample_kable, echo=FALSE, message=FALSE, dependson=-1, cache=TRUE,purl=FALSE}
+
+zoo_test_summary = zoo_test_summary%>%
+  #need to specify this to ensure that species names are italized in the table
+  mutate(taxon = cell_spec(taxon, 
+                           italic = c(TRUE,FALSE,FALSE,TRUE,TRUE,TRUE,TRUE,TRUE)))%>%
+  #Capitilizing taxon in the table names
+  rename(Taxon = taxon)
+
+kable(zoo_test_summary, 
+      format = table_out_format, 
+      caption="Out-of-sample predictive ability for model \\textit{S} and \\textit{I} applied to the zooplankton community dataset. Deviance values represent the total deviance of model predictions from observations for out-of-sample data. 'Intercept only' results are for a null model with only taxon-level random effect intercepts included.", 
+      booktabs = TRUE,
+      escape = FALSE)%>%
+  add_header_above(c(" " = 1, "Total deviance of out-of-sample data" = 3),
+                   escape = FALSE)%>%
+  kable_styling(full_width = FALSE) %>%
+  row_spec(2:3,italic = FALSE) %>%
+  row_spec(2:3, italic = FALSE)
+  
+```
+
+Next, we look at how to fit inter-lake variability in dynamics for just *Daphnia mendotae*.
+Here, we will compare models *G*, *GS*, and *GI* to determine if a single global function is appropriate for all four lakes, or if we can more effectively model variation between lakes with a shared smoother and lake-specific smoothers.
+
+### Model *G*:
+
+```{r zoo_daph_modG, echo=TRUE, message=FALSE, cache=TRUE}
+
+zoo_daph_modG <- gam(density_adj ~ s(day, bs="cc", k=10) + s(lake, bs="re") +
+                       s(lake, year_f, bs="re"),
+                     data=daphnia_train, knots=list(day=c(0, 365)),
+                     family=Gamma(link="log"), method="REML",
+                     drop.unused.levels=FALSE)
+```
+
+### Model *GS*:
+```{r zoo_daph_modGS, echo=TRUE, message=FALSE,  cache=TRUE}
+
+zoo_daph_modGS <- gam(density_adj ~ s(day, bs="cc", k=10) +
+                        s(day, lake, k=10, bs="fs", xt=list(bs="cc")) +
+                        s(lake, year_f, bs="re"),
+                      data=daphnia_train, knots=list(day=c(0, 365)),
+                      family=Gamma(link="log"), method="REML",
+                      drop.unused.levels=FALSE)
+```
+
+### Model *GI*:
+
+```{r zoo_daph_modGI, echo=TRUE, message=FALSE,  cache=TRUE}
+
+zoo_daph_modGI <- gam(density_adj~s(day, bs="cc", k=10) + s(lake, bs="re") +
+                        s(day, by=lake, k=10, bs="cc") +
+                        s(lake, year_f, bs="re"),
+                      data=daphnia_train, knots=list(day=c(0, 365)),
+                      family=Gamma(link ="log"), method="REML",
+                      drop.unused.levels=FALSE)
+```
+
+Diagnostic plots from `gam.check()` indicate that there are no substantial patterns comparing residuals to fitted values (not shown), and QQ-plots are similar to those from the zooplankton community models; the residuals for all three models closely correspond to the expected (Gamma) distribution, except at small values, where the observed residuals are generally larger than expected (Fig. \ref{fig:Fig16}). 
+As with the community data, this is likely an artifact of the assumption we made of assigning zero observations a value of 1000 (the lowest possible value), imposing an artificial lower bound on the observed counts. There was also some evidence that the largest observed values were smaller than expected given the theoretical distribution , but these fell within the 95% CI for expected deviations from the 1-1 line (Fig. \ref{fig:Fig16}). 
+
+```{r Fig16, echo=FALSE, message=FALSE, warning=TRUE, cache=TRUE,results="markup", fig.width=9, fig.height=3, fig.cap = "\\label{fig:Fig16} QQ-plots for model *G* (A) , *GS* (B), and *GI* (C) fitted to Daphnia data across the four lakes. Red line indicates the 1-1 line, black points are observed model residuals, and grey bands correspond to the expected 95% CI for the QQ plot, assuming the distribution is correct."}
+
+#Checking residuals and qqplots for GAM fits
+
+#qqplot, using gratia's qq_plot function, with simulated confidence intervals
+pltG <- qq_plot(zoo_daph_modG, method = "simulate")+
+  labs(subtitle = NULL, title=NULL)
+pltGS <- qq_plot(zoo_daph_modGS, method = "simulate")+
+  labs(subtitle = NULL, title=NULL, y=NULL)
+pltGI <- qq_plot(zoo_daph_modGI, method = "simulate")+
+  labs(subtitle = NULL, title=NULL, y=NULL)
+
+plot_grid(pltG, pltGS,pltGI, 
+          ncol = 3, 
+          align = "hv", 
+          axis = "lrtb",labels=c("A","B","C"))
+```
+
+
+AIC values indicate that both model *GS* (`r round(AIC(zoo_daph_modGS), 2)`) and *GI*
+(`r round(AIC(zoo_daph_modGI), 2)`) are better fits than model *G* (`r round(AIC(zoo_daph_modG), 2)`),
+with model *GI* fitting somewhat better than model *GS* [^AIC_note].  There does not seem to be a large amount of inter-lake variability (the effective degrees of freedom per lake are low in models *GS* & *GI*).  Plots for all three models
+(Fig. \ref{fig:Fig17}) show that Mendota, Monona, and Kegonsa lakes are very close to the average and to one another for both models, but Waubesa shows evidence of a more pronounced spring bloom and lower winter abundances. 
+
+[^AIC_note]: When comparing models via AIC, we use the standard rule of thumb from @burnham_model_1998, where models that differ by 2 units or less from the lowest AIC model have substantial support, and those differing by more than 4 units have less support. 
+
+
+```{r Fig17, echo=FALSE, message=FALSE, warning=TRUE, cache=TRUE, fig.width=6, fig.height=4, fig.cap="\\label{fig:Fig17}Raw data (points) and fitted models (lines) for \\textit{D. mendota} data.  Black points indicate individual plankton observations in the training data, and grey points are observations in held-out years used for model validation. Green line: model *G* (no inter-lake variation in dynamics); orange line: model *GS* (interlake variation with similar smoothness); purple line: model *GI* (varying smoothness among lakes). Shaded bands are drawn at $\\pm$ 2 standard errors around each model."}
+
+#Create synthetic data to use to compare predictions
+daph_plot_data <- expand.grid(day = 1:365, 
+                              lake = factor(levels(zoo_train$lake)),
+                              year_f = 1980)
+
+#extract predicted values and standard errors for both models. the 
+#exclude ="s(taxon,year_f)" term indicates that predictions should be made 
+#excluding the effect of the taxon-by-year random effect (effectively making
+#predictions averaging over year-taxon effects).
+daph_modG_fit <- predict(zoo_daph_modG, 
+                         newdata = daph_plot_data, 
+                         se.fit = TRUE, 
+                         exclude = "s(lake,year_f)")
+daph_modGS_fit <- predict(zoo_daph_modGS, 
+                         newdata = daph_plot_data, 
+                         se.fit = TRUE, 
+                         exclude = "s(lake,year_f)")
+daph_modGI_fit <- predict(zoo_daph_modGI, 
+                         newdata = daph_plot_data, 
+                         se.fit = TRUE, 
+                         exclude = "s(lake,year_f)")
+
+daph_plot_data$modG_fit <- as.numeric(daph_modG_fit$fit)
+daph_plot_data$modGS_fit <- as.numeric(daph_modGS_fit$fit)
+daph_plot_data$modGI_fit <- as.numeric(daph_modGI_fit$fit)
+
+daph_plot_data <- gather(daph_plot_data, 
+                         key = model, 
+                         value = fit, 
+                         modG_fit, 
+                         modGS_fit, 
+                         modGI_fit)
+
+daph_plot_data <- mutate(daph_plot_data, 
+                         se = c(as.numeric(daph_modG_fit$se.fit),
+                                as.numeric(daph_modGS_fit$se.fit),
+                                as.numeric(daph_modGI_fit$se.fit)),
+                         upper = exp(fit + (2 * se)),
+                         lower = exp(fit - (2 * se)),
+                         fit   = exp(fit))
+
+daph_plot_model_labels = paste("Model", c("G","GS","GI"))
+daph_plot_model_labels = factor(daph_plot_model_labels, 
+                                levels= daph_plot_model_labels)
+
+daph_plot <- ggplot(daph_plot_data, aes(x=day))+
+  facet_wrap(~lake, nrow = 2)+
+  geom_ribbon(aes(x = day, ymin = lower, ymax = upper, fill = model), 
+                alpha = 0.2) +
+  geom_point(data= daphnia_train, 
+             aes(x = day, 
+                 y = density_adj),
+             size=0.06)+
+  geom_point(data= daphnia_test, 
+             aes(x = day, 
+                 y = density_adj),
+             size=0.06,
+             col="grey")+
+  geom_line(aes(x = day, y = fit, colour = model)) +
+
+  labs(y = expression(atop(Population~density,
+                           ("10 000"~individuals~m^{-2}))), 
+       x = "Day of Year") +
+  scale_x_continuous(expand = c(0,0))+
+  scale_y_log10()+
+    scale_fill_brewer(name = "", 
+                      palette = "Dark2",
+                      labels = daph_plot_model_labels) +
+    scale_colour_brewer(name = "",
+                        palette = "Dark2", 
+                        labels = daph_plot_model_labels)+
+  theme(legend.position = "top")
+
+
+daph_plot
+```
+
+Model *GI* is able to predict as well or better than model *G* or *GS* for all lakes (Table \ref{tab:zoo_daph_outofsample_kable}), indicating that allowing for inter-lake variation in seasonal dynamics improved model prediction. All three models predicted dynamics in Lake Mendota and Lake Menona significantly better than the intercept-only model (Table \ref{tab:zoo_daph_outofsample_kable}). None of the models did well in terms of predicting Lake Waubesa dynamics out-of-sample compared to a simple model with only a lake-specific intercept and no intra-annual variability, but this was due to the influence of a single large outlier in the out-of-sample data that occurred after the spring bloom, at day 243 (Fig. \ref{fig:Fig17}; note that the y-axis is log-scaled). 
+However, baring a more detailed investigation into the cause of this large value, we cannot arbitrarily exclude this outlier from the goodness-of-fit analysis; 
+it may be due either to measurement error or a true high late-season *Daphnia* density that our model was not able to predict.
+
+```{r zoo_daph_outofsample, echo=FALSE, message=FALSE,  cache=TRUE}
+
+# we need to compare how well this model fits with a null model. here we'll use
+# an intercept-only model
+zoo_daph_mod0 <- gam(density_adj~s(lake, bs="re"),
+                     data=daphnia_train,
+                     knots=list(day =c(0, 365)),
+                     family=Gamma(link ="log"),
+                     method="REML",
+                     drop.unused.levels = FALSE)
+
+
+
+# We'll look at the correlation between fitted and observed values for all species:
+
+daph_test_summary <- daphnia_test %>%
+  mutate(
+    #get out-of-sample predicted fits
+    mod0 = as.numeric(predict(zoo_daph_mod0,.,type="response")),
+    modG = as.numeric(predict(zoo_daph_modG,.,type="response")),
+    modGS = as.numeric(predict(zoo_daph_modGS,.,type="response")),
+    modGI = as.numeric(predict(zoo_daph_modGI,.,type="response")))%>%
+  group_by(lake)%>%
+  summarise(`Intercept only` = format(get_deviance(zoo_daph_mod0, 
+                                                   mod0, 
+                                                   density_adj), 
+                                      scientific = FALSE, 
+                                      digits=2),
+            `Model G` = format(get_deviance(zoo_daph_modG, 
+                                            modG, 
+                                            density_adj), 
+                               scientific = FALSE, 
+                               digits=2),
+            `Model GS` = format(get_deviance(zoo_daph_modGS, 
+                                             modGS, 
+                                             density_adj), 
+                               scientific = FALSE, 
+                               digits=2),
+            `Model GI` = format(get_deviance(zoo_daph_modGI, 
+                                             modGI, 
+                                             density_adj), 
+                               scientific = FALSE, 
+                               digits=2))%>%
+  rename(Lake = lake)
+```
+
+```{r zoo_daph_outofsample_kable, echo=FALSE, message=FALSE, dependson=-1,  cache=TRUE, purl = FALSE}
+kable(daph_test_summary,
+      format = table_out_format, 
+      caption="Out-of-sample predictive ability for model \\textit{G}, \\textit{GS}, and \\textit{GI} applied to the \\textit{D. mendotae} dataset. Deviance values represent the total deviance of model predictions from observations for out-of-sample data. 'Intercept only' results are for a null model with only lake-level random effect intercepts included.", 
+      booktabs = TRUE)%>%
+  add_header_above(c(" " = 1, "Total deviance of out-of-sample data" = 4),
+                   escape = FALSE)%>%
+  kable_styling(full_width = FALSE)
+```
