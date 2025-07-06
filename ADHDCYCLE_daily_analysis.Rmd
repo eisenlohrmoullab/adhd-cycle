@@ -20,8 +20,11 @@ source("scripts/options_packages.R")
 source("scripts/set-output-folder.R")
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ```
 =======
+=======
+>>>>>>> Stashed changes
 # Create a new output folder with the current date
 current_date <- format(Sys.Date(), "%Y%m%d")  # Produces date as YYYYMMDD
 output_folder <- paste0(
@@ -30,6 +33,9 @@ output_folder <- paste0(
 ) # Define the output folder with the current date
 # State the output folder
 cat("Output folder set as: ", output_folder, "\n")
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 
