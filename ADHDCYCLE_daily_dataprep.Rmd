@@ -60,6 +60,7 @@ library(haven)       # For reading SPSS, Stata, and SAS files
 library(readxl)      # For reading Excel files
 library(readr)       # For reading CSV and other text files
 
+?haven
 
 # ---- Plotting and Visualization ----
 
@@ -152,6 +153,7 @@ standardize_index_names <- function(df) {
 - Inputs: Any Dataframe with @id variable
 - Outputs: Number of rows in the dataset, number of unique id values, and a list of unique id values
 ```{r count_rows_ids, cache=TRUE}
+
 count_rows_ids <- function(df) {
   cat("Number of rows: ", nrow(df), "\n")
   cat("Number of unique ids: ", n_distinct(df$id), "\n")
@@ -162,6 +164,7 @@ count_rows_ids <- function(df) {
   # Print the number of unique IDs and the list of unique IDs in a sentence
   cat("The id values are:", "\n", "\n", paste(id_list, collapse = ", "), "\n", "\n")
 }
+
 ```
 
 ## print.variable.names() Function to print variable names
@@ -383,12 +386,212 @@ alldailyvars <- c(dv_list, hormlist) %>% noquote()
 
 # Load your CSV file (adjust the path to your actual file location)
 
-rawdf <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") # Change the path to your file
+#rawdf <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24. Daily Master.csv") 
+
+# New file emailed by Emily Knapp and Urveesha June 2025
+
+rawdf <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav") 
+
+# Create new dbl variable called id from ID
+rawdf <- rawdf %>%
+  mutate(id = as.numeric(ID)) %>% # Convert ID to numeric
+  select(-ID) # Drop the original ID column
+
+# move id to the start of the file
+rawdf <- rawdf %>%
+  select(id, everything()) # Move id to the first column
+
+# Change the path to your file
 
 df <- rawdf
 
 print.variable.names(df)
+
+View(df)
+
+# remove observations where date_rated is NA
+df <- df %>%
+  filter(!is.na(date_rated))
+
+# add placeholder rows for missing dates by id (date_rated)
+df <- df %>%
+  group_by(id) %>%
+  complete(date_rated = seq.Date(min(date_rated), max(date_rated), by = "day")) %>%
+  ungroup()
+
+
 ```
+
+# Merge in additional cycle and ov dates from Emily Knapp in August of 2025
+
+```{r}
+# Load additional cycle data
+
+knapp_dates <- read_excel("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/cycadhd_mensov_iso.xlsx")
+
+#check formats of id in both datasets
+str(df$id) #check id format (dbl)
+str(knapp_dates$id) #check id format (chr)
+
+# Convert id in knapp_dates to numeric to match df
+knapp_dates <- knapp_dates %>%
+  mutate(id = as.numeric(id))
+
+# Merge knapp_dates into df based on id (one to many): 
+df <- df %>%
+  left_join(knapp_dates, by = "id")
+
+# View items in knapp_dates in the new df file merged
+
+#View(df)
+```
+
+# Merge in additional hormone data from Emily Knapp August 2025
+#OLD NAMES (already changed): id	sample	Box #	Estradiol (pg/mL)	STERR	Progesterone (pg/mL)	STERR	LH (uIU/mL)	lh_sterr	hormone_assay_note	
+# New names already changed: Changed names to id sample Box # Estradiol E2_stderr Progesterone P4_stderr LH lh_sterr hormone_assay_note
+
+```{r}
+finalhormonebatch <- read_excel("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.xlsx")
+
+#View(finalhormonebatch)
+
+#Drop the variable "Box #" and set id to dbl format
+finalhormonebatch <- finalhormonebatch %>%
+  select(-`Box #`) %>%
+  mutate(id = as.numeric(id)) # Convert id to numeric to match df
+
+finalhormonebatch <- finalhormonebatch %>%
+  separate(sample, into = c("id_sample", "TubeNumber"), sep = "-")
+
+# Make a copy of the TubeNumber variable called "days_in_study"
+
+finalhormonebatch <- finalhormonebatch %>%
+  mutate(TubeNumber = as.numeric(TubeNumber)) %>% # Convert TubeNumber to numeric
+  mutate(days_in_study = TubeNumber) # Create days_in_study variable
+
+View(finalhormonebatch)
+
+# Drop id_sample variable
+finalhormonebatch <- finalhormonebatch %>%
+  select(-id_sample)
+
+# Determine which ids are not shared between finalhormonebatch and df
+ids_not_in_df <- setdiff(finalhormonebatch$id, df$id)
+
+#ids_not_in_df
+# Good, all ids in in both dataframes
+
+# ---- Standardize Names ----
+finalhormonebatch <- standardize_index_names(finalhormonebatch)
+
+
+#Print unique ids
+unique(finalhormonebatch$id)
+
+
+# ---- Add placeholder rows for missing TubeNumbers ----
+finalhormonebatch <- finalhormonebatch %>%
+  group_by(id) %>%
+  complete(TubeNumber = seq(min(TubeNumber, na.rm = TRUE), max(TubeNumber, na.rm = TRUE), by = 1)) %>%
+  ungroup()
+
+finalhormonebatch$TubeNumber <- as.numeric(finalhormonebatch$TubeNumber)
+
+# ---- Sort df by id and TubeNumber ----
+finalhormonebatch <- finalhormonebatch %>%
+  arrange(id, TubeNumber)
+
+View(finalhormonebatch)
+
+
+# Need to create a new variable daterated in the finalhormonebatch dataset based on the first morning daterated value for each id in the df dataset
+
+# ---- Create a new variable daterated in the hormdf dataset based on the first morning daterated value for each id in the amdf dataset ----
+
+# Save the first daterated value for each id in the amdf dataset as a trait date variable called first_day_in_study
+first_day_in_study <- df %>%
+  group_by(id) %>%
+  summarize(first_day_in_study = min(date_rated)) %>%
+  ungroup()
+
+# Merge the first_day_in_study variable into the hormdf dataset
+finalhormonebatch <- finalhormonebatch %>%
+  left_join(first_day_in_study, by = "id")
+
+# Calculate daterated in the hormdf dataset as the first_day_in_study + TubeNumber - 1
+finalhormonebatch <- finalhormonebatch %>%
+  mutate(date_rated = first_day_in_study + TubeNumber - 1)
+
+# Check to see if it worked 
+View(finalhormonebatch)
+
+vis_miss(finalhormonebatch)
+
+
+# ---- View all Raw Dataset Variable Names ----
+
+# When daterated is missing from a row in the hormdf dataset at the end of an id's date range, fill in the missing daterated values using TubeNumber as a counting index day variable within each id
+finalhormonebatch <- finalhormonebatch %>%
+  group_by(id) %>%
+  fill(date_rated) %>% # Fill in missing daterated values using TubeNumber as a counting index day variable within each id
+  ungroup()
+
+# ---- Sort df by id and daterated ----
+finalhormonebatch <- finalhormonebatch %>%
+  arrange(id, date_rated)
+
+#Format date_rated as ISO in both datasets
+finalhormonebatch$date_rated <- as.Date(finalhormonebatch$date_rated, format = "%Y-%m-%d")
+# Format daterated as ISO in both datasets
+df$date_rated <- as.Date(df$date_rated, format = "%Y-%m-%d")
+
+#View(df)
+
+# Merge together the hormone data with the main dataset
+
+# Merge finalhormonebatch with df by id and daterated only including observations that are in both datasets
+
+df <- df %>%
+  left_join(finalhormonebatch, by = c("id", "date_rated"))
+
+View(df)
+```
+
+
+```{r}
+# Sort df by id and daterated
+df <- df %>%
+  arrange(id, daterated)
+
+print.variable.names(df)
+count_rows_ids(df)
+vis_miss(df)
+
+# how many nonmissing E2 values for each participant id? 
+df %>%
+  group_by(id) %>%
+  summarize(n_E2 = sum(!is.na(E2))) %>%
+  arrange(n_E2) %>% View()
+
+#Create a histogram of n_E2
+df %>%
+  group_by(id) %>%
+  summarize(n_E2 = sum(!is.na(E2))) %>%
+  ggplot(aes(x = n_E2)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Number of Non-Missing E2 Values per Participant", x = "Number of Non-Missing E2 Values", y = "Count") +
+  theme_minimal()
+
+ggsave(filename = paste0(output_folder, "/n_E2_histogram.png"), width = 6, height = 4)
+
+# Print a description of what happened in this script. 
+cat("\n", "The hormone data was imported and merged with the main dataset. The id and day_in_study were separated. The TubeNumber was converted to a numeric variable. Missing rows were removed. Placeholder rows were added for missing TubeNumbers. The dataset was sorted by id and TubeNumber. A new variable daterated was created in the hormone dataset based on the first morning daterated value for each id in the main dataset. Missing daterated values were filled in using TubeNumber as a counting index day variable within each id. The hormone data was merged with the main dataset by id and daterated. The dataset was sorted by id and daterated. The number of nonmissing E2 values for each participant id was calculated and visualized in a histogram.")
+
+```
+
+
+
+
 
 # ---- Standardize Variable Names ----
 - This includes standardizing the names of the index variables (id and daterated)
