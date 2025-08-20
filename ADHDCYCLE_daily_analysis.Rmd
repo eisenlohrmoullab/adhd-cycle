@@ -572,12 +572,13 @@ df$E2log <- log(df$E2 + 1)   # Log-transform E2
 hist(df$E2log, main = "Histogram of log(E2+1)", xlab = "log(E2+1)")
 
 # Ensure 'id' is a factor
-df$id <- as.factor(df$id)
+df$id <- as.factor(
+  df$id)
 
 # Fit the GAMM model
 gamm_E2 <- gam(E2log ~ s(id, bs = "re") + 
-                 s(id, scaled_cycleday, bs = "re") + 
-                 s(scaled_cycleday), 
+                 s(id, scaled_cycleday_ov, bs = "re") + 
+                 s(scaled_cycleday_ov), 
                data = df, method = "REML")
 
 # Save model summary
@@ -590,7 +591,7 @@ var_part_E2_output <- capture.output(var_part_E2$hierarchical.partitioning)
 writeLines(var_part_E2_output, file.path(output_folder, "E2_var_partitioning.txt"))
 
 # Create a dataset for predictions
-E2dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+E2dat <- expand.grid(scaled_cycleday_ov = seq(-1, 1, by = 0.1), id = 0)
 pred_E2 <- predictions(gamm_E2, newdata = E2dat, type = "response",
                        transform = function(x) exp(x) - 1)
 E2dat$estimate <- pred_E2$estimate
@@ -598,11 +599,11 @@ E2dat$conf.low <- pred_E2$conf.low
 E2dat$conf.high <- pred_E2$conf.high
 
 # Create the E2 plot
-E2plot <- ggplot(E2dat, aes(x = scaled_cycleday, y = estimate)) +
+E2plot <- ggplot(E2dat, aes(x = scaled_cycleday_ov, y = estimate)) +
   scale_x_continuous(
     limits = c(-1, 1),
     breaks = seq(-1, 1, by = 0.50),
-    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+    labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses")
   ) +
   labs(x = "", y = "Salivary Estradiol") +
   geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
@@ -614,12 +615,12 @@ E2plot <- ggplot(E2dat, aes(x = scaled_cycleday, y = estimate)) +
 
 print(E2plot)
 ggsave(
-  filename = file.path(output_folder, "E2_gamm_plot.png"),
+  filename = file.path(output_folder, "E2_gamm_plot.pdf"),
   plot = E2plot,
   width = 10,
   height = 8,
   dpi = 300,
-  device = ragg::agg_png,
+  device = cairo_pdf,
   bg = "white"
 )
 
@@ -632,8 +633,8 @@ df$P4log <- log(df$P4 + 1)
 hist(df$P4log, main = "Histogram of log(P4+1)", xlab = "log(P4+1)")
 
 gamm_P4 <- gam(P4log ~ s(id, bs = "re") + 
-                 s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20),
+                 s(scaled_cycleday_ov, id, bs = "re") + 
+                 s(scaled_cycleday_ov, k = 20),
                data = df, method = "REML")
 
 summary_P4 <- capture.output(summary(gamm_P4))
@@ -643,18 +644,18 @@ var_part_P4 <- gam.hp::gam.hp(gamm_P4)
 var_part_P4_output <- capture.output(var_part_P4$hierarchical.partitioning)
 writeLines(var_part_P4_output, file.path(output_folder, "P4_var_partitioning.txt"))
 
-P4dat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+P4dat <- expand.grid(scaled_cycleday_ov = seq(-1, 1, by = 0.1), id = 0)
 pred_P4 <- predictions(gamm_P4, newdata = P4dat, type = "response",
                        transform = function(x) exp(x) - 1)
 P4dat$estimate <- pred_P4$estimate
 P4dat$conf.low <- pred_P4$conf.low
 P4dat$conf.high <- pred_P4$conf.high
 
-P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
+P4plot <- ggplot(P4dat, aes(x = scaled_cycleday_ov, y = estimate)) +
   scale_x_continuous(
     limits = c(-1, 1),
     breaks = seq(-1, 1, by = 0.50),
-    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+    labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses")
   ) +
   labs(x = "", y = "Salivary Progesterone") +
   geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
@@ -666,12 +667,12 @@ P4plot <- ggplot(P4dat, aes(x = scaled_cycleday, y = estimate)) +
 
 print(P4plot)
 ggsave(
-  filename = file.path(output_folder, "P4_gamm_plot.png"),
+  filename = file.path(output_folder, "P4_gamm_plot.pdf"),
   plot = P4plot,
   width = 10,
   height = 8,
   dpi = 300,
-  device = ragg::agg_png,
+  device = cairo_pdf,
   bg = "white"
 )
 
@@ -684,8 +685,8 @@ df$LHlog <- log(df$LH + 1)
 hist(df$LHlog, main = "Histogram of log(LH+1)", xlab = "log(LH+1)")
 
 gamm_LH <- gam(LHlog ~ s(id, bs = "re") + 
-                 s(scaled_cycleday, id, bs = "re") + 
-                 s(scaled_cycleday, k = 20),
+                 s(scaled_cycleday_ov, id, bs = "re") + 
+                 s(scaled_cycleday_ov, k = 20),
                data = df, method = "REML")
 
 summary_LH <- capture.output(summary(gamm_LH))
@@ -695,20 +696,20 @@ var_part_LH <- gam.hp::gam.hp(gamm_LH)
 var_part_LH_output <- capture.output(var_part_LH$hierarchical.partitioning)
 writeLines(var_part_LH_output, file.path(output_folder, "LH_var_partitioning.txt"))
 
-LHdat <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+LHdat <- expand.grid(scaled_cycleday_ov = seq(-1, 1, by = 0.1), id = 0)
 pred_LH <- predictions(gamm_LH, newdata = LHdat, type = "response",
                        transform = function(x) exp(x) - 1)
 LHdat$estimate <- pred_LH$estimate
 LHdat$conf.low <- pred_LH$conf.low
 LHdat$conf.high <- pred_LH$conf.high
 
-LHplot <- ggplot(LHdat, aes(x = scaled_cycleday, y = estimate)) +
+LHplot <- ggplot(LHdat, aes(x = scaled_cycleday_ov, y = estimate)) +
   scale_x_continuous(
     limits = c(-1, 1),
     breaks = seq(-1, 1, by = 0.50),
-    labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")
+    labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses")
   ) +
-  labs(x = "", y = "Salivary Progesterone") +
+  labs(x = "", y = "Salivary Luteinizing Hormone") +
   geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
             fill = "grey70", alpha = 0.2, color = "white") +
   geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
@@ -718,17 +719,54 @@ LHplot <- ggplot(LHdat, aes(x = scaled_cycleday, y = estimate)) +
 
 print(LHplot)
 ggsave(
-  filename = file.path(output_folder, "LH_gamm_plot.png"),
+  filename = file.path(output_folder, "LH_gamm_plot.pdf"),
   plot = LHplot,
   width = 10,
   height = 8,
   dpi = 300,
-  device = ragg::agg_png,
+  device = cairo_pdf,
   bg = "white"
 )
 
+# merge e2dat, p4dat, lhdat
+E2dat$variable <- "E2"
+P4dat$variable <- "P4"
+LHdat$variable <- "LH"
+all_dat_orig <- rbind(E2dat, P4dat, LHdat)
 
 
+#Redo graph scaling each hormone so they fit togethr well on the graph
+E2dat$estimate <- scale(E2dat$estimate)
+P4dat$estimate <- scale(P4dat$estimate)
+LHdat$estimate <- scale(LHdat$estimate)
+all_dat <- rbind(E2dat, P4dat, LHdat)
+
+# Create a combined plot
+combined_plot <- ggplot(all_dat, aes(x = scaled_cycleday_ov, y = estimate, color = variable)) +
+  scale_x_continuous(
+    limits = c(-1, 1),
+    breaks = seq(-1, 1, by = 0.50),
+    labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses")
+  ) +
+  labs(x = "", y = "Salivary Hormone Levels") +
+  geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf),
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf),
+            fill = "grey87", alpha = 0.2, color = "white") +
+  geom_line(size = 1, show.legend = TRUE) +
+  theme_minimal(base_size = 16)
+
+print(combined_plot)
+
+ggsave(
+  filename = file.path(output_folder, "combined_gamm_plot.pdf"),
+  plot = combined_plot,
+  width = 10,
+  height = 8,
+  dpi = 300,
+  device = cairo_pdf,
+  bg = "white"
+)
 ```
 
 
@@ -753,7 +791,7 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   df[[log_dv]] <- log(df[[dv]] + 1)  
 
   # Step 2: Fit GAMM model
-  gamm_model <- gam(as.formula(paste0(log_dv, " ~ s(id, bs = 're') + s(scaled_cycleday, id, bs = 're') + s(scaled_cycleday, k = 30)")), 
+  gamm_model <- gam(as.formula(paste0(log_dv, " ~ s(id, bs = 're') + s(scaled_cycleday_ov, id, bs = 're') + s(scaled_cycleday_ov, k = 30)")), 
                      data = df, method = "REML")
 
   # Step 3: Extract model summary & hierarchical partitioning
@@ -761,9 +799,9 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   var_part <- gam.hp::gam.hp(gamm_model)
   
   # Extract p-value and EDF
-  scaled_cycleday_row <- which(rownames(model_summary$s.table) == "s(scaled_cycleday)")
-  p_value <- model_summary$s.table[scaled_cycleday_row, "p-value"]
-  edf <- model_summary$s.table[scaled_cycleday_row, "edf"]
+  scaled_cycleday_ov_row <- which(rownames(model_summary$s.table) == "s(scaled_cycleday_ov)")
+  p_value <- model_summary$s.table[scaled_cycleday_ov_row, "p-value"]
+  edf <- model_summary$s.table[scaled_cycleday_ov_row, "edf"]
 
   # Determine significance symbol
   significance <- ifelse(p_value < 0.001, "***", 
@@ -778,7 +816,7 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   writeLines(combined_output, file.path(output_folder, paste0("gamm_hp_", dv, ".txt")))
 
   # Step 4: Create dataset for predictions
-  pred_data <- expand.grid(scaled_cycleday = seq(-1, 1, by = 0.1), id = 0)
+  pred_data <- expand.grid(scaled_cycleday_ov = seq(-1, 1, by = 0.1), id = 0)
   pred <- predictions(gamm_model, newdata = pred_data, type = "response", transform = function(x) exp(x) - 1)
 
   # Add predictions and confidence intervals
@@ -787,9 +825,9 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   pred_data$conf.high <- scale(pred$conf.high)
 
   # Step 5: Create ggplot for predictions
-  dv_plot <- ggplot(pred_data, aes(x = scaled_cycleday)) +
+  dv_plot <- ggplot(pred_data, aes(x = scaled_cycleday_ov)) +
     scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
-                       labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+                       labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses")) +
     labs(x = "Cycle Day (Scaled)", y = paste0(dv, " (Z, Pred)")) +
     
     # Background shading for key regions
@@ -803,8 +841,8 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
     geom_line(aes(y = estimate, color = "dv"), size = 1) +
     
     # Add E2 and P4 curves
-    geom_line(data = E2dat, aes(x = scaled_cycleday, y = scale(estimate), color = "E2"), size = 1, linetype = "dashed") +
-    geom_line(data = P4dat, aes(x = scaled_cycleday, y = scale(estimate), color = "P4"), size = 1, linetype = "dashed") +
+    geom_line(data = E2dat, aes(x = scaled_cycleday_ov, y = scale(estimate), color = "E2"), size = 1, linetype = "dashed") +
+    geom_line(data = P4dat, aes(x = scaled_cycleday_ov, y = scale(estimate), color = "P4"), size = 1, linetype = "dashed") +
     
     # Customize legend
     scale_color_manual(name = "Key", 
@@ -836,7 +874,7 @@ gamm_models_plots <- function(dv, df, output_folder, plot_path) {
   pred_data$conf.low <- pred$conf.low
   pred_data$conf.high <- pred$conf.high
 
-  dv_plot_orig <- ggplot(pred_data, aes(x = scaled_cycleday)) +
+  dv_plot_orig <- ggplot(pred_data, aes(x = scaled_cycleday_ov)) +
     scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
                        labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
     labs(x = "Cycle Day (Scaled)", y = paste0(dv, " (Original Scale)")) +

@@ -1,0 +1,741 @@
+Daily Data Prep for R01AA027990
+---
+title: "UKALC_primary"
+date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document
+---
+
+# Code for R01AA027990, "Estradiol Effects on Behavioral and Reward Sensitivity to Alcohol across the Menstrual Cycle", which sought to examine how the menstrual cycle influences daily alcohol use and related outcomes in female drinkers. Data collected at U Kentucky by Mark Fillmore and Michelle Martel from 2021-2024. Code prepared by Tory Eisenlohr-Moul, PhD, assisted by Anna Patterson and Anisha Nagpal. 
+
+```{r opt-pkg, quiet=TRUE, message=FALSE, warning=FALSE}
+# Set options, load packages and resolve conflicts
+source("scripts/options_packages.R")
+```
+
+```{r set-output-folder, quiet=TRUE, message=FALSE, warning=FALSE}
+source("scripts/set-output-folder.R")
+
+# Create the output folder if needed
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder)
+}
+```
+
+```{r source-custom-fxs, quiet=TRUE, message=FALSE, warning=FALSE}
+source("scripts/rename_id_E2_P4.R") # Load the function to rename id, E2, and P4 columns
+source("scripts/plot-day-of-week.R") # Load the function to plot day of week effects
+cat("Custom functions have been sourced.", "\n")
+```
+
+```{r set-var-lists}
+source("scripts/variable_lists.R")
+```
+
+```{r import-raw-data}
+source("scripts/import-raw-survey-data.R")
+```
+
+```{r clean-am-qual}
+source("scripts/clean_am_qual.R")
+```
+
+```{r clean-am-rc, warning=FALSE}
+source("scripts/clean_am_rc.R")
+```
+
+```{r create-merged-amdf}
+source("scripts/create_merged_amdf.R")
+
+# 83 ids, 2543 rows
+```
+
+
+```{r clean-pm-qual}
+source("scripts/clean_pm_qual.R")
+```
+
+```{r clean-pm-rc, warning=FALSE}
+source("scripts/clean_pm_rc.R")
+```
+
+```{r create-merged-pmdf}
+source("scripts/create_merged_pmdf.R")
+
+# PM SURVEYS: 82 ids, 2167 rows
+```
+
+```{r anna-specifications}
+source("scripts/ukalc_annasurveyspecs.R") # Removes bad/duplicate rows
+
+# Check for duplicates and remove
+pmdf <- pmdf %>%
+  distinct()
+
+count_rows_ids(pmdf)
+
+# Note: Lots of replacements of duplicates etc happen here. 
+
+# 80 ids, 2112 rows
+```
+
+
+
+# TODO Doublecheck this join
+
+```{r create_df_merge_am_pm, warning=FALSE}
+source("scripts/create_df_merge_am_pm.R")
+
+
+# People with survey data: 81 ids, 2398 rows
+
+# Create a list of ids with 10 or more days of survey data in this dataset
+ids_with_survey_data <- df %>%
+  group_by(id) %>%
+  summarize(n = n()) %>%
+  filter(n >= 10) %>%
+  pull(id) %>% unique()
+
+ids_with_survey_data # This is a list that can be used to cross-reference missing data later on
+
+print.variable.names(df)
+
+```
+
+
+```{r create-alc-vars}
+source("scripts/Create_Alc_Vars.R")
+
+str(df$drink_today_bin)
+hist(df$drink_today_bin)
+str(df$fourplustoday_bin)
+
+hist(df$fourplustoday_bin)
+
+```
+
+```{r score-bdefs}
+source("scripts/score_bdefs.R")
+
+```
+
+```{r}
+
+
+source("scripts/clean-cycle-dates.R")
+print.variable.names(df)
+count_rows_ids(df)
+
+```
+
+
+```{r}
+
+# Your Venn diagram code with ggvenn
+missing_data_diagram1 <- ggvenn(list(SurveyData = ids_with_survey_data, CycleData = ids_with_final_cycle_length))
+
+ggsave(filename = paste0(output_folder, "/venn_diagram_survey_cycle_length.png"), width = 10, height = 10)
+
+missing_data_diagram1
+
+# Print a list of the 13 people who are in ids_with_survey_data but who are not in ids_with_cycle_length
+ids_with_survey_data_not_in_cycle_length <- setdiff(ids_with_survey_data, ids_with_cycle_length)
+ids_with_survey_data_not_in_cycle_length
+
+```
+
+```{r}
+count_rows_ids(df)
+```
+
+
+```{r}
+# Step 5: Visualize Period Start Dates Over Time with Color-Coded Tiles
+periodstartplot <- df %>%
+  ggplot(aes(x = daterated, y = id, fill = factor(TAEMPeriodStart))) +
+  geom_tile() +
+  labs(
+    title = "Period Start Dates Over Time",
+    x = "Date",
+    y = "ID",
+    fill = "Period Start"
+  ) +
+  scale_fill_manual(values = c("grey", "red")) +
+  theme_minimal()
+
+# Save to output_folder previously specified, specify periodstartplot
+ggsave(filename = paste0(output_folder, "/period_start_dates_heatmap.png"), plot = periodstartplot, width = 10, height = 6)
+
+# Step 6: Visualize Ovulation Dates Over Time
+ovulationplot <- df %>%
+  ggplot(aes(x = daterated, y = id, fill = factor(TAEMOvPos))) +
+  geom_tile() +
+  labs(
+    title = "Ovulation Dates Over Time",
+    x = "Date",
+    y = "ID",
+    fill = "Ovulation Date"
+  ) +
+  scale_fill_manual(values = c("grey", "blue")) +
+  theme_minimal()
+
+# Save to output_folder previously specified, specify ovulationplot
+ggsave(filename = paste0(output_folder, "/ovulation_dates_heatmap.png"), plot = ovulationplot, width = 10, height = 6)
+
+periodstartplot
+
+ovulationplot
+
+df %>% select(id, daterated, TAEMPeriodStart, TAEMOvPos) %>% View()
+
+#vis_miss(df)
+
+```
+
+
+```{r , warning=FALSE}
+source("scripts/horm-prep-merge.R")
+```
+
+```{r}
+source("scripts/import_visual_peak_notes.R")
+```
+
+# Output Cycle Event and Hormone Plots for Each Participant
+## Saved in the output_folder for 2024-11-10
+```{r ,include=FALSE}
+#source("scripts/plot-cycle-events.R")
+```
+
+
+# Visualize Percentage of Days Drinking
+```{r}
+# Prepare data for the pie chart
+drink_table <- table(df$drink_today, useNA = "no")  # Remove NAs for pie chart
+drink_percentages <- round(100 * prop.table(drink_table), 1)  # Calculate percentages
+drink_labels <- paste(names(drink_table), ":", drink_table, "(", drink_percentages, "%)", sep = "")
+
+# Define the file path and open the graphics device
+png(paste0(output_folder, "/drink_today_pie_chart.png"), width = 800, height = 600)
+
+# Create  the pie chart
+pie(drink_table, labels = drink_labels, col = c("skyblue", "lightcoral"), main = "Percentage of Days Drinking")
+
+# Close the graphics device
+dev.off()
+
+
+table(df$fourplustoday)
+table(df$drink_today)
+
+```
+
+
+```{r how-many-drinking-ids}
+#How many unique ids are in the dataset? 
+ids_in_am_dataset <- n_distinct(df$id) # 83
+
+# How many unique participants (factor var id) reported drinking at least once? 
+unique_drinkers <- n_distinct(df$id[df$drink_today == "Yes"]) # 79
+
+# Print out each id with the number of times that each id reported drinking
+df %>%
+  filter(drink_today == "Yes") %>%
+  count(id) %>%
+  arrange(desc(n))
+
+table(df$drink_today)
+
+# use cat to print out the number of unique ids and unique drinkers
+cat("Number of unique ids in the dataset: ", ids_in_dataset, "\n")
+cat("Number of unique participants who reported drinking at least once: ", unique_drinkers, "\n")
+
+
+```
+
+# Visualize Drinking Across the Study by ID
+```{r visualize-drinks-fourplus}
+
+df %>% filter(!is.na(drink_today)) %>% 
+  ggplot(aes(x = daterated, y = id, fill = drink_today)) +
+  geom_tile() +
+  labs(title = "Drinking Across the Study by ID",
+       x = "Date",
+       y = "ID",
+       fill = "Drinking Today") +
+  scale_fill_manual(values = c("Yes" = "blue", "No" = "lightgray")) +  # Customize colors here
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8))  # Adjust the size as needed
+
+
+# Save the plot to the output_folder
+ggsave(filename = paste0(output_folder, "/drink_today_heatmap.png"), width = 10, height = 6)
+
+
+
+df %>% filter(!is.na(fourplustoday)) %>% 
+  ggplot(aes(x = daterated, y = id, fill = fourplustoday)) +
+  geom_tile() +
+  labs(title = "Drinking 4+ Drinks Across the Study by ID",
+       x = "Date",
+       y = "ID",
+       fill = "4+ Drinks Today") +
+  scale_fill_manual(values = c("Yes" = "blue", "Blue" = "lightgray")) +  # Customize colors here
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 8))  # Adjust the size as needed
+
+
+# Save the plot to the output_folder
+ggsave(filename = paste0(output_folder, "/fourplustoday_heatmap.png"), width = 10, height = 6)
+
+
+```
+
+```{r}
+source("scripts/variable_lists.R")
+```
+
+```{r}
+# Source the function and create variables
+source("scripts/plot-day-of-week.R")
+# Call the function
+# plot_day_of_week_effects(df = df, outcome_vars = alldailyvars)
+```
+
+
+
+```{r apply-3-5-rolling-avgs}
+source("scripts/create.rolling.avgs.R")
+df <- create.rolling.avgs(df, alldailyvars)
+cat("Rolling averages (.3roll, .5roll) have been applied to the raw variables in the alldailyvars list (see variable_lists.R)", "\n")
+```
+
+```{r apply-log-transforms}
+df <- df %>%
+  mutate(across(all_of(alldailyvars), ~ log(.x + 1), .names = "{.col}.log"))
+cat("Variables in alldailyvars have been log transformed (.log) and can be referenced in list: alldailyvars_log.", "\n")
+
+df <- df %>% mutate(across(all_of(alldailyvars_roll), ~ log(.x + 1), .names = "{.col}.log"))
+cat("\n","Variables in alldailyvars_roll have been log transformed (log(var+1); .3roll.log, .5roll.log) and can be referenced in list: alldailyvars_roll_log.", "\n")
+```
+
+```{r save-person-metrics}
+for (var in alldailyvars) {df <- create.person.metrics(df, !!sym(var), id)}
+cat("\n","Person metrics (.d, .zd, .m, .sd) have been calculated for variables in alldailyvars and are now available in lists: alldailyvars_d, _zd, _sd, _m.", "\n")
+
+for (var in alldailyvars_roll) {df <- create.person.metrics(df, !!sym(var), id)}
+cat("\n","Person metrics (.d, .zd, .m, .sd) have been calculated for variables in alldailyvars_roll (including .3roll and .5roll versions) and are now available in lists: alldailyvars_roll_d, _zd, _sd, _m.", "\n")
+
+for (var in alldailyvars_roll_log) {df <- create.person.metrics(df, !!sym(var), id)}
+cat("\n","Person metrics (.d, .zd, .m, .sd) have been calculated for variables in alldailyvars_roll_log and are now available in lists: alldailyvars_roll_log_d, _zd, _sd, _m.", "\n")
+
+```
+
+# ---- Hormone Exclusions/Quality Control ----
+# NOT YET DONE _ TEMPLATE CODE BELOW _ TODO
+- Note that their raw data can still be accessed in @rawdf
+- The variable @removed_from_horm_analysis is created and set to 1 for all observations from these IDs
+```{r}
+# List of IDs whose hormone data should be flagged for missingness due to poor quality
+
+#badhorm_ids <- c(put IDs here)
+
+# Add a new binary column `remove_from_horm_analysis` to flag the IDs
+
+#df <- df %>% mutate(removed_from_horm_analysis = ifelse(id %in% badhorm_ids, 1, 0))
+
+# For these ids, set variables E2 and P4 to missing
+#df <- df %>% mutate(E2 = ifelse(id %in% badhorm_ids, NA, E2),
+        # P4 = ifelse(id %in% badhorm_ids, NA, P4),
+        # LH = ifelse(id %in% badhorm_ids, NA, LH))
+
+```
+
+
+
+```{r}
+#source("scripts/scaledcyc_prep.R")
+
+#checkpointdf <- df
+#df <- checkpointdf
+
+source("scripts/scaled_cycle-prep-2.R")
+```
+
+# Check dataset for missingness patterns to check for merging issues
+
+# ---- Check for Hormone Missingness ----
+#TODO need to get remaining hormone data from 170-184
+```{r missing-hormones, warning=FALSE}
+
+df %>%
+  mutate(is_missing = ifelse(is.na(E2), 1, 0)) %>%
+  ggplot(aes(x = TubeNumber, y = as.factor(id), fill = as.factor(is_missing))) +
+  geom_tile() +
+  labs(title = "Hormone Data Heatmap Across DateRated (Green=Present)", fill = "Missing") +
+  scale_fill_manual(values = c("0" = "forestgreen", "1" = "red")) +
+  theme(axis.text.y = element_text(angle = 0, size=5))
+
+#Save to previously defined output_folder
+ggsave(paste0(output_folder, "/hormone_missingness_heatmap.png"), width = 10, height = 10)
+
+```
+
+# ---- Check for Survey Missingness  ----
+
+```{r}
+
+#Urg_Alc_am, Dep_pm - lots of missingness in second half;
+#Drink_Alc_am - ALL missing!
+#StressDay_am - PRESENT
+#StressNight_am - PRESENT
+
+df %>%
+  mutate(is_missing = ifelse(is.na(Dep), 1, 0)) %>%
+  ggplot(aes(x = TubeNumber, y = as.factor(id), fill = as.factor(is_missing))) +
+  geom_tile() +
+  labs(title = "Missingness Heatmap Across DateRated (Green=Present)", fill = "Missing") +
+  scale_fill_manual(values = c("0" = "forestgreen", "1" = "red")) +
+  theme(axis.text.y = element_text(angle = 0, size=5))
+
+ggsave(paste0(output_folder, "/survey_missingness_heatmap.png"), width = 10, height = 10)
+
+print.variable.names(df)
+```
+
+
+
+# ---------------------------------------------------------------------------------- PRINT DATA INFO
+
+# ---- Count Rows and Unique IDs ----
+```{r count rows and ids}
+count_rows_ids(df)
+```
+
+# ---- Specific Ns for Days in Study, Survey Data, and Hormone Data ----        
+```{r data N details}
+
+# Load necessary libraries
+library(dplyr)
+
+# Filter the data for non-missing E2 values and count unique ids
+non_missing_E2 <- df %>%
+  filter(!is.na(E2))
+
+non_missing_E2_count <- n_distinct(non_missing_E2$id)
+non_missing_E2_ids <- unique(non_missing_E2$id)
+
+# Get IDs with missing E2 values
+missing_E2_ids <- setdiff(unique(df$id), non_missing_E2_ids)
+
+# Print results for non-missing and missing E2 values
+cat("Number of people WITH usable hormones:", non_missing_E2_count, "\n",
+    "The id values are:", paste(non_missing_E2_ids, collapse = ", "), "\n\n",
+    "Number of people WITHOUT usable hormone data:", length(missing_E2_ids), "\n",
+    "Their id values are:", paste(missing_E2_ids, collapse = ", "), "\n\n",
+    "In addition, these ids were removed due to a lack of complete data:", 
+    paste(ids_w_no_menses_onset, collapse = ", "), "\n\n")
+
+# Filter the data for non-missing survey values and count unique ids
+non_missing_survey <- df %>%
+  filter(!is.na(drink_today))
+
+non_missing_survey_count <- n_distinct(non_missing_survey$id)
+non_missing_survey_ids <- unique(non_missing_survey$id)
+
+# Get IDs with missing survey values
+missing_survey_ids <- setdiff(unique(df$id), non_missing_survey_ids)
+
+# Print results for non-missing and missing survey values
+cat("Number of people WITH any surveys:", non_missing_survey_count, "\n",
+    "Their id values are:", paste(non_missing_survey_ids, collapse = ", "), "\n\n",
+    "Number of people WITHOUT any surveys:", length(missing_survey_ids), "\n",
+    "Their id values are:", paste(missing_survey_ids, collapse = ", "), "\n\n")
+
+# Find the intersection of available hormone data and available survey data
+intersection_ids <- intersect(non_missing_E2_ids, non_missing_survey_ids)
+intersection_count <- length(intersection_ids)
+
+# Print result for the intersection of hormone and survey data
+cat("Number of people WITH both usable hormone and any survey data:", intersection_count, "\n",
+    "Their id values are:", paste(intersection_ids, collapse = ", "), "\n\n")
+
+# Count the non-missing observations of drink_today and E2 for people with both hormone and survey data
+non_missing_intersection <- df %>%
+  filter(id %in% intersection_ids, !is.na(drink_today), !is.na(E2))
+
+non_missing_intersection_count <- nrow(non_missing_intersection)
+
+# Print the result for non-missing observations of drink_today and E2
+cat("Number of non-missing observations of drink_today and E2 for people with both hormone and survey data:", non_missing_intersection_count, "\n")
+
+# Create a list of IDs with the number of days with both E2 and DRSP
+usable_days_list <- non_missing_intersection %>%
+  group_by(id) %>%
+  summarise(usable_days = n()) %>%
+  arrange(usable_days)
+
+# Print the list of IDs with the number of days in words
+cat("List of IDs with the number of days having both E2 and DRSP (sorted by number of observations ascending):", "\n")
+apply(usable_days_list, 1, function(row) {
+  cat("id", row["id"], "has", row["usable_days"], "hormone-survey pairs.", "\n")
+})
+
+```
+
+# Create a variable that counts the number of days since the first day of data collection for each participant
+# Create a variable that counts the number of rows per id and saves it as a trait variable (repeating within each id)
+
+```{r}
+# Create a variable called days_since_enrollment that counts the number of days since the first day of data collection (daterated) for each participant (id) in df
+df <- df %>%
+  group_by(id) %>%
+  mutate(days_since_enrollment = daterated - min(daterated))
+
+# Create a variable that counts the number of rows per id and saves it as a trait variable (repeating within each id)
+df <- df %>%
+  group_by(id) %>%
+  mutate(id_daycount = n())
+
+hist(df$id_daycount)
+```
+# Check scaled_cycleday
+```{r}
+hist(df$scaled_cycleday)
+
+ggsave(paste0(output_folder, "/scaled_cycleday_histogram.png"), width = 10, height = 6)
+```
+
+
+# ---- Plot Overlap of Available Data  ----        
+# Plot days in study, nonmissing survey observations, and E2 observations per id 
+#TODO need to add hormone data into this and redo
+```{r N details plot, message=FALSE, warning=FALSE}
+
+# Count the total number of "Days in Study" (total observations per ID)
+df_count <- df %>%
+  group_by(id) %>%
+  summarize(id_daycount = n())
+
+# Count the number of non-missing observations per ID for the variable drink_today_am
+df_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(number_of_observations = sum(!is.na(drink_today)))
+
+# Count the number of non-missing observations for the variable E2
+df_e2_nonmissing_count <- df %>%
+  group_by(id) %>%
+  summarize(e2_nonmissing = sum(!is.na(E2)))
+
+#### Handle Outliers ONLY for "Days in Study" ####
+
+# Outlier removal for "Days in Study"
+Q1 <- quantile(df_count$id_daycount, 0.25)
+Q3 <- quantile(df_count$id_daycount, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+df_no_outliers <- df_count %>%
+  filter(id_daycount >= lower_bound & id_daycount <= upper_bound)
+
+#### Determine Y-Axis Limits ####
+y_min <- min(df_no_outliers$id_daycount, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+y_max <- max(df_no_outliers$id_daycount, df_nonmissing_count$number_of_observations, df_e2_nonmissing_count$e2_nonmissing, na.rm = TRUE)
+
+#### Plots ####
+
+# Plot "Days in Study" per ID (with outliers removed)
+plot1_no_outliers <- ggplot(df_no_outliers, aes(x = factor(1), y = id_daycount, label = id)) +
+  geom_violin(fill = "lightblue", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "blue", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Days in Study", title = "Days in Study per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of Observations" for drink_today_am (without removing outliers)
+plot2_no_outliers <- ggplot(df_nonmissing_count, aes(x = factor(1), y = number_of_observations, label = id)) +
+  geom_violin(fill = "lightgreen", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "darkgreen", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing drink_today_am)", title = "Surveys per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Plot "Number of non-missing E2 observations" (without removing outliers)
+plot3_no_outliers <- ggplot(df_e2_nonmissing_count, aes(x = factor(1), y = e2_nonmissing, label = id)) +
+  geom_violin(fill = "lightcoral", alpha = 0.5) +  # Violin plot to show distribution
+  geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.7) +  # Boxplot inside the violin
+  geom_jitter(width = 0.15, size = 2, color = "red", alpha = 0.7) +  # Dots for raw data
+  geom_text(aes(label = id), hjust = -0.1, size = 3, check_overlap = TRUE) +  # Add ID labels
+  labs(x = NULL, y = "Number of Observations (Non-missing E2)", title = "Hormone Days per ID") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  ylim(y_min, y_max)
+
+# Combine the three plots on one page using grid.arrange from gridExtra
+observations_plot <- grid.arrange(plot1_no_outliers, plot2_no_outliers, plot3_no_outliers, ncol = 3)
+
+# Save the combined plot to a file with the current date
+ggsave(filename = paste0(output_folder, "/N_observations_plot_", current_date, ".png"), 
+       plot = observations_plot, 
+       width = 8, 
+       height = 6)
+
+```
+
+```{r}
+# Create a venn diagram (using ggvenn) to visualize the overlap of (1) ids with more than ten nonmissing observations of "Dep", (2) ids with more than 10 nonmissing observations of E2, and (3) ids with more than 10 nonmissing observations of scaled_cycleday_ov
+
+# Load necessary libraries
+#library(dplyr)
+#library(ggvenn)
+
+# Step 1: Identify ids with more than 10 non-missing observations for each variable
+ids_with_dep <- df %>%
+  group_by(id) %>%
+  summarize(nonmissing_dep = sum(!is.na(Dep))) %>%
+  filter(nonmissing_dep > 10) %>%
+  pull(id)
+
+ids_with_e2 <- df %>%
+  group_by(id) %>%
+  summarize(nonmissing_e2 = sum(!is.na(E2))) %>%
+  filter(nonmissing_e2 > 10) %>%
+  pull(id)
+
+ids_with_scaled_cycleday <- df %>%
+  group_by(id) %>%
+  summarize(nonmissing_scaled_cycleday = sum(!is.na(scaled_cycleday))) %>%
+  filter(nonmissing_scaled_cycleday > 10) %>%
+  pull(id)
+
+# Step 2: Create a list of sets for the Venn diagram
+sets <- list(
+  Surveys = ids_with_dep,
+  Hormones = ids_with_e2,
+  CycleData = ids_with_scaled_cycleday
+)
+
+# Generate the Venn diagram
+venn_plot <- ggvenn(
+  sets, 
+  show_percentage = FALSE,   # Show percentages in each intersection
+  fill_color = c("#E69F00", "#56B4E9", "#009E73"),  # Colors for each circle
+  stroke_size = 0.8,        # Border thickness
+  set_name_size = 20,        # Set names size (Surveys, Hormones, CycleData)
+  text_size = 20            # Size of numbers/percentages in intersections
+) +
+  ggtitle("Overlap of IDs with More Than 10 Observations of:") +
+  theme(
+    plot.title = element_text(size = 50, hjust = 0.5),  # Larger, centered title
+    text = element_text(size = 20)                      # General text size adjustments
+  )
+
+# Display the plot
+print(venn_plot)
+
+# Save the plot with high resolution
+ggsave(filename = paste0(output_folder, "/venn_diagram_dep_e2_scaledcycleday.png"),
+       plot = venn_plot, width = 10, height = 10, dpi = 300)
+
+
+```
+
+
+```{r}
+# Save a wide dataset (one row per id) with variables representing (1) the count of nonmissing E2 values for that id, (2) the count of nonmissing scaled_cycleday values for that id, and (3) the count of nonmissing Dep values for that id
+wide_df <- data.frame(
+  id = unique(df$id),
+  nonmissing_e2 = df %>%
+    group_by(id) %>%
+    summarize(nonmissing_e2 = sum(!is.na(E2))) %>%
+    pull(nonmissing_e2),
+  nonmissing_scaled_cycleday = df %>%
+    group_by(id) %>%
+    summarize(nonmissing_scaled_cycleday = sum(!is.na(scaled_cycleday))) %>%
+    pull(nonmissing_scaled_cycleday),
+  nonmissing_dep = df %>%
+    group_by(id) %>%
+    summarize(nonmissing_dep = sum(!is.na(Dep))) %>%
+    pull(nonmissing_dep)
+)
+
+View(wide_df)
+
+# Save out as csv to output_folder predefined
+write.csv(wide_df, paste0(output_folder, "/wide_df_", current_date, ".csv"), row.names = FALSE)
+```
+
+
+# TROUBLESHOOT -- it looks like we are not getting scaledcycledayov for a lot of people
+
+```{r}
+hist(df$scaled_cycleday_ov)
+hist(df$scaled_cycleday)
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Create a data frame with indicators for data availability for each variable
+data_availability <- df %>%
+  select(id, daterated, scaled_cycleday_ov, scaled_cycleday) %>%
+  mutate(
+    scaled_cycleday_ov_available = !is.na(scaled_cycleday_ov),
+    scaled_cycleday_available = !is.na(scaled_cycleday)
+  ) %>%
+  pivot_longer(cols = c(scaled_cycleday_ov_available, scaled_cycleday_available),
+               names_to = "variable", values_to = "available") %>%
+  mutate(available = ifelse(available, "Available", "Missing"))
+
+# Plot heatmap
+ggplot(data_availability, aes(x = daterated, y = factor(id), fill = available)) +
+  geom_tile() +
+  facet_wrap(~ variable) +
+  scale_fill_manual(values = c("Available" = "blue", "Missing" = "red")) +
+  labs(
+    x = "Date Rated",
+    y = "Participant ID",
+    title = "Data Availability for scaled_cycleday_ov vs. scaled_cycleday"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# Save to pre-specified output folder
+ggsave(file.path(output_folder, "/scaledcyc_data_availability_heatmap.png"), width = 12, height = 8)
+
+```
+
+
+
+
+
+
+# ---- Print Variable Names ----
+```{r print variable names}
+print.variable.names(df)
+```
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+##### END OF DATA PREP 
+
+
+# Save out Prepped Dataset for Easier Use Later On
+
+```{r}
+
+write.csv(df, paste0("/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/UKALC/03_analytic_projects/UKALC-Primary ms/02_datasets_output/ukalc_", current_date, ".csv"), row.names = FALSE)
+
+# Save as .rds
+saveRDS(df, paste0("/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/UKALC/03_analytic_projects/UKALC-Primary ms/02_datasets_output/ukalc_", current_date, ".rds"))
+```
+
+
+# ---------------------------------------------------------------------------------- END OF SCRIPT

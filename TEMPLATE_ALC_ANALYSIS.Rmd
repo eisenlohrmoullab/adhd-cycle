@@ -1,0 +1,710 @@
+Daily Data Prep for R01AA027990
+---
+title: "UKALC_primary"
+date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document
+---
+
+# Code for R01AA027990, "Estradiol Effects on Behavioral and Reward Sensitivity to Alcohol across the Menstrual Cycle", which sought to examine how the menstrual cycle influences daily alcohol use and related outcomes in female drinkers. Data collected at U Kentucky by Mark Fillmore and Michelle Martel from 2021-2024. Code prepared by Tory Eisenlohr-Moul, PhD, assisted by Anna Patterson and Anisha Nagpal. 
+
+
+```{r opt-pkg, quiet=TRUE, message=FALSE, warning=FALSE}
+# Set options, load packages and resolve conflicts
+source("scripts/options_packages.R")
+```
+
+```{r set-output-folder, quiet=TRUE, message=FALSE, warning=FALSE}
+source("scripts/set-output-folder.R")
+```
+
+```{r set-var-lists}
+source("scripts/variable_lists.R")
+```
+
+# Import saved data from the daily data prep script
+```{r import-prepped-data}
+
+# Import from same place
+df <- readRDS("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/UKALC/03_analytic_projects/UKALC-Primary ms/02_datasets_output/ukalc_20241112.rds")
+
+print.variable.names(df)
+
+df$scaled_cycleday <- df$scaled_cycleday-.5
+```
+
+# VISUALIZE OUTCOMES
+
+```{r save-daily-histograms}
+
+for (var in c(alldailyvars, alldailyvars_roll, alldailyvars_roll_log, alldailyvars_roll_log_d, alldailyvars_roll_log_zd, alldailyvars_d, alldailyvars_zd)) {
+  p <- ggplot(df, aes(!!rlang::sym(var))) +
+    geom_histogram(binwidth = .25, fill = "blue", color = "black") + # Customize the binwidth, fill, and color as needed
+    labs(title = paste("Histogram of", var), x = var, y = "Frequency") +
+    theme_minimal()
+
+  ggsave(filename = paste0(output_folder, "/", var, "_histogram.png"), plot = p, width = 6, height = 4)
+}
+
+# Print variable names
+#print.variable.names(c3d)
+
+```
+
+
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+# GAMMs
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+############################################ 
+
+# GAMM with scaled_cycleday and HP
+```{r}
+str(df$id)
+
+# Fit the generalized additive model
+    Crave_Alc_PM_gamm <- gam(Crave_Alc_PM ~ s(id, bs="re") + s(scaled_cycleday) + s(scaled_cycleday, id, bs="re"), 
+      method = "REML",
+      family = gaussian(),
+      data = df)
+
+summary(Crave_Alc_PM_gamm)
+
+var_part <- gam.hp::gam.hp(Crave_Alc_PM_gamm)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(Crave_Alc_PM_gamm, select = 2, shade = TRUE, scale = 0)
+```
+
+
+
+
+
+# Predicting DRINK TODAY from SCALED CYCLEDAY
+
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+str(df$drink_today)
+
+str(df$drink_today_bin)
+
+
+# Fit the generalized additive model for a binary outcome
+drink_today_gamm_bin <- gam(drink_today_bin ~ s(id, bs="re") + s(scaled_cycleday) + s(scaled_cycleday, id, bs="re"), 
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(drink_today_gamm_bin)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(drink_today_gamm_bin)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(drink_today_gamm_bin, select = 2, shade = TRUE, scale = 0)
+
+
+# Save out summary of model and hierarchical partitioning into one text file into the predefined output folder
+summary_output <- capture.output(summary(drink_today_gamm_bin))
+partitioning_output <- capture.output(var_part$hierarchical.partitioning)
+combined_output <- c(summary_output, "", "Hierarchical Partitioning:", partitioning_output)
+summary_file <- file.path(output_folder, "drink_today_gamm_bin_summary.txt")
+if (file.exists(summary_file)) file.remove(summary_file)
+writeLines(combined_output, summary_file)
+
+# Define the path to save the plot
+plot_file <- file.path(output_folder, "drink_today_gamm_bin_plot.png")
+
+# Check if the file already exists and remove it if so
+if (file.exists(plot_file)) file.remove(plot_file)
+
+# Open a PNG device, plot, and close the device
+png(filename = plot_file, width = 800, height = 600)
+plot(drink_today_gamm_bin, select = 2, shade = TRUE, scale = 0)
+dev.off()
+```
+
+# ---- FOURPLUSTODAY ----
+
+# Predicting FOURPLUSTODAY from SCALED CYCLEDAY - Cycle not significant
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+str(df$fourplustoday_bin)
+
+# Fit the generalized additive model for a binary outcome
+fourplustoday_gamm_bin <- gam(fourplustoday_bin ~ s(id, bs="re") + s(scaled_cycleday) + s(scaled_cycleday, id, bs="re"), 
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(fourplustoday_gamm_bin)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(fourplustoday_gamm_bin)
+var_part$hierarchical.partitioning
+
+# Save out summary of model and hierarchical partitioning into one text file into the predefined output folder
+summary_output <- capture.output(summary(fourplustoday_gamm_bin))
+partitioning_output <- capture.output(var_part$hierarchical.partitioning)
+combined_output <- c(summary_output, "", "Hierarchical Partitioning:", partitioning_output)
+summary_file <- file.path(output_folder, "fourplustoday_gamm_bin_summary.txt")
+if (file.exists(summary_file)) file.remove(summary_file)
+writeLines(combined_output, summary_file)
+
+# Define the path to save the plot
+plot_file <- file.path(output_folder, "fourplustoday_gamm_bin_plot.png")
+
+# Check if the file already exists and remove it if so
+if (file.exists(plot_file)) file.remove(plot_file)
+
+# Open a PNG device, plot, and close the device
+png(filename = plot_file, width = 800, height = 600)
+plot(fourplustoday_gamm_bin, select = 2, shade = TRUE, scale = 0)
+dev.off()
+
+plot(fourplustoday_gamm_bin, select = 2, shade = TRUE, scale = 0)
+
+```
+
+# Predicting FOURPLUS_TODAY from SCALED CYCLEDAY x DAYOFWEEK  - interaction not significant
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+
+# Fit the generalized additive model for a continuous outcome
+fourplus_weekbycyc_gamm <- gam(drink_today_bin ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week + s(scaled_cycleday, by=day_of_week),
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(fourplus_weekbycyc_gamm)
+```
+
+# Predicting FOURPLUS_TODAY from SCALED CYCLEDAY + DAYOFWEEK - Cycle not significant
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+
+# Fit the generalized additive model for a continuous outcome
+fourplus_weekandcyc_gamm <- gam(fourplustoday_bin ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week ,
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(fourplus_weekandcyc_gamm)
+```
+
+# ---- DRINKS TODAY ----
+
+# Predicting DRINK_TODAY from SCALED CYCLEDAY and DAYOFWEEk - Interaction not significant
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+str(df$drinks)
+
+# Fit the generalized additive model for a continuous outcome
+drinktoday_weekbycyc_gamm <- gam(drink_today_bin ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week + s(scaled_cycleday, by=day_of_week),
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(drinktoday_weekbycyc_gamm)
+```
+
+# Predicting DRINK_TODAY from SCALED CYCLEDAY + DAYOFWEEK - Cycle not significant
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+
+# Fit the generalized additive model for a continuous outcome
+drinktoday_weekandcyc_gamm <- gam(drink_today_bin ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week,
+                           method = "REML",
+                           family = binomial(),
+                           data = df)
+
+# Display the summary of the model
+summary(drinktoday_weekandcyc_gamm)
+```
+
+# ---- ALCOHOL CRAVINGS ----
+
+# Predicting Alcohol Cravings from SCALED CYCLEDAY X DAYOFWEEK  - Interaction NS
+```{r}
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+# Fit the generalized additive model for a continuous outcome
+Crave_Alc_PM_weekbycyc_gamm <- gam(Crave_Alc_PM.5roll.log ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week + s(scaled_cycleday, by=day_of_week),
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(Crave_Alc_PM_weekbycyc_gamm)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(Crave_Alc_PM_weekbycyc_gamm)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(Crave_Alc_PM_weekbycyc_gamm, select = 3, shade = TRUE, scale = 0)
+
+```
+
+# Predicting LOG 5roll PM Alcohol Cravings from SCALED CYCLEDAY + DAYOFWEEK  - CYCLE SIGNIFICANT
+```{r}
+
+# Predicting Alcohol Cravings from SCALED CYCLEDAY and DAYOFWEEK    
+
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+# Fit the generalized additive model for a continuous outcome
+Crave_Alc_PM_weekbycyc_gamm <- gam(Crave_Alc_PM.5roll.log ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week ,
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(Crave_Alc_PM_weekbycyc_gamm)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(Crave_Alc_PM_weekbycyc_gamm)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(Crave_Alc_PM_weekbycyc_gamm, select = 3, shade = TRUE, scale = 0)
+
+```
+
+```{r}
+
+# Predicting Alcohol Cravings from E2 and P4    
+df$E2zd <- df$E2.5roll.log.zd
+df$P4zd <- df$P4.5roll.log.zd
+
+
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+# Fit the generalized additive model for a continuous outcome
+Crave_Alc_PM_E2xP4_gamm <- gam(Crave_Alc_PM.5roll.log ~ s(id, bs="re") + day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(Crave_Alc_PM_E2xP4_gamm)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(Crave_Alc_PM_E2xP4_gamm)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(Crave_Alc_PM_E2xP4_gamm, select =2, shade = TRUE, scale = 0)
+plot(Crave_Alc_PM_E2xP4_gamm, select =3, shade = TRUE, scale = 0)
+plot(Crave_Alc_PM_E2xP4_gamm, select =4, shade = TRUE, scale = 0)
+
+  gamm_model_simple <- gam(
+      Crave_Alc_PM.5roll.log ~ day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+  
+  
+  # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      day_of_week = "Friday",
+      P4zd = seq(
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response")
+
+    # Contour plot
+    plot_title <-"Predicting Crave_Alc_PM.5roll.log from E2 and P4 (Person Standardized"
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+
+```
+
+
+# ---- FOURPLUSTODAY ----
+```{r}
+
+# Fit the generalized additive model for a continuous outcome
+fourplustoday.5roll.log_model <- gam(fourplustoday.5roll.log ~ s(id, bs="re") + day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(fourplustoday.5roll.log_model)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(fourplustoday.5roll.log_model)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(fourplustoday.5roll.log_model, select =2, shade = TRUE, scale = 0)
+plot(fourplustoday.5roll.log_model, select =3, shade = TRUE, scale = 0)
+plot(fourplustoday.5roll.log_model, select =4, shade = TRUE, scale = 0)
+
+  gamm_model_simple <- gam(
+      fourplustoday.5roll.log ~ day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+  
+  
+  # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      day_of_week = "Friday",
+      P4zd = seq(
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response")
+
+    # Contour plot
+    plot_title <-"Predicting 4+ Drinks Today from E2 and P4 (Person Standardized"
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+```
+
+
+# ---- ANY DRINKS TODAY ----
+```{r}
+
+# Fit the generalized additive model for a continuous outcome
+drink_today.5roll.log_model <- gam(drink_today.5roll.log ~ s(id, bs="re") + day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(drink_today.5roll.log_model)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(drink_today.5roll.log_model)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(drink_today.5roll.log_model, select =2, shade = TRUE, scale = 0)
+plot(drink_today.5roll.log_model, select =3, shade = TRUE, scale = 0)
+plot(drink_today.5roll.log_model, select =4, shade = TRUE, scale = 0)
+
+  gamm_model_simple <- gam(
+      drink_today.5roll.log ~ day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+  
+  
+  # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      day_of_week = "Friday",
+      P4zd = seq(
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response")
+
+    # Contour plot
+    plot_title <-"Predicting Any Drinks Today from E2 and P4 (Person Standardized"
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+```
+
+
+# ---- BDEFS ----
+```{r}
+
+# Fit the generalized additive model for a continuous outcome
+BDEFS.5roll.log_model <- gam(BDEFS.5roll.log ~ s(id, bs="re") + day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(BDEFS.5roll.log_model)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(BDEFS.5roll.log_model)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(BDEFS.5roll.log_model, select =2, shade = TRUE, scale = 0)
+plot(BDEFS.5roll.log_model, select =3, shade = TRUE, scale = 0)
+plot(BDEFS.5roll.log_model, select =4, shade = TRUE, scale = 0)
+
+  gamm_model_simple <- gam(
+      BDEFS.5roll.log ~ day_of_week + s(E2zd) + s(P4zd) + ti(E2zd, P4zd),
+      data = df,
+      family = gaussian,
+      method = "REML"
+    )
+  
+  
+  # Create the grid for contour plot
+    grid <- expand.grid(
+      E2zd = seq(
+        min(df$E2zd, na.rm = TRUE),
+        max(df$E2zd, na.rm = TRUE),
+        length.out = 100
+      ),
+      day_of_week = "Friday",
+      P4zd = seq(
+        min(df$P4zd, na.rm = TRUE),
+        max(df$P4zd, na.rm = TRUE),
+        length.out = 100
+      )
+    )
+
+    # Predict values
+    grid$predicted <- predict(gamm_model_simple,
+                              newdata = grid,
+                              type = "response")
+
+    # Contour plot
+    plot_title <-"Predicting BDEFS from E2 and P4 (Person Standardized"
+    contour_plot <- ggplot() +
+      geom_tile(data = grid, aes(x = E2zd, y = P4zd, fill = predicted)) +
+      geom_contour(data = grid, aes(x = E2zd, y = P4zd, z = predicted), color = "black") +
+      geom_point(data = df, aes(x = E2zd, y = P4zd), color = "black", alpha = 0.25) +
+      scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = median(grid$predicted)) +
+      labs(x = "E2zd", y = "P4zd", fill = "Outcome") +
+      theme_minimal() +
+      ggtitle(plot_title)
+
+    print(contour_plot)
+
+```
+
+# Predicting LOG 5roll BDEFS from SCALED CYCLEDAY + DAYOFWEEK  - CYCLE SIGNIFICANT
+```{r}
+
+# Predicting Alcohol Cravings from SCALED CYCLEDAY and DAYOFWEEK    
+
+# Ensure id is factored
+df$id <- as.factor(df$id)
+
+# Fit the generalized additive model for a continuous outcome
+BDEFS_weekbycyc_gamm <- gam(BDEFS.5roll.log ~ s(id, bs="re") + s(scaled_cycleday, id, bs="re") + s(scaled_cycleday) + day_of_week ,
+                           method = "REML",
+                           family = gaussian(),
+                           data = df)
+
+# Display the summary of the model
+summary(BDEFS_weekbycyc_gamm)
+
+# Perform hierarchical partitioning of variance
+var_part <- gam.hp::gam.hp(BDEFS_weekbycyc_gamm)
+var_part$hierarchical.partitioning
+
+# Plot the GAMM fixed effect of scaled_cycleday
+plot(BDEFS_weekbycyc_gamm, select = 3, shade = TRUE, scale = 0)
+
+```
+
+# Loop for DRSP Variables
+```{r}
+
+# Define the function
+run_gamm_analysis <- function(df, dep_vars) {
+  # Ensure id is factored
+  df$id <- as.factor(df$id)
+  
+  # Loop over each dependent variable
+  results <- lapply(dep_vars, function(dep_var) {
+    # Define the formula dynamically using the current dependent variable
+    formula <- as.formula(paste(dep_var, "~ s(id, bs='re') + s(scaled_cycleday, id, bs='re') + s(scaled_cycleday) + day_of_week"))
+    
+    # Fit the GAMM model
+    model <- gam(formula, method = "REML", family = gaussian(), data = df)
+    
+    # Display summary of the model
+    cat("\n\nSummary for model with dependent variable:", dep_var, "\n")
+    print(summary(model))
+    
+    # Perform hierarchical partitioning of variance
+    var_part <- gam.hp::gam.hp(model)
+    
+    # Plot the fixed effect of scaled_cycleday
+    plot(model, select = 3, shade = TRUE, scale = 0, main = paste("Fixed effect of scaled_cycleday for", dep_var))
+    
+    # Return results
+    list(dependent_variable = dep_var, model = model, var_partitioning = var_part$hierarchical.partitioning)
+  })
+  
+  # Return all results
+  return(results)
+}
+
+# Example usage
+# Assuming 'df' is your data frame and 'dependent_vars' is a list of dependent variables
+dependent_vars <- c("E2", "P4") # "Breast_Tend.5roll.log", "JM_Pain.5roll.log") #"Dep.5roll.log", "Angry.5roll.log")
+gamm_results <- run_gamm_analysis(df, dependent_vars)
+
+```
+
+
+```{r}
+# Create a pie chart representing the percentage of days where fourplustoday=1
+fourplustoday_pie <- df %>% filter(!is.na(fourplustoday_bin)) %>%
+  group_by(fourplustoday_bin) %>%
+  summarize(n = n()) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = percent, fill = factor(fourplustoday_bin))) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(title = "Percentage of Days with Four or More Drinks", fill = "Four or More Drinks") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+fourplustoday_pie
+
+
+# Create a pie chart representing the percentage of days where drink_today=1
+drink_today_pie <- df %>% filter(!is.na(drink_today_bin)) %>%
+  group_by(drink_today_bin) %>%
+  summarize(n = n()) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = percent, fill = factor(drink_today_bin))) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(title = "     Percentage of Days Drinking", fill = "Drank Today") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+drink_today_pie
+
+
+```
+
