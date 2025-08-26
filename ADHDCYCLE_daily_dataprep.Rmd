@@ -19,6 +19,7 @@ date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 - Sets the number of digits (3) to display in output
 - Saves Current Date as a string in YYYYMMDD format
 - Sets the 'output_folder' as path to the output folder for saving files
+
 ```{r setup}
 
 knitr::opts_chunk$set(echo = TRUE) # Setting options for knitr to display R code in output
@@ -292,78 +293,11 @@ dv_list <- c(
 
 
 # Rename the variables based on DRSP items
-# This creates a named vector to assign meaningful labels to each variable for better interpretation in the plots
-names(dv_list) <- c(
-  "Inattention Sx", 
-  "Hyperactivity/Imp Sx", 
-  "Pinball Score",
-  "Robot Score",
-  "BDEFS Total",
-  "BDEFS Working Memory",
-  "BDEFS Resp Inhibition",
-  "Negative Urgency",
-  "Positive Urgency",
-  "Lack of Premeditation",
-  "Lack of Perseverance",
-  "Sensation Seeking",
-  "DEBQ Total",
-  "Inattention Sx Count",
-  "Hyperactivity Sx Count",
-  "Impulsivity Sx Count",
-  "Hyp/Imp Sx Count",
-  "Depressed Mood", # DRSP_1
-  "Hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Incr Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloat/Wt Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Imp", 
-  "Relational Imp"
-)
 
-
-# Rename the variables based on DRSP items
+# This single block replaces both of your previous "names(dv_list)" assignments
 names(dv_list) <- c(
-  "Depressed Mood", # DRSP_1
-  "hopelessness", # DRSP_2
-  "Worthlessness/Guilt", # DRSP_3
-  "Anxiety/Tension", # DRSP_4
-  "Mood Swings", # DRSP_5
-  "Rejection Sensitivity", # DRSP_6
-  "Anger/Irritability", # DRSP_7
-  "Interpersonal Conflict", # DRSP_8
-  "Less Interest", # DRSP_9
-  "Difficulty Concentrating", # DRSP_10
-  "Lethargy/Fatigue", # DRSP_11
-  "Increased Appetite/Overate", # DRSP_12
-  "Food Cravings", # DRSP_13
-  "Hypersomnia", # DRSP_14
-  "Insomnia", # DRSP_15
-  "Overwhelm/Can't Cope", # DRSP_16
-  "Out of Control", # DRSP_17
-  "Breast Tenderness", # DRSP_18
-  "Swelling/Bloating/Weight Gain", # DRSP_19
-  "Joint/Muscle Pain", # DRSP_20
-  "Headache", # DRSP_21
-  "Work/School Impairment", 
-  "Relational Impairment",
-  "Inattention Symptoms", 
-  "Hyperactivity/Impulsivity Symptoms", 
+  "Inattention Symptoms",
+  "Hyperactivity/Impulsivity Symptoms",
   "Pinball Score",
   "Robot Score",
   "BDEFS Total",
@@ -378,7 +312,30 @@ names(dv_list) <- c(
   "Inattention Sx Count",
   "Hyperactivity Sx Count",
   "Impulsivity Sx Count",
-  "Hyperactivity/Impulsivity Sx Count"
+  "Hyperactivity/Impulsivity Sx Count",
+  "Depressed Mood",
+  "Hopelessness",
+  "Worthlessness/Guilt",
+  "Anxiety/Tension",
+  "Mood Swings",
+  "Rejection Sensitivity",
+  "Anger/Irritability",
+  "Interpersonal Conflict",
+  "Less Interest",
+  "Difficulty Concentrating",
+  "Lethargy/Fatigue",
+  "Increased Appetite/Overate",
+  "Food Cravings",
+  "Hypersomnia",
+  "Insomnia",
+  "Overwhelm/Can't Cope",
+  "Out of Control",
+  "Breast Tenderness",
+  "Swelling/Bloating/Weight Gain",
+  "Joint/Muscle Pain",
+  "Headache",
+  "Work/School Impairment",
+  "Relational Impairment"
 )
 
 hormlist <- c(
@@ -407,7 +364,7 @@ rawdf1 <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folder
 # Standardize variable names
 rawdf1 <- standardize_index_names(rawdf1)
 
-names(rawdf1)
+#names(rawdf1)
 
 # Create new date variable called daterated 
 rawdf1 <- rawdf1 %>%
@@ -415,9 +372,9 @@ rawdf1 <- rawdf1 %>%
 
 # Keep id, daterated, E2, P4, LH, StartPeriod, PosLHTest
 rawdf1 <- rawdf1 %>%
-  select(id, date, daterated, E2, P4, LH, StartPeriod, PosLHTest)
+  select(id, daterated, E2, P4, LH, StartPeriod, PosLHTest)
 
-View(rawdf1)
+#View(rawdf1)
 ```
 
 
@@ -443,7 +400,7 @@ rawdf <- rawdf %>%
 # Standardize variable names
 rawdf <- standardize_index_names(rawdf)
 
-View(rawdf)
+#View(rawdf)
 
 # Change the path to your file
 
@@ -451,7 +408,7 @@ df <- rawdf
 
 print.variable.names(df)
 
-##View(df)
+###View(df)
 
 count_rows_ids(df)
 
@@ -471,7 +428,7 @@ df <- df %>%
 count_rows_ids(df)
 
 # View id, daterated, E2 in df
-View(df %>% select(id, daterated, E2))
+#View(df %>% select(id, daterated, E2))
 
 
 ```
@@ -497,10 +454,10 @@ df <- df %>%
     LH = ifelse(is.na(LH), LH.new, LH)  ) %>%
   select(-ends_with(".new")) # Remove the temporary columns created during the join
 
-View(df)
+#View(df)
 
 # View id, daterated, E2 in df
-View(df %>% select(id, daterated, E2))
+#View(df %>% select(id, daterated, E2))
 
 
 ```
@@ -528,25 +485,90 @@ duplicates_knapp <- knapp_dates %>%
   group_by(id) %>%
   filter(n() > 1)
 
-##View(duplicates_knapp) #None
+###View(duplicates_knapp) #None
 
 # Merge knapp_dates into df based on id (one to many): 
 df <- df %>%
   left_join(knapp_dates, by = "id")
 
+#names(df)
+```
+
+
+```{r}
+# --- REVISED CONSOLIDATED MENSES ONSET LOGIC ---
+
+# Step 1: Gather all menses dates from your three sources
+df <- df %>%
+  mutate(
+    daterated = as.Date(daterated), c1_menses = as.Date(c1_menses),
+    c2_menses = as.Date(c2_menses), c3_menses = as.Date(c3_menses)
+  )
+menses_from_knapp <- df %>% select(id, c1_menses, c2_menses, c3_menses) %>%
+  tidyr::pivot_longer(cols = starts_with("c"), names_to = "cycle", values_to = "daterated") %>%
+  filter(!is.na(daterated)) %>% distinct(id, daterated)
+menses_from_daily <- df %>% filter(StartPeriod == 1) %>% distinct(id, daterated)
+menses_onset_data <- data.frame(
+  id = c(206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332),
+  daterated = as.Date(c("2021-04-25", "2021-02-27", "2021-02-15", "2022-07-02", "2022-07-11", "2022-09-04", "2022-10-27", "2023-02-21", "2023-02-10", "2023-02-03", "2023-07-04", "2024-01-03", "2024-01-21"))
+)
+
+# Step 2: Combine all sources into one definitive list of menses days
+all_menses_keys <- bind_rows(menses_from_knapp, menses_from_daily, menses_onset_data) %>%
+  distinct(id, daterated)
+
+# Step 3: Use a join to cleanly set StartPeriod
+# First, ensure StartPeriod exists and is initialized to 0
+if (!"StartPeriod" %in% names(df)) { df$StartPeriod <- 0 }
+df <- df %>% mutate(StartPeriod = ifelse(is.na(StartPeriod), 0, StartPeriod))
+
+# Join the menses flags into the main dataframe
+df <- df %>%
+  left_join(all_menses_keys %>% mutate(is_menses_day = 1), by = c("id", "daterated")) %>%
+  mutate(
+    # If is_menses_day is 1 from the join, StartPeriod becomes 1. Otherwise, it keeps its old value.
+    StartPeriod = ifelse(!is.na(is_menses_day), 1, StartPeriod)
+  ) %>%
+  select(-is_menses_day) # Clean up the temporary column
+
+# Step 4: Finalize the dataframe structure
+df <- df %>%
+  group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated, na.rm = TRUE), max(daterated, na.rm = TRUE), by = "day")) %>%
+  ungroup() %>%
+  mutate(
+    StartPeriod = ifelse(is.na(StartPeriod), 0, StartPeriod),
+    date = as.Date(daterated)
+  ) %>%
+  arrange(id, daterated)
+
+# --- Manual Data Fixes ---
+# Use this chunk for specific, one-off corrections after the main script runs.
+
+# Fix for participant 210
+# Replace "YYYY-MM-DD" with the correct date that should be marked as menses onset.
+
+# For id 210, change daterated == 2021-11-20 to daterated==2020-11-20
+df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
+df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
+
+# Step 5: Create the menses variable for plotting
+df <- df %>%
+  mutate(menses = ifelse(StartPeriod == 1, 1, 0))
+```
+
+
+```{r}
 # View items in knapp_dates in the new df file merged
 
-#View(df)
-
-# Drop if RecordedDate is NA
-df <- df %>%
-  filter(!is.na(RecordedDate))
+##View(df)
 
 # remove duplicate combinations of id and daterated
 df <- df %>%
   distinct(id, daterated, .keep_all = TRUE)
 
 count_rows_ids(df)
+
 
 ```
 
@@ -556,8 +578,8 @@ count_rows_ids(df)
 ```{r}
 finalhormonebatch <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv")
 
-View(finalhormonebatch)
-#names(finalhormonebatch)
+#View(finalhormonebatch)
+##names(finalhormonebatch)
 
 finalhormonebatch <- standardize_index_names(finalhormonebatch)
 
@@ -590,7 +612,7 @@ duplicates_hormone <- finalhormonebatch %>%
   group_by(id, TubeNumber) %>%
   filter(n() > 1)
 
-##View(duplicates_hormone) #None
+###View(duplicates_hormone) #None
 
 count_rows_ids(df)
 
@@ -614,7 +636,7 @@ finalhormonebatch <- finalhormonebatch %>%
   fill(daterated) %>%          # 2. Fill in missing values of `date_rated` within each group
   ungroup()                     # 3. Remove the grouping
 
-View(finalhormonebatch)
+#View(finalhormonebatch)
 
 #Print unique ids
 #unique(finalhormonebatch$id)
@@ -646,8 +668,8 @@ finalhormonebatch$daterated <- as.Date(finalhormonebatch$daterated, format = "%Y
 # Format daterated as ISO in both datasets
 df$daterated <- as.Date(df$daterated, format = "%Y-%m-%d")
 
-names(df)
-names(finalhormonebatch)
+#names(df)
+#names(finalhormonebatch)
 
 
 count_rows_ids(df)
@@ -668,7 +690,7 @@ str(finalhormonebatch$id) #check id format (dbl)
 str(df$daterated) #check daterated format (date)
 str(finalhormonebatch$daterated) #check daterated format (date)
 
-#View(finalhormonebatch)
+##View(finalhormonebatch)
 
 # Merge finalhormonebatch into df based on id and daterated (many to many):
 df <- df %>%
@@ -682,9 +704,9 @@ df <- df %>%
     LH = ifelse(is.na(LH), LH.new, LH)  ) %>%
   select(-ends_with(".new")) # Remove the temporary columns created during the join
 
-View(df)
+#View(df)
 
-names(df)
+#names(df)
 
 # add a copy of daterated called date and format as iso
 df <- df %>%
@@ -708,7 +730,7 @@ df <- df %>%
 
 print.variable.names(df)
 
-View(df)
+#View(df)
 
 ```
 
@@ -760,6 +782,10 @@ df <- df %>%
   complete(daterated = seq.Date(min(daterated), max(daterated), by = "day")) %>%
   ungroup()
 
+df <- df %>%
+  mutate(date = as.Date(coalesce(date, daterated)))
+
+
 # Display the number of rows after adding placeholders
 cat("Placeholder dates added (i.e., added blank lines for days when there were no surveys but the participant was in the study). AFTER adding placeholder dates, this is the number of rows: ", nrow(df), "\n")
 ```
@@ -782,74 +808,6 @@ ids_with_E2_list <- ids_with_E2$id
 ids_with_E2_list
 
 # 203 205 206 207 208 209 210 213 214 218 219 221 223 224 225 227 228 230 232 233 235 237 239 241 242 243 245 246 248 249 252 254 256 258 259 260 261 262 263 265 266 267 268 270 271 272 273 275 277 278 279 281 283 284 286 287 289 290 293 305 307 310 312 314 317 318 321 323 324 325 326 327 329 330 331 332 333 334 336 337 338 340 341 343 344 345 346 347 348
-
-```
-
-
-
-
-# ---- Hard-Coded Fixes ----
-```{r hard-coded-changes}
-# Hard-coding changes based on manual review
-
-df$StartPeriod[df$id == 208 & df$TubeNumber == 27] <- 1
-# Fix date issues for participant 210
-df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
-df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
-
-
-
-# Add in missing menses onset dates from Urveesha
-# <!-- Calculated menses onset (although almost all of these are recorded in the tracking sheet? Not sure why missing): -->
-# <!-- 206 - 4/25/21 -->
-# <!-- 208 - 2/27/21 -->
-# <!-- 209 - 2/15/21 -->
-# <!-- 255- 7/2/22 -->
-# <!-- 258 - 7/11/22 -->
-# <!-- 270 - 9/4/22 -->
-# <!-- 279 - 10/27/22 -->
-# <!-- 290 - 2/21/23 -->
-# <!-- 291 - 2/10/23 -->
-# <!-- 293 - 2/3/23 -->
-# <!-- 312 - 7/4/23 -->
-# <!-- 331 - 1/3/24 -->
-# <!-- 332 - 1/21/24     -->
-
-# Convert the dates to Date format
-df[["daterated"]] <- as.Date(df[["daterated"]], format = "%m/%d/%y")
-
-# Define a vector of IDs and their corresponding menses onset dates
-menses_onset_data <- data.frame(
-  id = c(206, 208, 209, 255, 258, 270, 279, 290, 291, 293, 312, 331, 332),
-  onset_date = as.Date(c("2021-04-25", "2021-02-27", "2021-02-15", "2022-07-02", "2022-07-11", 
-                         "2022-09-04", "2022-10-27", "2023-02-21", "2023-02-10", "2023-02-03", 
-                         "2023-07-04", "2024-01-03", "2024-01-21"))
-)
-
-# Update StartPeriod in df for these ID and date combinations
-for (i in 1:nrow(menses_onset_data)) {
-  df[["StartPeriod"]][df[["id"]] == menses_onset_data$id[i] & df[["daterated"]] == menses_onset_data$onset_date[i]] <- 1
-}
-```
-
-# ---- TURNED OFF: Set E2, P4, LH to NA for patients with unusable hormone data (based on Tory and Ashley Eng inspection of salivary E2 and P4) ----
-- Note that their raw data can still be accessed in @rawdf
-- The variable @removed_from_horm_analysis is created and set to 1 for all observations from these IDs
-```{r}
-# List of IDs whose hormone data should be flagged for missingness due to poor quality
-
-#badhorm_ids <- c(221, 235, 243, 267, 272, 273, 278, 283, 305, 307, 312, 317)
-
-# Add a new binary column `remove_from_horm_analysis` to flag the IDs
-
-#df <- df %>%
- # mutate(removed_from_horm_analysis = ifelse(id %in% badhorm_ids, 1, 0))
-
-# For these ids, set variables E2 and P4 to missing
-#df <- df %>%
-#  mutate(E2 = ifelse(id %in% badhorm_ids, NA, E2),
-#         P4 = ifelse(id %in% badhorm_ids, NA, P4),
-#         LH = ifelse(id %in% badhorm_ids, NA, LH))
 
 ```
 
@@ -1015,7 +973,7 @@ for (var in alldailyvars) {
 
 # Confirm the calculation of new metrics .d.3roll, .d.5roll, .zd.3roll, and .zd.5roll
 
-#DONE df %>% dplyr::select(id, daterated, DRSP_1, DRSP_1.d.3roll, DRSP_1.zd.3roll) %>% #View()
+#DONE df %>% dplyr::select(id, daterated, DRSP_1, DRSP_1.d.3roll, DRSP_1.zd.3roll) %>% ##View()
 
 ```
 
@@ -1026,17 +984,6 @@ library(menstrualcycleR)
 ```
 
 ```{r}
-# create a new variable called "menses" where StartPeriod = 1
-df <- df %>%
-  mutate(menses = ifelse(StartPeriod == 1, 1, 0))
-
-# If c1_menses or c2_menses or c3_menses match date, set menses to 1
-df <- df %>%
-  mutate(menses = ifelse(date %in% c(c1_menses, c2_menses, c3_menses), 1, menses))
-
-View(df)
-
-count_rows_ids(df)
 
 # how many ids have at least one non-NA value for E2? 
 ids_with_E2 <- df %>%
@@ -1044,13 +991,15 @@ ids_with_E2 <- df %>%
   distinct(id)
 ids_with_E2 #89
 
+
+
 ```
 
 # Create "LHposday" (0/1/NA) that represents the positive LH day.
 ```{r create LHposday}
 
 
-####View(df)
+#####View(df)
   
   df$PosLHTest <- as.numeric(df$PosLHTest)
 
@@ -1061,7 +1010,7 @@ df <- df %>%
     TRUE ~ 0
   ))
 
-####View(df)
+#####View(df)
 
 # Eliminate all but the first pos Ov day in a new variable called "LHposdayfirst"
 df <- df %>%
@@ -1077,7 +1026,7 @@ df <- df %>%
   ungroup()  # Remove the grouping
 
 #Check vars
-#DONE df %>% dplyr::select(id, daterated, mensdayonefirst, LHposdayfirst) %>% #View()
+#DONE df %>% dplyr::select(id, daterated, mensdayonefirst, LHposdayfirst) %>% ##View()
 
 # Create "ovtoday" variable that is 1 on the day after LHposdayfirst, 0 otherwise
 df <- df %>%
@@ -1098,22 +1047,175 @@ list <-unique(df$id)
 #list
 
 
-
 ```
 
 # Create plots by id with date on the x axis and person-standardized E2, P4, and LH values on the Y axis
 ```{r}
 
-# USE THE SCRIPT "hormone_prep_template" in the adhd-cycle repository to create daily hormone graphs
+dat <- df %>% select(id, date, menses, ovtoday, E2.zd, P4.zd, LH.zd)
+dat3 <- df %>% select(id, date, menses, ovtoday, E2.zd.3roll, P4.zd.3roll, LH.zd.3roll)
+dat5 <- df %>% select(id, date, menses, ovtoday, E2.zd.5roll, P4.zd.5roll, LH.zd.5roll)
+
+
+#E2, P4, LH, E2.zd, P4.zd, LH.zd, 
+
+dat <- dat %>%
+  arrange(id, date)
+
+```
+
+```{r}
+
+dat.long.z = pivot_longer(dat, cols = c("E2.zd", "P4.zd", "LH.zd"), names_to = "hormone", values_to = "value")
+dat.long.z3r = pivot_longer(dat3, cols = c("E2.zd.3roll", "P4.zd.3roll", "LH.zd.3roll"), names_to = "hormone", values_to = "value")
+dat.long.z5r = pivot_longer(dat5, cols = c("E2.zd.5roll", "P4.zd.5roll", "LH.zd.5roll"), names_to = "hormone", values_to = "value")
+
+View(dat.long.z)
+```
+
+
+# z-scoring 
+
+```{r}
+
+# how many ids with hormones are there? N=89
+length(ids_with_E2_list)
+
+# 203 205 206 207 208 209 210 213 214 218 219 221 223 224 225 227 228 230 232 233 235 237 239 241 242 243 245 246 248 249 252 254 256 258 259 260 261 262 263 265 266 267 268 270 271 272 273 275 277 278 279 281 283 284 286 287 289 290 293 305 307 310 312 314 317 318 321 323 324 325 326 327 329 330 331 332 333 334 336 337 338 340 341 343 344 345 346 347 348
+
+#View dataset with only id 210
+View(df %>% filter(id == 210))
+```
+
+```{r}
+# how many menses rows exist vs have non-missing x-var used in the plot?
+df %>% filter(StartPeriod %in% c(1L, TRUE)) %>% summarise(
+  total_markers = n(),
+  markers_with_date  = sum(!is.na(date)),       # if your ggplot x uses 'date'
+  markers_with_drate = sum(!is.na(daterated))   # if ggplot x uses 'daterated'
+)
+
+```
+
+
+# z-scored plots - no roll
+
+```{r}
+
+for (i in ids_with_E2_list){
+  plot_df <- dat.long.z %>%
+    filter(id == i) %>%
+    filter(complete.cases(date, value)) %>%
+    mutate(date = as.POSIXct(date))  # parse the actual x variable only
+
+  menses_df  <- plot_df %>% filter(menses == 1)  %>% distinct(date) %>% transmute(xintercept = date)
+  ov_df      <- plot_df %>% filter(ovtoday == 1) %>% distinct(date) %>% transmute(xintercept = date)
+
+  p <- ggplot(plot_df, aes(x = date, y = value, color = hormone, group = hormone)) +
+    geom_line(linewidth = 0.7) +
+    geom_point() +
+    geom_vline(data = menses_df, aes(xintercept = xintercept), color = "red", linewidth = 1) +
+    geom_vline(data = ov_df,     aes(xintercept = xintercept), color = "purple", linewidth = 1) +
+    scale_x_datetime(date_breaks = "1 day") +
+    theme_light() +
+    theme(axis.text.x = element_text(size = 7.5, angle = 90, hjust = 1)) +
+    ggtitle(i, subtitle = "red = menses onset, purple = day after posLH")
+
+  print(p)
+
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_", i, ".png")
+  ggsave(out, p, width = 10, height = 6, dpi = 300)
+}
+
+
+
+```
+# z-scored plots - 3 roll
+
+
+```{r}
+
+for (i in ids_with_E2_list){
+  plot_df <- dat.long.z3r %>%
+    filter(id == i) %>%
+    filter(complete.cases(date, value)) %>%
+    mutate(date = as.POSIXct(date))  # parse the actual x variable only
+
+  menses_df  <- plot_df %>% filter(menses == 1)  %>% distinct(date) %>% transmute(xintercept = date)
+  ov_df      <- plot_df %>% filter(ovtoday == 1) %>% distinct(date) %>% transmute(xintercept = date)
+
+  p <- ggplot(plot_df, aes(x = date, y = value, color = hormone, group = hormone)) +
+    geom_line(linewidth = 0.7) +
+    geom_point() +
+    geom_vline(data = menses_df, aes(xintercept = xintercept), color = "red", linewidth = 1) +
+    geom_vline(data = ov_df,     aes(xintercept = xintercept), color = "purple", linewidth = 1) +
+    scale_x_datetime(date_breaks = "1 day") +
+    theme_light() +
+    theme(axis.text.x = element_text(size = 7.5, angle = 90, hjust = 1)) +
+    ggtitle(i, subtitle = "red = menses onset, purple = day after posLH")
+
+  print(p)
+
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_3r_", i, ".png")
+  ggsave(out, p, width = 10, height = 6, dpi = 300)
+}
+
+
+
+```
+
+# z-scored plots - 5 roll
+
+
+```{r}
+
+for (i in ids_with_E2_list){
+  plot_df <- dat.long.z5r %>%
+    filter(id == i) %>%
+    filter(complete.cases(date, value)) %>%
+    mutate(date = as.POSIXct(date))  # parse the actual x variable only
+
+  menses_df  <- plot_df %>% filter(menses == 1)  %>% distinct(date) %>% transmute(xintercept = date)
+  ov_df      <- plot_df %>% filter(ovtoday == 1) %>% distinct(date) %>% transmute(xintercept = date)
+
+  p <- ggplot(plot_df, aes(x = date, y = value, color = hormone, group = hormone)) +
+    geom_line(linewidth = 0.7) +
+    geom_point() +
+    geom_vline(data = menses_df, aes(xintercept = xintercept), color = "red", linewidth = 1) +
+    geom_vline(data = ov_df,     aes(xintercept = xintercept), color = "purple", linewidth = 1) +
+    scale_x_datetime(date_breaks = "1 day") +
+    theme_light() +
+    theme(axis.text.x = element_text(size = 7.5, angle = 90, hjust = 1)) +
+    ggtitle(i, subtitle = "red = menses onset, purple = day after posLH")
+
+  print(p)
+
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_5r_", i, ".png")
+  ggsave(out, p, width = 10, height = 6, dpi = 300)
+}
+
 
 
 ```
 
 
 
-# LEFT OF HERE-- NEXT STEP IS TO FINALIZE MENSES AND OVTODAY VALUES BY CODING
+# LEFT OFF HERE-- NEXT STEP IS TO FINALIZE MENSES AND OVTODAY VALUES BY CODING
 
 
+```{r}
+{r manual-data-fixes}
+# --- Manual Data Fixes ---
+# Use this chunk for specific, one-off corrections after the main script runs.
+
+# Fix for participant 210
+# Replace "YYYY-MM-DD" with the correct date that should be marked as menses onset.
+df$StartPeriod[df$id == 210 & df$daterated == as.Date("YYYY-MM-DD")] <- 1
+
+# After making the manual fix, we need to update the 'menses' column as well
+df <- df %>%
+  mutate(menses = ifelse(StartPeriod == 1, 1, 0))
+```
 
 
 
