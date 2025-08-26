@@ -1,0 +1,75 @@
+---
+title: "Daily Hormone Plots"
+author: "Anisha Nagpal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+dat <- df
+
+dat <- dat %>% select(id, date, menses, ovtoday, E2.zd, P4.zd, LH.zd)
+
+#E2, P4, LH, E2.zd, P4.zd, LH.zd, 
+
+dat <- dat %>%
+  arrange(id, date)
+
+```
+
+```{r}
+
+dat.long.z = pivot_longer(dat, cols = c("E2.zd", "P4.zd", "LH.zd"), names_to = "hormone", values_to = "value")
+
+View(dat.long.z)
+```
+
+
+# z-scoring 
+
+```{r}
+
+# how many ids with hormones are there? N=89
+length(ids_with_E2_list)
+
+# 203 205 206 207 208 209 210 213 214 218 219 221 223 224 225 227 228 230 232 233 235 237 239 241 242 243 245 246 248 249 252 254 256 258 259 260 261 262 263 265 266 267 268 270 271 272 273 275 277 278 279 281 283 284 286 287 289 290 293 305 307 310 312 314 317 318 321 323 324 325 326 327 329 330 331 332 333 334 336 337 338 340 341 343 344 345 346 347 348
+
+
+View(dat.long.z)
+```
+
+# z-scored plots 
+
+```{r}
+for (i in ids_with_E2_list){
+  plot_df <- dat.long.z %>%
+    filter(id == i) %>%
+    filter(complete.cases(date, value)) %>%
+    mutate(date = as.POSIXct(date))  # parse the actual x variable only
+
+  menses_df  <- plot_df %>% filter(menses == 1)  %>% distinct(date) %>% transmute(xintercept = date)
+  ov_df      <- plot_df %>% filter(ovtoday == 1) %>% distinct(date) %>% transmute(xintercept = date)
+
+  p <- ggplot(plot_df, aes(x = date, y = value, color = hormone, group = hormone)) +
+    geom_line(linewidth = 0.7) +
+    geom_point() +
+    geom_vline(data = menses_df, aes(xintercept = xintercept), color = "red", linewidth = 1) +
+    geom_vline(data = ov_df,     aes(xintercept = xintercept), color = "purple", linewidth = 1) +
+    scale_x_datetime(date_breaks = "1 day") +
+    theme_light() +
+    theme(axis.text.x = element_text(size = 7.5, angle = 90, hjust = 1)) +
+    ggtitle(i, subtitle = "red = menses onset, purple = day after posLH")
+
+  print(p)
+
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_", i, ".png")
+  ggsave(out, p, width = 10, height = 6, dpi = 300)
+}
+
+```
+
+
+
+
+
+
