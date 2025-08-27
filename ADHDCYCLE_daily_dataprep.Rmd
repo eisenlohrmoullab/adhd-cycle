@@ -552,6 +552,10 @@ df <- df %>%
 df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-20")] <- as.Date("2020-11-20")
 df$daterated[df$id == 210 & df$daterated == as.Date("2021-11-21")] <- as.Date("2020-11-21")
 
+# if id is 2010, delete observations where daterated is later than 2020-11-22
+df <- df %>%
+  filter(!(id == 210 & daterated > as.Date("2020-11-22")))
+
 # Step 5: Create the menses variable for plotting
 df <- df %>%
   mutate(menses = ifelse(StartPeriod == 1, 1, 0))
@@ -1049,6 +1053,47 @@ list <-unique(df$id)
 
 ```
 
+
+
+# Merge in updates to participant menses and ovulation dates based on visual confirmation coding 
+
+```{r}
+updates <- read_xls("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_dateupdates_taem.xls")
+
+View(updates)
+
+#For each combination of id and date in the updates dataset, update the corresponding menses and ovtoday values in the df dataset; if the combination does not exist, make it exist by adding a new row with NA for all other variables except id, date, menses, and ovtoday
+
+library(dplyr)
+
+# make sure updates has only the fields you want to touch, and types match
+updates_min <- updates %>%
+  mutate(date = as.Date(date),
+         menses = as.integer(menses),
+         ovtoday = as.integer(ovtoday)) %>%
+  select(id, date, menses, ovtoday) %>%
+  arrange(id, date)
+
+
+updates_min <- updates_min %>%
+  group_by(id, date) %>%
+  summarise(
+    menses  = dplyr::last(na.omit(menses))  %||% NA_integer_,
+    ovtoday = dplyr::last(na.omit(ovtoday)) %||% NA_integer_,
+    .groups = "drop"
+)
+
+df <- df %>%
+  mutate(date = as.Date(date)) %>%
+  rows_upsert(updates_min, by = c("id","date")) %>%
+  arrange(id, date)
+
+
+
+```
+
+
+
 # Create plots by id with date on the x axis and person-standardized E2, P4, and LH values on the Y axis
 ```{r}
 
@@ -1057,12 +1102,13 @@ dat3 <- df %>% select(id, date, menses, ovtoday, E2.zd.3roll, P4.zd.3roll, LH.zd
 dat5 <- df %>% select(id, date, menses, ovtoday, E2.zd.5roll, P4.zd.5roll, LH.zd.5roll)
 
 
-#E2, P4, LH, E2.zd, P4.zd, LH.zd, 
+#E2, P4, LH, E2.zd, P4.zd, LH.zd 
 
 dat <- dat %>%
   arrange(id, date)
 
 ```
+
 
 ```{r}
 
@@ -1070,7 +1116,7 @@ dat.long.z = pivot_longer(dat, cols = c("E2.zd", "P4.zd", "LH.zd"), names_to = "
 dat.long.z3r = pivot_longer(dat3, cols = c("E2.zd.3roll", "P4.zd.3roll", "LH.zd.3roll"), names_to = "hormone", values_to = "value")
 dat.long.z5r = pivot_longer(dat5, cols = c("E2.zd.5roll", "P4.zd.5roll", "LH.zd.5roll"), names_to = "hormone", values_to = "value")
 
-View(dat.long.z)
+#View(dat.long.z)
 ```
 
 
@@ -1200,37 +1246,6 @@ for (i in ids_with_E2_list){
 
 
 
-# LEFT OFF HERE-- NEXT STEP IS TO FINALIZE MENSES AND OVTODAY VALUES BY CODING
-
-
-```{r}
-{r manual-data-fixes}
-# --- Manual Data Fixes ---
-# Use this chunk for specific, one-off corrections after the main script runs.
-
-# Fix for participant 210
-# Replace "YYYY-MM-DD" with the correct date that should be marked as menses onset.
-df$StartPeriod[df$id == 210 & df$daterated == as.Date("YYYY-MM-DD")] <- 1
-
-# After making the manual fix, we need to update the 'menses' column as well
-df <- df %>%
-  mutate(menses = ifelse(StartPeriod == 1, 1, 0))
-```
-
-
-
-
-
-
-
-
-```{r create cycle plots by id, message=FALSE, warning=FALSE}
-# ---------------------------------------------------------------------------------- PRINT DATA INFO
-
-# ---- Count Rows and Unique IDs ----
-```{r count rows and ids}
-count_rows_ids(df)
-```
 
 # ---- Specific Ns for Days in Study, Survey Data, and Hormone Data ----        
 ```{r data N details}
@@ -1252,7 +1267,7 @@ cat("The id values are:", "\n", paste(non_missing_E2_ids, collapse = ", "), "\n"
 # Print the result for missing E2 values
 cat("Number of people WITHOUT usable hormone data:", length(missing_E2_ids), "\n")
 cat("Their id values are:", "\n", paste(missing_E2_ids, collapse = ", "), "\n", "\n")
-cat("Of those, these ids were removed due to non-cyclic/insufficient hormone data as reviewed by Tory Eisenlohr-Moul and Ashley Eng:", "\n", paste(badhorm_ids, collapse = ", "), "\n", "\n")
+
 
 # Filter the data for non-missing survey values and count unique ids
 non_missing_survey <- df %>%
@@ -1388,7 +1403,102 @@ ggsave(filename = paste0(output_folder, "N_observations_plot_", current_date, ".
 # ---- Print Variable Names ----
 ```{r print variable names}
 print.variable.names(df)
+
+df_for_pacts <- df %>%
+  select(id, date, ovtoday, menses, E2, P4, LH, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DEBQ_avg, CSS_Inatt_Count, CSS_Imp_Count, CSS_Hyp_Count, BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, score_pinball, score_robot)
+
 ```
+
+# Run menstrualcycleR and scale cycletime
+```{r}
+library(menstrualcycleR)
+
+df_scaled <- pacts_scaling(
+  df_for_pacts,
+  id=id,
+  date=date,
+  menses=menses,
+  ovtoday=ovtoday,
+  lower_cyclength_bound = 21,
+  upper_cyclength_bound = 35
+)
+
+cycle_df_scaled <- df_scaled
+
+#cycledata_check(df_scaled, c("DRSP_1", "BDEFS_WM_avg"))
+#summary_ovulation(df_scaled)
+
+cycle_plot(
+  df_scaled,
+  symptom="CSS_Inatt_Count",
+  centering = "ovulation",
+  include_impute = TRUE,
+  y_scale = "person-centered_roll",
+  rollingavg = 5,
+  align_val = "center",
+  se = T
+)
+
+
+```
+
+# Inattention
+```{r}
+
+cycle_df_scaled$CSS_Inatt_Count_Log = log(cycle_df_scaled$CSS_Inatt_Count + 1) #log-transforming our outcome variable symptom
+
+# Run GAMM for Inattention - cyclic time
+
+selected_vars <- c("cyclic_time", "CSS_Inatt_Count_Log" )
+datSX <- cycle_df_scaled[complete.cases(cycle_df_scaled[selected_vars]), ]
+
+count_rows_ids(datSX)
+
+datSX$id = as.factor(datSX$id) # ALWAYS factor id before putting it in a gam formula
+
+gamm <- mgcv::gam(
+  CSS_Inatt_Count_Log ~ 
+    s(cyclic_time, bs = 'cc', k = 10) + 
+    s(id, bs = 're') + 
+    s(id, cyclic_time, bs = c('re','cc'), k = c(NA, 10)),
+  data = datSX, 
+  knots = list(cyclic_time = c(-1, 1)),
+  method = 'REML')
+
+summary(gamm)
+
+plotdat <- expand.grid(cyclic_time = seq(-1, 1, by = 0.05),
+                      id = 0) # setting id = 0 suppresses random effects, to model the just the fixed effect (sample-wide) of your outcome across the cycle
+
+# Predict using the model for each dataset and add predictions
+pred <- marginaleffects::predictions(gamm, newdata = plotdat, type = "response", transform = function(x) exp(x) - 1) # applying a transform function, to undo to the log transformation on symptom. The transform can be removed if your outcome was not log-transformed 
+plotdat$estimate = pred$estimate
+plotdat$conf.low = pred$conf.low
+plotdat$conf.high = pred$conf.high
+
+# Plotting
+gamplot <- ggplot(plotdat, aes(x = cyclic_time, y = estimate)) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
+                     labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
+  labs(x = "", y = "CSS Inattention Sx Count") + # You can change the y-axis label to reflect your outcome
+  
+  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
+            fill = "grey70", alpha = 0.2, color = "white") +
+  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
+            fill = "grey87", alpha = 0.2, color = "white") +
+  geom_line(size = 1, show.legend = TRUE) +
+  # Adding CI ribbon with translucent light grey color
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "lightgrey", alpha = 0.3) +
+  theme_minimal()
+
+# Print the plot
+print(gamplot)
+
+```
+
+
+
+
 
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1402,7 +1512,7 @@ print.variable.names(df)
 
 ```{r}
 
-write.csv(df, "/Users/taem-macbook-air/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20241020.csv", row.names = FALSE)
+write.csv(df, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20250826.csv", row.names = FALSE)
 
 
 ```
