@@ -1439,62 +1439,9 @@ cycle_plot(
   se = T
 )
 
-
 ```
 
-# Inattention
-```{r}
 
-cycle_df_scaled$CSS_Inatt_Count_Log = log(cycle_df_scaled$CSS_Inatt_Count + 1) #log-transforming our outcome variable symptom
-
-# Run GAMM for Inattention - cyclic time
-
-selected_vars <- c("cyclic_time", "CSS_Inatt_Count_Log" )
-datSX <- cycle_df_scaled[complete.cases(cycle_df_scaled[selected_vars]), ]
-
-count_rows_ids(datSX)
-
-datSX$id = as.factor(datSX$id) # ALWAYS factor id before putting it in a gam formula
-
-gamm <- mgcv::gam(
-  CSS_Inatt_Count_Log ~ 
-    s(cyclic_time, bs = 'cc', k = 10) + 
-    s(id, bs = 're') + 
-    s(id, cyclic_time, bs = c('re','cc'), k = c(NA, 10)),
-  data = datSX, 
-  knots = list(cyclic_time = c(-1, 1)),
-  method = 'REML')
-
-summary(gamm)
-
-plotdat <- expand.grid(cyclic_time = seq(-1, 1, by = 0.05),
-                      id = 0) # setting id = 0 suppresses random effects, to model the just the fixed effect (sample-wide) of your outcome across the cycle
-
-# Predict using the model for each dataset and add predictions
-pred <- marginaleffects::predictions(gamm, newdata = plotdat, type = "response", transform = function(x) exp(x) - 1) # applying a transform function, to undo to the log transformation on symptom. The transform can be removed if your outcome was not log-transformed 
-plotdat$estimate = pred$estimate
-plotdat$conf.low = pred$conf.low
-plotdat$conf.high = pred$conf.high
-
-# Plotting
-gamplot <- ggplot(plotdat, aes(x = cyclic_time, y = estimate)) +
-  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.50), 
-                     labels = c("0%L", "50%L", "Menses Onset", "50%F", "Ovulation")) +
-  labs(x = "", y = "CSS Inattention Sx Count") + # You can change the y-axis label to reflect your outcome
-  
-  geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf,
-            fill = "grey70", alpha = 0.2, color = "white") +
-  geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf,
-            fill = "grey87", alpha = 0.2, color = "white") +
-  geom_line(size = 1, show.legend = TRUE) +
-  # Adding CI ribbon with translucent light grey color
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "lightgrey", alpha = 0.3) +
-  theme_minimal()
-
-# Print the plot
-print(gamplot)
-
-```
 
 
 
@@ -1513,6 +1460,10 @@ print(gamplot)
 ```{r}
 
 write.csv(df, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20250826.csv", row.names = FALSE)
+
+write.csv(df_scaled, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250826.csv", row.names = FALSE)
+
+
 
 
 ```
