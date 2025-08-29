@@ -15,12 +15,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 # --- 1. Setup ---
-
 # Assume 'cycle_df_scaled' is your pre-existing dataframe
 
 # Define your output folder and current date
 gamm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/GAMMs/"
+
 current_date <- format(Sys.Date(), "%Y%m%d")
+
+# Create the full output file name with the date
+file_name <- paste0("GAMM_model_", current_date, ".rds")
+full_path <- paste0(gamm_output_folder, file_name)
+
+# Example of how you would save your data using the full path
+# saveRDS(cycle_df_scaled, file = full_path)
 ```
 
 
@@ -32,6 +39,8 @@ outcomes <- c(
   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
   "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
   "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
+  "CSS_Inatt" = "CSS Inattention Sx Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
     "score_pinball" = "Working Memory Score (Pinball)", 
     "score_robot" = "Reponse Inhibition (Robot Factory)", 
     "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
@@ -56,19 +65,11 @@ for (outcome_to_check in names(outcomes)) {
 
 
 ```{r}
-# --- 1. Setup ---
+# --- 1. Define the time variable you want to use ---
 
-# Define the time variable you want to use
 # You can easily switch this back to "cyclic_time" if needed
-time_var <- "cyclic_time_ov"
+time_var <- "cyclic_time"
 
-# Define your output folder and current date
-gamm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/GAMMs/"
-current_date <- format(Sys.Date(), "%Y%m%d")
-```
-
-
-```{r}
 # --- 2. Define Outcomes and Labels ---
 outcomes <- c("E2" = "Estradiol",
               "P4" = "Progesterone", 
@@ -88,6 +89,7 @@ outcomes <- c("E2" = "Estradiol",
 
 
 ```{r}
+
 # --- 3. Loop Through Each Outcome ---
 for (outcome_var in names(outcomes)) {
 
@@ -153,7 +155,7 @@ for (outcome_var in names(outcomes)) {
       limits = c(-1, 1),
       breaks = seq(-1, 1, by = 0.50),
       # IMPORTANT: You may need to change these labels to match the meaning of cyclic_time_ov
-      labels = c("Menses Onset", "50%F", "Ovulation", "50%L", "Menses Onset")
+      labels = c("Ovulation", "50%F", "Menses Onset", "50%L", "Ovulation")
     ) +
     labs(x = "", y = outcome_label) +
     geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf, fill = "grey70", alpha = 0.2, color = "white") +
@@ -169,87 +171,6 @@ for (outcome_var in names(outcomes)) {
   ggsave(plot_filename, gamplot, width = 8, height = 6, dpi = 300)
 
 }
-```
-
-# Plot E2, P4, and LH across cyclic_time_ov
-```{r}
-
-hormone_vars <- c("E2" = "Estradiol",
-                   "P4" = "Progesterone", 
-                   "LH" = "Luteinizing Hormone")
-
-for (hormone_var in names(hormone_vars)) {
-  hormone_label <- hormone_vars[hormone_var]
-  
-  message(paste("Processing hormone:", hormone_label, "with time variable:", time_var))
-  
-  # Prepare data for the model using the specified time_var
-  selected_vars <- c(time_var, hormone_var, "id")
-  datSX <- cycle_df_scaled[complete.cases(cycle_df_scaled[selected_vars]), ]
-  datSX$id <- as.factor(datSX$id)
-  
-  # Dynamically create the formula for the GAM model using time_var
-  gamm_formula <- as.formula(paste(
-    hormone_var,
-    "~ s(", time_var, ", bs = 'cc', k = 10) + s(id, bs = 're') + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
-  ))
-  
-  # Create the knots list dynamically
-  knots_list <- list(c(-1, 1))
-  names(knots_list) <- time_var
-  
-  # Run the GAMM model
-  gamm <- mgcv::gam(
-    formula = gamm_formula,
-    data = datSX,
-    knots = knots_list,
-    method = 'REML'
-  )
-  
-  # Save the model summary to a dynamically named .txt file
-  summary_filename <- paste0(gamm_output_folder, "gamm_", hormone_var, "_", time_var, "_summary_", current_date, ".txt")
-  sink(summary_filename)
-  print(summary(gamm))
-  sink()
-  
-  # --- Plotting ---
-  
-  # Create a named list for expand.grid using the time_var string
-  grid_list <- list(seq(-1, 1, by = 0.05), id = 0)
-  names(grid_list)[1] <- time_var
-  plotdat <- do.call(expand.grid, grid_list)
-  
-  # Get predictions
-  pred <- marginaleffects::predictions(
-    gamm,
-    newdata = plotdat,
-    type = "response"
-  )
-  
-  plotdat$estimate <- pred$estimate
-  plotdat$conf.low <- pred$conf.low
-  plotdat$conf.high <- pred$conf.high
-  
-  # Generate the plot with the dynamic y-axis label
-  gamplot <- ggplot(plotdat, aes(x = .data[[time_var]], y = estimate)) +
-    scale_x_continuous(
-      limits = c(-1, 1),
-      breaks = seq(-1, 1, by = 0.50),
-      # IMPORTANT: You may need to change these labels to match the meaning of cyclic_time_ov
-      labels = c("Menses Onset", "50%F", "Ovulation", "50%L", "Menses Onset")
-    ) +
-    labs(x = "", y = hormone_label) +
-    geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf, fill = "grey70", alpha = 0.2, color = "white") +
-    geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf, fill = "grey87", alpha = 0.2, color = "white") +
-    geom_line(linewidth = 1) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "lightgrey", alpha = 0.3) +
-    theme_minimal()
-  print(gamplot)
-  # Save the plot to a dynamically named .png file
-  plot_filename <- paste0(gamm_output_folder, "gamplot_", hormone_var, "_", time_var, "_", current_date, ".png")
-  ggsave(plot_filename, gamplot, width = 8, height = 6, dpi = 300)
-}
-
 ```
 
 

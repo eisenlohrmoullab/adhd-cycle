@@ -1,0 +1,152 @@
+---
+title: "Flexible Automated Cyclic SMM Analysis"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# --- 1. SETUP: LOAD LIBRARIES AND FUNCTIONS ---
+library(dplyr)
+library(tidyverse)
+library(mgcv)
+library(gamm4)
+library(ggplot2)
+library(zoo)
+library(glue)
+library(slider)
+
+# Load all the custom functions from their R files
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/run_SMM_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/subset_by_phase_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/compare_bic_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/model_plot_modx_gam_cyclic.R")
+
+```
+
+```{r}
+# --- 2. DEFINE ANALYSIS PARAMETERS ---
+
+# --- ‼️ CHOOSE YOUR TIME VARIABLES HERE ‼️ ---
+# Set the exact variable name for menses-centered analysis
+menses_time_variable <- "cyclic_time"  # Or "cyclic_time"
+
+# Set the exact variable name for ovulation-centered analysis
+ovulation_time_variable <- "cyclic_time_ov" # Or "cyclic_time_ov"
+# ---
+
+# Define outcomes and save directory
+outcomes_to_run <- c("E2", "P4", "LH", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "CSS_Inatt", "CSS_Inatt_Count", "CSS_HypImp", "CSS_Imp_Count", "CSS_Hyp_Count", "DRSP_1", "DRSP_4", "DRSP_7") 
+base_save_dir <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs"
+centering_methods <- c("menses", "ovulation")
+```
+
+
+
+```{r}
+
+# --- 3. HELPER FUNCTION ---
+preprocess_outcome <- function(data, outcome) {
+  outcome_log <- paste0(outcome, "_log")
+  outcome_log_d <- paste0(outcome, "_log.d")
+  outcome_roll <- paste0(outcome, "_log.d.roll")
+  
+  data %>%
+    mutate(id = as.factor(id)) %>%
+    mutate(!!outcome_log := log(.data[[outcome]] + 1)) %>%
+    group_by(id) %>%
+    mutate(!!outcome_log_d := .data[[outcome_log]] - mean(.data[[outcome_log]], na.rm = TRUE)) %>%
+    mutate(!!outcome_roll := slider::slide_dbl(
+      .x = .data[[outcome_log_d]],
+      .f = mean,
+      .before = 2,
+      .after = 2,
+      .partial = TRUE,
+      .na_rm = TRUE
+    )) %>%
+    ungroup()
+}
+
+```
+
+```{r}
+# --- 4. AUTOMATED ANALYSIS LOOP ---
+analysis_combinations <- expand.grid(
+  outcome = outcomes_to_run,
+  centering = centering_methods,
+  stringsAsFactors = FALSE
+)
+
+all_smm_results <- list()
+all_bic_results <- list()                                                              
+all_gam_results <- list()
+
+for (i in 1:nrow(analysis_combinations)) {
+  current_outcome <- analysis_combinations$outcome[i]
+  current_centering <- analysis_combinations$centering[i]
+  
+  # Determine the time variable name based on your choice above
+  current_time_var <- ifelse(current_centering == "menses", menses_time_variable, ovulation_time_variable)
+  
+  message(paste0("\n🚀 Starting analysis for outcome: ", current_outcome, " (", current_centering, "-centered using '", current_time_var, "')"))
+  
+  preprocessed_data <- preprocess_outcome(data = cycle_df_scaled, outcome = current_outcome)
+  
+  subset_result <- subset_by_phase_cyclic(
+    data = preprocessed_data,
+    outcome = current_outcome,
+    time_var = current_time_var,
+    min_obs = 5
+  )
+  data_for_analysis <- subset_result$data_subset
+  
+  smm_results <- run_smm_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    g = 2:5,
+    d_inter = 20,
+    k_smooth = 10,
+    plot = TRUE,
+    centering = current_centering,
+    save_dir = base_save_dir
+  )
+  
+  list_name <- paste0(current_outcome, "_", current_centering)
+  all_smm_results[[list_name]] <- smm_results
+  
+  bic_result <- compare_bic_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    centering = current_centering,
+    smm_results = smm_results,
+    save_dir = base_save_dir
+  )
+  
+  all_bic_results[[list_name]] <- bic_result
+  
+  gams <- model_plot_modx_gam_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    smm_result = smm_results,
+    centering = current_centering,
+    save_dir = base_save_dir,
+    k_smooth = 10
+  )
+  
+  all_gam_results[[list_name]] <- gams
+  
+  message(paste0("✅ Finished analysis for outcome: ", current_outcome, " (", current_centering, "-centered)"))
+}
+
+message("\n🏁 ALL OUTCOMES PROCESSED! 🏁")
+```
+
+
+
+
+

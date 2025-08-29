@@ -623,17 +623,14 @@ count_rows_ids(df)
 ```
 
 ```{r}
+
 # ---- Standardize Names ----
 df <- standardize_index_names(df)
 
-
-
 # Drop TubeNumber from df and finalhormonebatch if it exists in either dataset
-
 
 finalhormonebatch <- finalhormonebatch %>%
   select(-TubeNumber)
-
 
 finalhormonebatch <- finalhormonebatch %>% 
   group_by(id) %>%              # 1. Group the data by participant/ID
@@ -681,10 +678,6 @@ count_rows_ids(finalhormonebatch)
 
 
 ```
-
-
-
-
 
 ```{r}
 
@@ -934,52 +927,57 @@ df$score_pinball <- max_pinball - df$score_pinball
 #cor(df$BDEFS_Total, df$BDEFS_WM_avg, use="pairwise.complete.obs")
 #cor(df$BDEFS_WM_avg, df$score_pinball, use="pairwise.complete.obs")
 #cor(df$BDEFS_RI_avg, df$score_robot, use="pairwise.complete.obs")
-```
-
-# ---- Calculate Person Metrics .d, .zd, .m, and .sd for all daily variables ----
-```{r run person metrics}
-
-# Loop through each variable in alldailyvars list and create person-level metrics
-
-for (var in alldailyvars) {
-  df <- create.person.metrics(df=df, var = !!sym(var), id = id)
-}
 
 ```
 
-# ---- Calculate 3- and 5-day Rolling averages on raw, .d, .zd for all daily variables ----
 
-```{r run rolling avgs}
 
-# Loop through each variable and create 3- and 5-day rolling averages for each RAW variable in alldailyvars
+```{r}
+# R Script to Score the CSS ADHD Symptom Scale (Conners' Adult ADHD Rating Scales)
 
-for (var in alldailyvars) {
-  df <- create.rolling.avgs(df, var = !!sym(var))
-}
+# This script is designed to handle a dataset with multiple entries (e.g., daily administrations).
+# It will calculate the raw scores and symptom counts for the subscales.
 
-# Loop through each variable and create 3- and 5-day rolling averages for each .d variable in alldailyvars
-for (var in alldailyvars) {
-  # Create the .d version of the variable name
-  var.d <- paste0(quo_name(var), ".d")
-  
-  # Pass the .d version as a symbol to the function
-  df <- create.rolling.avgs(df, var = !!sym(var.d))
-}
+# IMPORTANT: This script only calculates RAW scores and symptom counts. For clinical interpretation,
+# these raw scores must be converted to standardized T-scores using the official
+# CAARS Professional Manual.
 
-# Loop through each variable and create 3- and 5-day rolling averages for each .zd variable in alldailyvars
-for (var in alldailyvars) {
-  # Create the .zd version of the variable name
-  var.zd <- paste0(quo_name(var), ".zd")
-  
-  # Pass the .d version as a symbol to the function
-  df <- create.rolling.avgs(df, var = !!sym(var.zd))
-}
+# --- 1. DEFINE SUBSCALES BASED ON ITEM NAMES ---
 
-# Confirm the calculation of new metrics .d.3roll, .d.5roll, .zd.3roll, and .zd.5roll
+# Create vectors of column names for each subscale.
+# Assumes the dataframe 'df' is already loaded in your environment.
+inatt_cols <- paste0("CSS_B_", 1:9)
+hyper_cols <- paste0("CSS_B_", 10:18)
+add_symp_cols <- paste0("CSS_B2_", 1:8)
+func_imp_cols <- paste0("CSS_Function_", 1:10)
 
-#DONE df %>% dplyr::select(id, daterated, DRSP_1, DRSP_1.d.3roll, DRSP_1.zd.3roll) %>% ##View()
+# --- 2. CALCULATE RAW SCORES (SEVERITY) AND SYMPTOM COUNTS FOR EACH ROW ---
+
+# Use the rowSums function to efficiently calculate the scores for each day.
+# A symptom is "counted" if the rating is "Often" (2) or "Very Often" (3).
+df$inatt_sev <- rowSums(df[, inatt_cols])
+df$inatt_mean <- df$inatt_sev / length(inatt_cols)
+df$inatt_count <- rowSums(df[, inatt_cols] >= 2)
+
+df$hyper_sev <- rowSums(df[, hyper_cols])
+df$hyper_mean <- df$hyper_sev / length(hyper_cols)
+df$hyper_count <- rowSums(df[, hyper_cols] >= 2)
+
+df$add_sev <- rowSums(df[, add_symp_cols])
+df$add_mean <- df$add_sev / length(add_symp_cols)
+
+df$func_sev <- rowSums(df[, func_imp_cols])
+df$func_mean <- df$func_sev / length(func_imp_cols)
+
+# Calculate total raw scores by summing the subscale scores for each day.
+df$total_symp_sev <- df$inatt_sev + df$hyper_sev
+df$total_symp_mean <- df$total_symp_sev / (length(inatt_cols) + length(hyper_cols))
+df$grand_total_sev <- rowSums(df[, c("total_symp_sev", "add_sev", "func_sev")])
+df$grand_total_mean <- df$grand_total_sev / (length(inatt_cols) + length(hyper_cols) + length(add_symp_cols) + length(func_imp_cols))
+
 
 ```
+
 
 # Open menstrualcycleR
 ```{r}
@@ -1050,6 +1048,8 @@ list <-unique(df$id)
 
 #list
 
+names(df)
+
 
 ```
 
@@ -1092,6 +1092,50 @@ df <- df %>%
 
 ```
 
+# ---- Calculate Person Metrics .d, .zd, .m, and .sd for all daily variables ----
+```{r run person metrics}
+
+# Loop through each variable in alldailyvars list and create person-level metrics
+
+for (var in alldailyvars) {
+  df <- create.person.metrics(df=df, var = !!sym(var), id = id)
+}
+
+```
+
+# ---- Calculate 3- and 5-day Rolling averages on raw, .d, .zd for all daily variables ----
+
+```{r run rolling avgs}
+
+# Loop through each variable and create 3- and 5-day rolling averages for each RAW variable in alldailyvars
+
+for (var in alldailyvars) {
+  df <- create.rolling.avgs(df, var = !!sym(var))
+}
+
+# Loop through each variable and create 3- and 5-day rolling averages for each .d variable in alldailyvars
+for (var in alldailyvars) {
+  # Create the .d version of the variable name
+  var.d <- paste0(quo_name(var), ".d")
+  
+  # Pass the .d version as a symbol to the function
+  df <- create.rolling.avgs(df, var = !!sym(var.d))
+}
+
+# Loop through each variable and create 3- and 5-day rolling averages for each .zd variable in alldailyvars
+for (var in alldailyvars) {
+  # Create the .zd version of the variable name
+  var.zd <- paste0(quo_name(var), ".zd")
+  
+  # Pass the .d version as a symbol to the function
+  df <- create.rolling.avgs(df, var = !!sym(var.zd))
+}
+
+# Confirm the calculation of new metrics .d.3roll, .d.5roll, .zd.3roll, and .zd.5roll
+
+#DONE df %>% dplyr::select(id, daterated, DRSP_1, DRSP_1.d.3roll, DRSP_1.zd.3roll) %>% ##View()
+
+```
 
 
 # Create plots by id with date on the x axis and person-standardized E2, P4, and LH values on the Y axis
@@ -1243,6 +1287,8 @@ for (i in ids_with_E2_list){
 
 
 ```
+
+
 
 
 
@@ -1404,14 +1450,21 @@ ggsave(filename = paste0(output_folder, "N_observations_plot_", current_date, ".
 ```{r print variable names}
 print.variable.names(df)
 
+df_backup <- df
+
+
 df_for_pacts <- df %>%
-  select(id, date, ovtoday, menses, E2, P4, LH, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DEBQ_avg, CSS_Inatt_Count, CSS_Imp_Count, CSS_Hyp_Count, BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, score_pinball, score_robot)
+  select(id, date, ovtoday, menses, E2, P4, LH, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DEBQ_avg, CSS_Inatt, CSS_HypImp, CSS_Inatt_Count, CSS_Imp_Count, CSS_Hyp_Count, BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, score_pinball, score_robot)
+
+names(df_for_pacts)
 
 ```
 
 # Run menstrualcycleR and scale cycletime
 ```{r}
 library(menstrualcycleR)
+
+#remotes::install_github("eisenlohrmoullab/menstrualcycleR")
 
 df_scaled <- pacts_scaling(
   df_for_pacts,
@@ -1424,13 +1477,46 @@ df_scaled <- pacts_scaling(
 )
 
 cycle_df_scaled <- df_scaled
+```
 
+
+# Create sensitivity version removing participants with suspicious hormone patterns
+```{r}
+
+# Import 
+
+omit_ids <- read_xlsx("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_omit.xlsx")
+
+View(omit_ids)
+
+
+# Merge into df by id
+cycle_df_scaled <- cycle_df_scaled %>%
+  left_join(omit_ids, by = "id")
+
+View(cycle_df_scaled)
+
+# Set format of suspicious to numeric
+cycle_df_scaled$suspicious <- as.numeric(cycle_df_scaled$suspicious)
+
+# Drop by suspicious==1 in df
+df_sens <- cycle_df_scaled %>%
+  filter(suspicious != 1 | is.na(suspicious)) %>%
+  select(-suspicious)  # Remove the suspicious column after filtering
+
+
+count_rows_ids(df_sens)
+
+```
+
+
+```{r}
 #cycledata_check(df_scaled, c("DRSP_1", "BDEFS_WM_avg"))
 #summary_ovulation(df_scaled)
 
 cycle_plot(
   df_scaled,
-  symptom="CSS_Inatt_Count",
+  symptom="CSS_HypImp",
   centering = "ovulation",
   include_impute = TRUE,
   y_scale = "person-centered_roll",
@@ -1459,12 +1545,12 @@ cycle_plot(
 
 ```{r}
 
-write.csv(df, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_20250826.csv", row.names = FALSE)
-
-write.csv(df_scaled, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250826.csv", row.names = FALSE)
 
 
+write.csv(cycle_df_scaled, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250827.csv", row.names = FALSE)
 
+
+write.csv(df_sens, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_PRESCALEDdf_20250827.csv", row.names = FALSE)
 
 ```
 

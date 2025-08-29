@@ -1,0 +1,141 @@
+---
+title: "ADHDCYCLE_SMMs_cyclic"
+author: "Tory Eisenlohr-Moul, PhD"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+#Load all required packages
+```{r}
+library(dplyr)
+library(zoo)
+```
+
+
+```{r}
+# Load functions
+
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/compare_bic_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/compare_bic.R")
+
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/model_plot_modx_gam_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/model_plot_modx_gam.R")
+
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/preprocess_outcome.R")
+
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/run_SMM_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/run_SMM.R")
+
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/subset_by_phase_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/subset_by_phase_cyclic.R")
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/subset_by_phase.R")
+
+```
+
+
+```{r}
+# --- 1. Setup ---
+# Assume 'cycle_df_scaled' is your pre-existing dataframe
+
+# Define your output folder and current date
+gamm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs/"
+
+current_date <- format(Sys.Date(), "%Y%m%d")
+
+# Create the full output file name with the date
+file_name <- paste0("GAMM_model_", current_date, ".rds")
+full_path <- paste0(gamm_output_folder, file_name)
+
+# Example of how you would save your data using the full path
+# saveRDS(cycle_df_scaled, file = full_path)
+```
+
+```{r}
+# Make sure to install the 'slider' package first if you haven't already
+# install.packages("slider")
+library(dplyr)
+library(slider)
+
+preprocess_outcome <- function(data, outcome) {
+  outcome_log <- paste0(outcome, "_log")
+  outcome_log_d <- paste0(outcome, "_log.d")
+  outcome_roll <- paste0(outcome, "_log.d.roll")
+  
+  data %>%
+    mutate(id = as.factor(id)) %>%
+    mutate(!!outcome_log := log(.data[[outcome]] + 1)) %>%
+    group_by(id) %>%
+    mutate(!!outcome_log_d := .data[[outcome_log]] - mean(.data[[outcome_log]], na.rm = TRUE)) %>%
+    # Add the 5-day centered rolling average using slider with a partial mean.
+    # The .before and .after arguments specify the window size (5 days total).
+    mutate(!!outcome_roll := slider::slide_dbl(
+      .x = .data[[outcome_log_d]],
+      .f = mean,
+      .before = 2,
+      .after = 2,
+      .partial = TRUE,
+      .na_rm = TRUE
+    )) %>%
+    ungroup()
+}
+```
+
+
+# Modeling
+## CSS_Inatt
+### Step 1: preprocess outcome/ subset by phase
+```{r}
+cycle_df_scaled = preprocess_outcome(cycle_df_scaled, "CSS_Inatt")
+#2. subset your dataset, so you have at least 5 observations in the luteal phase, and 5 in the follicular phase for each id 
+
+CSS_Inatt <- subset_by_phase_cyclic(
+  data = cycle_df_scaled,
+  outcome = "CSS_Inatt",
+  time_var = "cyclic_time",
+  min_obs = 5
+)
+
+CSS_Inatt_data_subset <-CSS_Inatt$data_subset
+
+View(CSS_Inatt_data_subset)
+```
+
+### Step 2:  run SMM
+```{r}
+
+resCSS_Inatt_ovulation <- run_smm_cyclic(
+  data = CSS_Inatt_data_subset,
+  outcome = "CSS_Inatt",
+  g = 2:3, #this will check for solutions for 2-5 groups
+  d_inter = 20,
+  k_smooth = 10,
+  plot = T, 
+  centering = "ovulation", #can change this to "ovulation" 
+  save_dir = "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs")
+
+```
+
+### Step 3: compare BIC
+```{r}
+CSS_Inatt_bic_result_ovulation <- compare_bic_cyclic(
+  data = CSS_Inatt_data_subset,
+  outcome = "CSS_Inatt",
+  centering = "ovulation",
+  smm_results = resCSS_Inatt_menses, #put in the result object from step 3
+  save_dir = "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs")
+```
+
+### Step 4: Model Subgroup Membership as a Moderator
+```{r}
+
+CSS_Inattgams_ovulation = model_plot_modx_gam_cyclic(
+  data = CSS_Inatt_data_subset,
+  outcome = "CSS_Inatt",
+  smm_result = resCSS_Inatt_ovulation, #put in the result object from step 3
+  centering = "ovulation", #can change this to "ovulation" 
+  save_dir = "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs")
+
+print(CSS_Inattgams_ovulation)
+
+```
+
