@@ -5,6 +5,16 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
+# To Do List for this file
+# - Make sure all outcomes are included
+# - Update so that the time variable can be easily switched between cyclic_time and cyclic_time_imp_ov
+# - Update the labels on the X axis of the cycle to switch between orders
+
+
+
+
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -46,8 +56,33 @@ outcomes <- c(
     "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
     "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", 
     "DRSP_1" = "Depressed Mood", 
+  "DRSP_2" = "Hopelessness",
+    "DRSP_3" = "Worthlessness/Guilt",
     "DRSP_4" = "Anxiety", 
-    "DRSP_7" = "Irritability")
+  "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity",
+    "DRSP_7" = "Irritability",
+  "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities",
+  "DRSP_10" = "Difficulty Concentrating",
+  "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite/Overate",
+  "DRSP_13" = "Food Cravings",
+  "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia",
+  "DRSP_16" = "Overwhelmed/Couldn't Cope",
+  "DRSP_17" = "Felt Out of Control",
+    "DRSP_18" = "Breast Tenderness",
+    "DRSP_19" = "Swelling/Bloating",
+  "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain",
+  "DRSP_22" = "Work Impairment",
+  "DRSP_23" = "Relationship Impairment", # Note that hobbies/social was removed
+  "E2" = "Estradiol",
+  "P4" = "Progesterone",
+  "LH" = "Luteinizing Hormone"
+)
+    
 
 
 # Get the actual column names from the dataframe
@@ -68,22 +103,8 @@ for (outcome_to_check in names(outcomes)) {
 # --- 1. Define the time variable you want to use ---
 
 # You can easily switch this back to "cyclic_time" if needed
-time_var <- "cyclic_time"
+time_var <- "cyclic_time_imp_ov"
 
-# --- 2. Define Outcomes and Labels ---
-outcomes <- c("E2" = "Estradiol",
-              "P4" = "Progesterone", 
-              "LH" = "Luteinizing Hormone",
-  "CSS_Inatt_Count" = "CSS Inattention Sx Count",
-  "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
-  "CSS_Imp_Count" = "CSS Impulsivity Sx Count",
-  "score_pinball" = "Working Memory Score (Pinball)",
-  "score_robot" = "Reponse Inhibition (Robot Factory)",
-  "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
-  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)",
-  "DRSP_1" = "Depressed Mood",
-  "DRSP_4" = "Anxiety",
-  "DRSP_7" = "Irritability")
 
 ```
 
@@ -155,7 +176,7 @@ for (outcome_var in names(outcomes)) {
       limits = c(-1, 1),
       breaks = seq(-1, 1, by = 0.50),
       # IMPORTANT: You may need to change these labels to match the meaning of cyclic_time_ov
-      labels = c("Ovulation", "50%F", "Menses Onset", "50%L", "Ovulation")
+      labels = c("Menses Onset", "50%F", "Ovulation", "50%L", "Menses Onset")
     ) +
     labs(x = "", y = outcome_label) +
     geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf, fill = "grey70", alpha = 0.2, color = "white") +

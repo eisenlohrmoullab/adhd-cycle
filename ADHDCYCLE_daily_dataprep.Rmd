@@ -981,7 +981,8 @@ df$grand_total_mean <- df$grand_total_sev / (length(inatt_cols) + length(hyper_c
 
 # Open menstrualcycleR
 ```{r}
-#remotes::install_github("eisenlohrmoullab/menstrualcycleR")
+remotes::install_github("eisenlohrmoullab/menstrualcycleR", force = TRUE)
+
 library(menstrualcycleR)
 ```
 
@@ -1452,16 +1453,17 @@ print.variable.names(df)
 
 df_backup <- df
 
-
 df_for_pacts <- df %>%
-  select(id, date, ovtoday, menses, E2, P4, LH, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DEBQ_avg, CSS_Inatt, CSS_HypImp, CSS_Inatt_Count, CSS_Imp_Count, CSS_Hyp_Count, BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, score_pinball, score_robot)
-
+  select(id, date, ovtoday, menses, E2, P4, LH, DRSP_1, DRSP_2, DRSP_3, DRSP_4, DRSP_5, DRSP_6, DRSP_7, DRSP_8, DRSP_9, DRSP_10, DRSP_11, DRSP_12, DRSP_13, DRSP_14, DRSP_15, DRSP_16, DRSP_17, DRSP_18, DRSP_19, DRSP_20, DRSP_21, DRSP_22, DRSP_23, DEBQ_avg, CSS_Inatt, CSS_HypImp, CSS_Inatt_Count, CSS_Imp_Count, CSS_Hyp_Count, total_symp_mean, BDEFS_WM_avg, BDEFS_RI_avg, UPPS_NU_avg, UPPS_Persev_avg, UPPS_Premed_avg, UPPS_Sens_avg, UPPS_PU_avg, score_pinball, score_robot)
+         
 names(df_for_pacts)
 
 ```
 
 # Run menstrualcycleR and scale cycletime
 ```{r}
+
+
 library(menstrualcycleR)
 
 #remotes::install_github("eisenlohrmoullab/menstrualcycleR")
@@ -1476,6 +1478,7 @@ df_scaled <- pacts_scaling(
   upper_cyclength_bound = 35
 )
 
+#cycle_df_scaled <- df_scaled
 cycle_df_scaled <- df_scaled
 ```
 
