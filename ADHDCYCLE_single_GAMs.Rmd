@@ -27,6 +27,8 @@ library(gridExtra)
 library(grid)
 library(tibble)
 library(tidyr)
+
+#names(cycle_df_scaled)
 ```
 
 #### 1.2: User-Configurable Parameters ⚙️
@@ -61,44 +63,49 @@ if (length(time_vars) < length(time_vars_to_run)) {
   missing_vars <- setdiff(time_vars_to_run, time_vars)
   warning("The following time_vars were not found and will be skipped: ", paste(missing_vars, collapse = ", "))
 }
+
+# View the first few rows of the dataset
+#head(cycle_df_scaled)
+
 ```
 
 #### 1.4: Define Outcomes, Categories, and Custom Page Layouts
 ```{r outcomes-and-layouts}
 # --- Define Outcomes to Model ---
-outcomes <- c(
-    "CSS_Inatt_Count" = "CSS Inattention Sx Count", "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
-    "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_Inatt" = "CSS Inattention Sx Severity",
-    "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity", "score_pinball" = "Working Memory Score (Pinball)",
-    "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
-    "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", "DRSP_1" = "Depressed Mood", "DRSP_2" = "Hopelessness",
-    "DRSP_3" = "Worthlessness/Guilt", "DRSP_4" = "Anxiety", "DRSP_5" = "Mood Swings",
-    "DRSP_6" = "Rejection Sensitivity", "DRSP_7" = "Irritability", "DRSP_8" = "Interpersonal Conflicts",
-    "DRSP_9" = "Less Interest in Activities", "DRSP_10" = "Difficulty Concentrating", "DRSP_11" = "Lethargy/Fatigue",
-    "DRSP_12" = "Increased Appetite/Overate", "DRSP_13" = "Food Cravings", "DRSP_14" = "Hypersomnia",
-    "DRSP_15" = "Insomnia", "DRSP_16" = "Overwhelmed/Couldn't Cope", "DRSP_17" = "Felt Out of Control",
-    "DRSP_18" = "Breast Tenderness", "DRSP_19" = "Swelling/Bloating", "DRSP_20" = "Headache",
-    "DRSP_21" = "Joint/Muscle Pain", "DRSP_22" = "Work Impairment", "DRSP_23" = "Relationship Impairment",
-    "E2" = "Estradiol", "P4" = "Progesterone", "LH" = "Luteinizing Hormone"
-)
 
-# --- Define Categories for organization ---
-outcome_categories <- tribble(
-  ~category, ~variable,
-  "ADHD Symptoms (CSS)", "CSS_Inatt_Count", "ADHD Symptoms (CSS)", "CSS_Hyp_Count",
-  "ADHD Symptoms (CSS)", "CSS_Imp_Count", "ADHD Symptoms (CSS)", "CSS_Inatt", "ADHD Symptoms (CSS)", "CSS_HypImp",
-  "Cognitive Score", "score_pinball", "Cognitive Score", "score_robot",
-  "Executive Function (BDEFS)", "BDEFS_WM_avg", "Executive Function (BDEFS)", "BDEFS_RI_avg",
-  "Hormone", "E2", "Hormone", "P4", "Hormone", "LH",
-  "Mood & Physical (DRSP)", "DRSP_1", "Mood & Physical (DRSP)", "DRSP_2", "Mood & Physical (DRSP)", "DRSP_3",
-  "Mood & Physical (DRSP)", "DRSP_4", "Mood & Physical (DRSP)", "DRSP_5", "Mood & Physical (DRSP)", "DRSP_6",
-  "Mood & Physical (DRSP)", "DRSP_7", "Mood & Physical (DRSP)", "DRSP_8", "Mood & Physical (DRSP)", "DRSP_9",
-  "Mood & Physical (DRSP)", "DRSP_10", "Mood & Physical (DRSP)", "DRSP_11", "Mood & Physical (DRSP)", "DRSP_12",
-  "Mood & Physical (DRSP)", "DRSP_13", "Mood & Physical (DRSP)", "DRSP_14", "Mood & Physical (DRSP)", "DRSP_15",
-  "Mood & Physical (DRSP)", "DRSP_16", "Mood & Physical (DRSP)", "DRSP_17", "Mood & Physical (DRSP)", "DRSP_18",
-  "Mood & Physical (DRSP)", "DRSP_19", "Mood & Physical (DRSP)", "DRSP_20", "Mood & Physical (DRSP)", "DRSP_21",
-  "Impairment (DRSP)", "DRSP_22", "Impairment (DRSP)", "DRSP_23"
-) %>% right_join(enframe(outcomes, name = "variable", value = "outcome_label"), by = "variable")
+# This creates a "named vector" in R called 'outcomes'. This is a highly
+# efficient way to create a lookup list.
+#
+# The structure is:
+# "raw_column_name_in_your_data" = "Pretty Label for Plots"
+#
+# - The 'name' (left side) MUST EXACTLY match the column name in your data frame.
+# - The 'value' (right side) is the user-friendly label you want to see in your reports.
+
+outcomes <- c(
+    # These are the outcomes currently active in the analysis.
+    "CSS_Inatt_Count" = "CSS Inattention Sx Count", 
+    "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
+    "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
+    "CSS_Inatt" = "CSS Inattention Sx Severity",
+    "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity"
+    
+    # --- Inactive Outcomes ---
+    # The lines below are "commented out" with a '#' symbol. This means R will ignore
+    # them. To include any of these variables in your analysis, simply remove the '#'
+    # at the beginning of the line.
+    #, "score_pinball" = "Working Memory Score (Pinball)",
+    #  "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+    #  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", "DRSP_1" = "Depressed Mood", "DRSP_2" = "Hopelessness",
+    #  "DRSP_3" = "Worthlessness/Guilt", "DRSP_4" = "Anxiety", "DRSP_5" = "Mood Swings",
+    #  "DRSP_6" = "Rejection Sensitivity", "DRSP_7" = "Irritability", "DRSP_8" = "Interpersonal Conflicts",
+    #  "DRSP_9" = "Less Interest in Activities", "DRSP_10" = "Difficulty Concentrating", "DRSP_11" = "Lethargy/Fatigue",
+    #  "DRSP_12" = "Increased Appetite/Overate", "DRSP_13" = "Food Cravings", "DRSP_14" = "Hypersomnia",
+    #  "DRSP_15" = "Insomnia", "DRSP_16" = "Overwhelmed/Couldn't Cope", "DRSP_17" = "Felt Out of Control",
+    #  "DRSP_18" = "Breast Tenderness", "DRSP_19" = "Swelling/Bloating", "DRSP_20" = "Headache",
+    #  "DRSP_21" = "Joint/Muscle Pain", "DRSP_22" = "Work Impairment", "DRSP_23" = "Relationship Impairment",
+    #  "E2" = "Estradiol", "P4" = "Progesterone", "LH" = "Luteinizing Hormone"
+)
 
 # --- Define custom page layouts ---
 page_definitions <- c(
@@ -260,12 +267,4 @@ for (current_id in unique_ids) {
   dev.off()
   message(paste("--- ✅ Saved Full Report for ID:", current_id, "---"))
 }
-```
-
----
-
-### 3. Publication Figure Generation
-```{r publication-figure-1, message=TRUE, warning=TRUE}
-# This section remains unchanged and functional for creating your specific publication figure.
-# ... (code from previous versions) ...
 ```
