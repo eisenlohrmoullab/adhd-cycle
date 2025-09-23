@@ -981,8 +981,6 @@ df$grand_total_mean <- df$grand_total_sev / (length(inatt_cols) + length(hyper_c
 
 # Open menstrualcycleR
 ```{r}
-remotes::install_github("eisenlohrmoullab/menstrualcycleR", force = TRUE)
-
 library(menstrualcycleR)
 ```
 
@@ -1059,9 +1057,13 @@ names(df)
 # Merge in updates to participant menses and ovulation dates based on visual confirmation coding 
 
 ```{r}
+
+# Note: further updates to the "adhdcyc_dateupdates_taem.xls" file were made on 2025-09-22 based on SMMs of E2, P4, LH which revealed some heterogeneity of hormone patterns that were not consistent with the previously coded menses and ovulation dates. These updates were made directly in the "updates" dataset below. Iterations of results after this date will use the updated ovulation and menses codes. 
+
+# Load updates from excel file
 updates <- read_xls("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_dateupdates_taem.xls")
 
-View(updates)
+#View(updates)
 
 #For each combination of id and date in the updates dataset, update the corresponding menses and ovtoday values in the df dataset; if the combination does not exist, make it exist by adding a new row with NA for all other variables except id, date, menses, and ovtoday
 
@@ -1174,8 +1176,6 @@ length(ids_with_E2_list)
 
 # 203 205 206 207 208 209 210 213 214 218 219 221 223 224 225 227 228 230 232 233 235 237 239 241 242 243 245 246 248 249 252 254 256 258 259 260 261 262 263 265 266 267 268 270 271 272 273 275 277 278 279 281 283 284 286 287 289 290 293 305 307 310 312 314 317 318 321 323 324 325 326 327 329 330 331 332 333 334 336 337 338 340 341 343 344 345 346 347 348
 
-#View dataset with only id 210
-View(df %>% filter(id == 210))
 ```
 
 ```{r}
@@ -1214,7 +1214,7 @@ for (i in ids_with_E2_list){
 
   print(p)
 
-  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_", i, ".png")
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250922/zhormoneplot_", i, ".png")
   ggsave(out, p, width = 10, height = 6, dpi = 300)
 }
 
@@ -1247,7 +1247,7 @@ for (i in ids_with_E2_list){
 
   print(p)
 
-  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_3r_", i, ".png")
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250922/zhormoneplot_3r_", i, ".png")
   ggsave(out, p, width = 10, height = 6, dpi = 300)
 }
 
@@ -1281,16 +1281,13 @@ for (i in ids_with_E2_list){
 
   print(p)
 
-  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250825/zhormoneplot_5r_", i, ".png")
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_zscored_20250922/zhormoneplot_5r_", i, ".png")
   ggsave(out, p, width = 10, height = 6, dpi = 300)
 }
 
 
 
 ```
-
-
-
 
 
 
@@ -1445,6 +1442,7 @@ ggsave(filename = paste0(output_folder, "N_observations_plot_", current_date, ".
        width = 8, 
        height = 6)
 
+
 ```
 
 # ---- Print Variable Names ----
@@ -1482,11 +1480,10 @@ df_scaled <- pacts_scaling(
 cycle_df_scaled <- df_scaled
 ```
 
-
-# Create sensitivity version removing participants with suspicious hormone patterns
+# Create sensitivity version removing participants with suspicious hormone and cycle patterns
 ```{r}
 
-# Import 
+# Import - updated on 2025-09-22 after inspection of odd-out hormone groups from SMM
 
 omit_ids <- read_xlsx("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_omit.xlsx")
 
@@ -1513,22 +1510,6 @@ count_rows_ids(df_sens)
 ```
 
 
-```{r}
-#cycledata_check(df_scaled, c("DRSP_1", "BDEFS_WM_avg"))
-#summary_ovulation(df_scaled)
-
-cycle_plot(
-  df_scaled,
-  symptom="CSS_HypImp",
-  centering = "ovulation",
-  include_impute = TRUE,
-  y_scale = "person-centered_roll",
-  rollingavg = 5,
-  align_val = "center",
-  se = T
-)
-
-```
 
 
 
@@ -1548,12 +1529,16 @@ cycle_plot(
 
 ```{r}
 
+write.csv(cycle_df_scaled, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250922.csv", row.names = FALSE)
+
+# write as R data file 
+save(cycle_df_scaledthe , file="~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250922.RData")
 
 
-write.csv(cycle_df_scaled, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_df_scaled_20250827.csv", row.names = FALSE)
+write.csv(df_sens, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_dfSENSscaled_20250922.csv", row.names = FALSE)
 
-
-write.csv(df_sens, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_PRESCALEDdf_20250827.csv", row.names = FALSE)
+# write as R data file 
+save(df_sens, file="~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/adhd_daily_dfSENSscaled_20250922.RData")
 
 ```
 

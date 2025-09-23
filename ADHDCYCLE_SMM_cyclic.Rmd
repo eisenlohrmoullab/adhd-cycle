@@ -1,5 +1,5 @@
 ---
-title: "ADHD CYC - Flexible Automated Cyclic SMM Analysis"
+title: "CYCLE ADHD R01 - Flexible Automated Cyclic SMM Analysis"
 author: "Tory Eisenlohr-Moul"
 date: "`r Sys.Date()`"
 output: html_document
@@ -18,32 +18,139 @@ library(zoo)
 library(glue)
 library(slider)
 
+
 # Load all the custom functions from their R files
-source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/run_SMM_cyclic.R")
-source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/subset_by_phase_cyclic.R")
-source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/compare_bic_cyclic.R")
-source("~/CLEAR Lab Repositories/adhd-cycle/scripts/SMM functions/model_plot_modx_gam_cyclic.R")
+source("~/CLEAR Lab Repositories/proj_BEARS/scripts/compare_bic_cyclic.R")
+source("~/CLEAR Lab Repositories/proj_BEARS/scripts/model_plot_modx_gam_cyclic.R")
+source("~/CLEAR Lab Repositories/proj_BEARS/scripts/run_smm_cyclic.R")
+source("~/CLEAR Lab Repositories/proj_BEARS/scripts/subset_by_phase_cyclic.R")
 
 ```
+
+
+# 0. Input scaled R daily data file saved from prep file
+
+```{r}
+
+# Define the file path
+file_path <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-22/datasets_interim/adhd_daily_df_scaled_20250922.RData"
+
+# Load the .RData file. This will restore the object with its original name, 'df_scaled'.
+load(file_path)
+
+```
+
+
+
+  
+
+# --- 1. Setup ---
+
+```{r}
+# Assumes 'cycle_df_scaled' is your pre-existing dataframe
+
+# Define your base output folder
+
+smm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-22/SMMs"
+
+# Get the current date as a string
+current_date <- format(Sys.Date(), "%Y%m%d")
+
+# --- 2. Create Dated Output Folder ---
+
+# Combine the base folder path and the current date to create the full path
+dated_output_folder <- file.path(smm_output_folder, current_date)
+
+# Check if the dated directory exists, and create it if it doesn't
+if (!dir.exists(dated_output_folder)) {
+  dir.create(dated_output_folder, recursive = TRUE)
+  message(paste("Successfully created directory:", dated_output_folder))
+} else {
+  message(paste("Directory already exists:", dated_output_folder))
+}
+```
+
+# --- 2. Define Outcomes and Their Plot Labels ---
+
+```{r}
+
+# This named vector uses your short variable names.
+# NAMES = the column names in your dataframe (e.g., dep)
+# VALUES = the pretty labels for your plots (e.g., "Depressed Mood")
+outcomes <- c(
+  "CSS_Inatt_Count" = "CSS Inattention Sx Count",
+  "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
+  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
+  "CSS_Inatt" = "CSS Inattention Sx Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
+    "score_pinball" = "Working Memory Score (Pinball)", 
+    "score_robot" = "Reponse Inhibition (Robot Factory)", 
+    "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
+    "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", 
+    "DRSP_1" = "Depressed Mood", 
+  "DRSP_2" = "Hopelessness",
+    "DRSP_3" = "Worthlessness/Guilt",
+    "DRSP_4" = "Anxiety", 
+  "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity",
+    "DRSP_7" = "Irritability",
+  "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities",
+  "DRSP_10" = "Difficulty Concentrating",
+  "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite/Overate",
+  "DRSP_13" = "Food Cravings",
+  "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia",
+  "DRSP_16" = "Overwhelmed/Couldn't Cope",
+  "DRSP_17" = "Felt Out of Control",
+    "DRSP_18" = "Breast Tenderness",
+    "DRSP_19" = "Swelling/Bloating",
+  "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain",
+  "DRSP_22" = "Work Impairment",
+  "DRSP_23" = "Relationship Impairment", # Note that hobbies/social was removed
+  "E2" = "Estradiol",
+  "P4" = "Progesterone",
+  "LH" = "Luteinizing Hormone")
+
+# You can easily switch the time variable for your models if needed
+time_var <- "cyclic_time_impute"
+
+# --- 3. Verify that Outcome Variables Exist in the Dataframe ---
+# This loop checks that all the columns defined above are actually in your dataframe.
+
+# Get the column names from your dataframe (replace with your actual df name)
+actual_colnames <- names(cycle_df_scaled)
+
+# Loop through your defined outcomes and check if they exist
+message("--- Checking for outcome variables in the dataframe ---")
+for (outcome_variable in names(outcomes)) {
+  if (outcome_variable %in% actual_colnames) {
+    message(paste("✅ Found:", outcome_variable))
+  } else {
+    message(paste("❌ NOT FOUND:", outcome_variable, " - Check your dataframe and variable names!"))
+  }
+}
+
+```
+
+
 
 ```{r}
 # --- 2. DEFINE ANALYSIS PARAMETERS ---
 
+#View(cycle_df_scaled)
+
 # --- ‼️ CHOOSE YOUR TIME VARIABLES HERE ‼️ ---
 # Set the exact variable name for menses-centered analysis
-menses_time_variable <- "cyclic_time_impute"  # Or "cyclic_time"
+menses_time_variable <- "cyclic_time"  # Or "cyclic_time_impute"
 
 # Set the exact variable name for ovulation-centered analysis
-ovulation_time_variable <- "cyclic_time_imp_ov" # Or "cyclic_time_ov"
-# ---
+ovulation_time_variable <- "cyclic_time_ov"  # Or "cyclic_time_ov_imp"
 
-# Define outcomes and save directory
-outcomes_to_run <- c("DRSP_22", "DRSP_23") 
-  
-  #c("E2", "P4", "LH", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "CSS_Inatt", "CSS_Inatt_Count", "CSS_HypImp", "CSS_Imp_Count", "CSS_Hyp_Count", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_9", "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14", "DRSP_15", "DRSP_16", "DRSP_17", "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21",) 
-  
-base_save_dir <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/SMMs"
 centering_methods <- c("menses", "ovulation")
+
 ```
 
 
@@ -77,7 +184,7 @@ preprocess_outcome <- function(data, outcome) {
 ```{r}
 # --- 4. AUTOMATED ANALYSIS LOOP ---
 analysis_combinations <- expand.grid(
-  outcome = outcomes_to_run,
+  outcome = names(outcomes),
   centering = centering_methods,
   stringsAsFactors = FALSE
 )
@@ -114,7 +221,7 @@ for (i in 1:nrow(analysis_combinations)) {
     k_smooth = 10,
     plot = TRUE,
     centering = current_centering,
-    save_dir = base_save_dir
+    save_dir = dated_output_folder
   )
   
   list_name <- paste0(current_outcome, "_", current_centering)
@@ -126,7 +233,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     centering = current_centering,
     smm_results = smm_results,
-    save_dir = base_save_dir
+    save_dir = dated_output_folder
   )
   
   all_bic_results[[list_name]] <- bic_result
@@ -137,7 +244,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     smm_result = smm_results,
     centering = current_centering,
-    save_dir = base_save_dir,
+    save_dir = dated_output_folder,
     k_smooth = 10
   )
   
@@ -148,6 +255,104 @@ for (i in 1:nrow(analysis_combinations)) {
 
 message("\n🏁 ALL OUTCOMES PROCESSED! 🏁")
 ```
+
+
+
+```{r}
+# --- 2. DEFINE ANALYSIS PARAMETERS ---
+
+#View(cycle_df_scaled)
+
+# --- ‼️ CHOOSE YOUR TIME VARIABLES HERE ‼️ ---
+# Set the exact variable name for menses-centered analysis
+menses_time_variable <- "cyclic_time"  # Or "cyclic_time_impute"
+
+# Set the exact variable name for ovulation-centered analysis
+ovulation_time_variable <- "cyclic_time_ov"  # Or "cyclic_time_ov_imp"
+
+centering_methods <- c("menses", "ovulation")
+
+```
+
+
+```{r}
+# --- 4. AUTOMATED ANALYSIS LOOP ---
+analysis_combinations <- expand.grid(
+  outcome = names(outcomes),
+  centering = centering_methods,
+  stringsAsFactors = FALSE
+)
+
+all_smm_results <- list()
+all_bic_results <- list()                                                              
+all_gam_results <- list()
+
+for (i in 1:nrow(analysis_combinations)) {
+  current_outcome <- analysis_combinations$outcome[i]
+  current_centering <- analysis_combinations$centering[i]
+  
+  # Determine the time variable name based on your choice above
+  current_time_var <- ifelse(current_centering == "menses", menses_time_variable, ovulation_time_variable)
+  
+  message(paste0("\n🚀 Starting analysis for outcome: ", current_outcome, " (", current_centering, "-centered using '", current_time_var, "')"))
+  
+  preprocessed_data <- preprocess_outcome(data = cycle_df_scaled, outcome = current_outcome)
+  
+  subset_result <- subset_by_phase_cyclic(
+    data = preprocessed_data,
+    outcome = current_outcome,
+    time_var = current_time_var,
+    min_obs = 5
+  )
+  data_for_analysis <- subset_result$data_subset
+  
+  smm_results <- run_smm_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    g = 2:5,
+    d_inter = 20,
+    k_smooth = 10,
+    plot = TRUE,
+    centering = current_centering,
+    save_dir = dated_output_folder
+  )
+  
+  list_name <- paste0(current_outcome, "_", current_centering)
+  all_smm_results[[list_name]] <- smm_results
+  
+  bic_result <- compare_bic_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    centering = current_centering,
+    smm_results = smm_results,
+    save_dir = dated_output_folder
+  )
+  
+  all_bic_results[[list_name]] <- bic_result
+  
+  gams <- model_plot_modx_gam_cyclic(
+    data = data_for_analysis,
+    outcome = current_outcome,
+    time_var = current_time_var, # Pass the chosen time variable
+    smm_result = smm_results,
+    centering = current_centering,
+    save_dir = dated_output_folder,
+    k_smooth = 10
+  )
+  
+  all_gam_results[[list_name]] <- gams
+  
+  message(paste0("✅ Finished analysis for outcome: ", current_outcome, " (", current_centering, "-centered)"))
+}
+
+message("\n🏁 ALL OUTCOMES PROCESSED! 🏁")
+```
+
+
+
+
 
 
 
