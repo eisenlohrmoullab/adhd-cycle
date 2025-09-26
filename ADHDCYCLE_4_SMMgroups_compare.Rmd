@@ -1,0 +1,212 @@
+---
+title: "ADHDCYCLE_SMMgroups_compare"
+author: "Tory Eisenlohr-Moul, PhD"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# The goal of this script is to load and merge a variety of trait datasets (wide) with an id column and group columns that indicate group membership in several smoothing mixture models for different outcomes (e.g., one file will have cycle trajectory group membership for ADHD symptoms, another for depression symptoms, etc.) and then (1) compare group memberships across models and (2) compare trait variables from another merged-in dataset across groups.
+
+```{r}
+library(tidyverse)
+library(here)
+library(psych)
+library(GGally)
+library(ggpubr)
+library(broom)
+library(kableExtra)
+library(DescTools)
+library(emmeans)
+library(car)
+library(magrittr)
+library(viridis)
+library(ggbeeswarm)
+library(ggrepel)
+library(cowplot)
+library(ggmosaic)
+library(ComplexUpset)
+library(patchwork)
+```
+# ---- Merge SMM Group Membership Datasets ----
+## Merge all of the selected (and close-call) groupings from cyclic_time_impute SMMs in full dataset (keep in mind that these may need to be run in the df_sens dataset to make sure they're robust)
+```{r}
+source("~/CLEAR Lab Repositories/adhd-cycle/merge_SMM_group_files.R")
+
+# rename dataset
+ctigrps <- merged_groups_cti
+
+# Format id as a factor
+ctigrps <- ctigrps %>%
+  mutate(id = as.factor(id))
+```
+
+
+
+```{r}
+# View dataset
+#View (merged_groups_cti)
+
+# Load demographic dataset
+traits <- haven::read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_TRAIT/01_raw_data/ADHD Demographic Data_1.sav") 
+
+#View(traits)
+
+# format id from ID to id to match SMM group dataset and as a factor
+traits <- traits %>%
+  rename(id = ID) %>%
+  mutate(id = as.factor(id))
+```
+
+
+
+
+```{r}
+# Merge data
+d <- left_join(ctigrps, traits, by="id")
+
+# Check data
+#glimpse(d)
+#summary(d)
+
+names(d)
+
+```
+
+# Compare on Age
+
+```{r}
+# 1. LOAD NECESSARY PACKAGES
+# ------------------------------------
+# Make sure you have these installed: install.packages(c("dplyr", "ggstatsplot", "rlang"))
+library(dplyr)
+library(ggstatsplot)
+library(rlang)
+
+
+# 2. PREPARE THE DATA
+# ------------------------------------
+# (Assuming your dataframe is named 'd')
+# This step correctly converts character columns to factors for plotting.
+# Crucially, we tell it to leave the 'id' column alone by adding '& !id'.
+d <- d %>%
+  mutate(across(where(is.character) & !id, as.factor))
+
+
+# 3. IDENTIFY GROUPING VARIABLES
+# ------------------------------------
+# This code selects the names of all factor columns for plotting.
+# The '-any_of("id")' command ensures the 'id' column is skipped.
+# Note: The 'id' column still exists in your dataframe 'd'.
+grouping_vars <- d %>%
+  select(where(is.factor) & !any_of("id")) %>%
+  names()
+
+# (Optional) Check the variables that will be plotted
+print("The following grouping variables will be plotted:")
+print(grouping_vars)
+
+
+# 4. CREATE AND SAVE PLOTS IN A LOOP
+# ------------------------------------
+# This loop iterates through each valid variable name, generates a plot,
+# stores it, and saves it as a PNG file.
+
+# Create an 'output' directory for the plots if it doesn't already exist
+dir.create("output", showWarnings = FALSE)
+
+# Create an empty list to store the plot objects
+plot_list <- list()
+
+for (group_name in grouping_vars) {
+  # Print progress to the console
+  print(paste("--- Generating plot for:", group_name, "---"))
+
+  # The main plotting function with the corrected 'x' argument
+  p <- ggbetweenstats(
+    data = d,
+    x = !!sym(group_name),
+    y = Age,
+    title = paste("Age by", group_name),
+    xlab = group_name
+  )
+
+  # Store the generated plot object in our list
+  plot_list[[group_name]] <- p
+
+  # Save the plot as a PNG file in the 'output' folder
+  ggsave(
+    filename = file.path("output", paste0("plot_Age_by_", group_name, ".png")),
+    plot = p,
+    width = 11,
+    height = 8.5,
+    units = "in",
+    dpi = 300
+  )
+}
+
+print("---------------------------------------------------------")
+print("All plots have been generated and saved to the 'output' folder.")
+```
+# Compare on BMI
+
+```{r}
+
+# 4. CREATE AND SAVE PLOTS IN A LOOP
+# ------------------------------------
+# This loop iterates through each valid variable name, generates a plot,
+# stores it, and saves it as a PNG file.
+
+# Create an 'output' directory for the plots if it doesn't already exist
+dir.create("output", showWarnings = FALSE)
+
+# Create an empty list to store the plot objects
+plot_list <- list()
+
+for (group_name in grouping_vars) {
+  # Print progress to the console
+  print(paste("--- Generating plot for:", group_name, "---"))
+
+  # The main plotting function with the corrected 'x' argument
+  p <- ggbetweenstats(
+    data = d,
+    x = !!sym(group_name),
+    y = BMI,
+    title = paste("BMI by", group_name),
+    xlab = group_name
+  )
+
+  # Store the generated plot object in our list
+  plot_list[[group_name]] <- p
+
+  # Save the plot as a PNG file in the 'output' folder
+  ggsave(
+    filename = file.path("output", paste0("plot_BMI_by_", group_name, ".png")),
+    plot = p,
+    width = 11,
+    height = 8.5,
+    units = "in",
+    dpi = 300
+  )
+}
+
+print("---------------------------------------------------------")
+print("All plots have been generated and saved to the 'output' folder.")
+```
+#Visualize overlap in group membership for factor variables BDEFS_RI_avg_g3, BDEFS_WM_avg_g2, CSS_Hyp_Count_g3, CSS_HypImp_g2, CSS_HypImp_g3, CSS_Imp_Count_g3, CSS_Imp_Count_g4, CSS_Inatt_Count_g3, CSS_Inatt_Count_g4, CSS_Inatt_g3, CSS_Inatt_g4, DRSP_1_g2, DRSP_1_g4, DRSP_2_g3, DRSP_2_g4, DRSP_3_g3, DRSP_4_g3, DRSP_4_g5, DRSP_5_g3, DRSP_6_g4, DRSP_7_g2, DRSP_9_g3, DRSP_9_g4, DRSP_10_g3, DRSP_10_g4, DRSP_11_g3, DRSP_12_g3, DRSP_13_g3, DRSP_13_g4, DRSP_14_g3, DRSP_14_g4, DRSP_15_g3, DRSP_15_g4, DRSP_16_g3, DRSP_16_g4, DRSP_17_g3, DRSP_17_g4, DRSP_18_g2, DRSP_18_g3, DRSP_19_g2, DRSP_19_g3, DRSP_19_g4, DRSP_20_g3, DRSP_20_g4, DRSP_21_g4, DRSP_22_g2, DRSP_23_g2, DRSP_23_g3, DRSP_23_g4, DRSP_23_g5, P4_g4, score_pinball_g2, score_robot_g2, score_robot_g3; these are factor variables with group numbers as response options and for some of them people don't have a value and it's NA
+
+
+# Output the dataset 
+```{r}
+write.csv(d, file = here("data", "ADHD_Cycle_SMMgroups_Traits_merged.csv"), row.names = FALSE)
+
+#rdata
+save(d, file = here("data", "ADHD_Cycle_SMMgroups_Traits_merged.RData"))
+```
+
+
+
+
