@@ -1,10 +1,6 @@
-<<<<<<< Updated upstream
 # History files
 .Rhistory
 .Rapp.history
-=======
-
->>>>>>> Stashed changes
 
 # Session Data files
 .RData
@@ -22,12 +18,9 @@
 # Output files from R CMD check
 /*.Rcheck/
 
-<<<<<<< Updated upstream
 # RStudio files
 .Rproj.user/
 *.Rproj
-=======
->>>>>>> Stashed changes
 
 # Produced vignettes
 vignettes/*.html
@@ -53,7 +46,6 @@ cache/
 .Rprofile
 
 # Data files 
-<<<<<<< Updated upstream
 data/
 *.csv
 *.tsv
@@ -62,16 +54,6 @@ data/
 *.dta
 *.rds
 *.RData
-=======
- data/
- *.csv
- *.tsv
- *.xlsx
- *.sav
- *.dta
- *.rds
- *.RData
->>>>>>> Stashed changes
 
 # Logs and output
 *.log
@@ -122,9 +104,4 @@ venv.bak/
 
 # Other IDEs
 .idea/
-<<<<<<< Updated upstream
 .vscode/
-=======
-.vscode/
-.Rproj.user
->>>>>>> Stashed changes
