@@ -1,4 +1,117 @@
-.Rproj.user
+# History files
 .Rhistory
+.Rapp.history
+
+# Session Data files
 .RData
+.RDataTmp
+
+# User-specific files
 .Ruserdata
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+*.Rproj
+.Rproj.user
+.Rproj.user/*
+.Rproj.user/*/sdb
+.Rproj.user/*/db
+.Rproj.user/*/project_state
+.Rproj.user/*/shared/notebooks/*
+.Rproj.user/*/sources/
+.Rproj.user/*/saved_source_markers
+.Rproj.user/*/unsaved
+
+# Produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+vignettes/*.R
+
+# OAuth2 tokens, credentials, or API keys
+*.httr-oauth
+
+# knitr and R markdown cache
+*_cache/
+cache/
+*.utf8.md
+*.knit.md
+
+# Temporary files created by R markdown
+*.utf8.md
+*.knit.md
+*.nb.html
+
+# R environment files
+.Renviron
+.Rprofile
+
+# Data files 
+ data/
+ *.csv
+ *.tsv
+ *.xlsx
+ *.sav
+ *.dta
+ *.rds
+ *.RData
+
+# Logs and output
+*.log
+*.out
+*.aux
+*.toc
+
+# Figures and generated outputs
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.pdf
+*.svg
+*.eps
+figure/
+figures/
+plots/
+output/
+zArchive/
+*.pptx
+
+# pkgdown site
+docs/
+
+# Mac-specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows-specific
+Thumbs.db
+Desktop.ini
+
+# Python / reticulate artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+
+# Other IDEs
+.idea/
+.vscode/
+
