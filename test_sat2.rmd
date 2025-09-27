@@ -561,11 +561,11 @@ for (row in 1:nrow(metrics_to_plot)) {
     
     p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
       geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
-      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "purple", linewidth = 1) +
-      geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
       # --- FIX: Apply the date range limit to the x-axis scale ---
       scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
-      scale_color_manual(values = c("E2" = "#d95f02", "LH" = "#1b9e77", "P4" = "#7570b3")) +
+      scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
       labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
       theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
       
@@ -587,23 +587,7 @@ for (row in 1:nrow(metrics_to_plot)) {
 cat("--- All hormone plots generated successfully! ---\n")
 ```
 
-# 8\. EXPORT FINAL DATASETS
 
-```{r export-data}
-# --- Define File Names ---
-file_base_main <- paste0("adhd_daily_scaled_", format(Sys.Date(), "%Y%m%d"))
-file_base_sens <- paste0("adhd_daily_SENS_scaled_", format(Sys.Date(), "%Y%m%d"))
-
-# --- Save Main Scaled Dataset ---
-write.csv(df_scaled, file.path(output_folder, paste0(file_base_main, ".csv")), row.names = FALSE)
-save(df_scaled, file = file.path(output_folder, paste0(file_base_main, ".RData")))
-
-# --- Save Sensitivity Dataset ---
-write.csv(df_sens, file.path(output_folder, paste0(file_base_sens, ".csv")), row.names = FALSE)
-save(df_sens, file = file.path(output_folder, paste0(file_base_sens, ".RData")))
-
-cat("Final datasets exported successfully to:", output_folder, "\n")
-```
 
 # Hormone Data Cleaning
 # Calculate robust Z-scores for each hormone within each person
@@ -641,4 +625,268 @@ ggsave(filename = file.path(output_folder, "robust_z_score_distributions.png"), 
 #outliers_mad <- df_with_robust_z %>% filter(abs(E2_robust_z) > 3.5 | abs(P4_robust_z) > 3.5)
 ```
 
+# Print histogram of all E2 variables to visually inspect for outliers
+```{r}
 
+
+e2_histogram <- df %>%
+  ggplot(aes(x = E2)) +
+  geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Histogram of E2 Values", x = "E2", y = "Count") +
+  theme_light()
+print(e2_histogram)
+
+ggsave(filename = file.path(output_folder, "e2_histogram.png"), plot = e2_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for person-standardized values
+e2_person_std_histogram <- df %>%
+  ggplot(aes(x = E2.zd)) +
+  geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
+  labs(title = "Histogram of Person-Standardized E2 Values", x = "E2 Person-Standardized (d)", y = "Count") +
+  theme_light() 
+print(e2_person_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_person_standardized_histogram.png"), plot = e2_person_std_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for sample-standardized values
+e2_sample_std_histogram <- df %>%
+  ggplot(aes(x = E2.szd)) +
+  geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
+  labs(title = "Histogram of Sample-Standardized E2 Values", x = "E2 Sample-Standardized (szd)", y = "Count") +
+  theme_light()
+print(e2_sample_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_sample_standardized_histogram.png"), plot = e2_sample_std_histogram, width = 8, height = 5, dpi = 300)
+
+# Test whether a log transform improves the distribution
+e2_log_histogram <- df %>%
+  mutate(E2_log = log(E2 + 1)) %>% # Add 1
+  ggplot(aes(x = E2_log)) +
+  geom_histogram(bins = 100, fill = "orange", alpha = 0.7)+
+  labs(title
+       = "Histogram of Log-Transformed E2 Values", x = "Log(E2 + 1)", y = "Count") +
+  theme_light()
+print(e2_log_histogram)
+ggsave(filename = file.path(output_folder, "e2_log_transformed_histogram.png"),
+       plot = e2_log_histogram, width = 8, height = 5, dpi = 300)
+
+# Stack the four histograms together for comparison
+combined_e2_histograms <- ggarrange(
+  e2_histogram + rremove("x.text") + rremove("x.title"),
+  e2_person_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_sample_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_log_histogram,
+  ncol = 1, nrow = 4,
+  labels = c("A", "B", "C", "D"),
+  common.legend = TRUE, legend = "right"
+)
+print(combined_e2_histograms)
+ggsave(filename = file.path(output_folder, "combined_e2_histograms.png"),
+       plot = combined_e2_histograms, width = 8, height = 16,
+       dpi = 300)
+
+```
+
+# Plot Descriptives for Hormones
+```{r}
+# --- Reusable Function Version ---
+
+# 1. Define the function
+plot_distributions <- function(data, var_name) {
+  # Define the column names based on the input variable
+  raw_col <- rlang::sym(var_name)
+  zd_col <- rlang::sym(paste0(var_name, ".zd"))
+  szd_col <- rlang::sym(paste0(var_name, ".szd"))
+  log_col <- rlang::sym(paste0(var_name, "_log"))
+
+  # The same data wrangling logic as before
+  data_long <- data %>%
+    mutate(!!log_col := log1p(!!raw_col)) %>%
+    select(!!raw_col, !!zd_col, !!szd_col, !!log_col) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "Transformation",
+      values_to = "Value"
+    ) %>%
+    mutate(Transformation = factor(Transformation,
+      levels = c(rlang::as_string(raw_col), rlang::as_string(zd_col), rlang::as_string(szd_col), rlang::as_string(log_col)),
+      labels = c("Raw", "Person-Standardized", "Sample-Standardized", "Log-Transformed")
+    ))
+
+  # The same plotting logic
+  p <- ggplot(data_long, aes(x = Value)) +
+    geom_histogram(bins = 50, fill = "#D55E00", alpha = 0.8) +
+    facet_wrap(~Transformation, ncol = 2, scales = "free_x") +
+    labs(
+      title = paste("Distributions of", var_name, "Under Different Transformations"),
+      x = paste(var_name, "Value"),
+      y = "Count"
+    ) +
+    theme_light()
+
+  return(p)
+}
+
+# 2. Use the function to create, print, and save plots for E2
+e2_comparison_plot <- plot_distributions(df, "E2")
+print(e2_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "E2_comparison_distributions.png"),
+  plot = e2_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for P4
+p4_comparison_plot <- plot_distributions(df, "P4")
+print(p4_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "P4_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for LH
+LH_comparison_plot <- plot_distributions(df, "LH")
+print(LH_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "LH_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+```
+
+# Plot Correlations
+```{r}
+# --- Add this code chunk to your R Markdown file ---
+
+# 1. Load necessary libraries (if not already loaded)
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggcorrplot)
+library(RColorBrewer)
+
+# 2. Define the function
+generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
+  
+  # --- Step 1: Initialize the results matrix ---
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  
+  # --- Step 2: Calculate Between-Person Correlations (Upper Triangle) ---
+  # Spearman correlation on person-mean scores
+  cat("Calculating between-person correlations (upper triangle)...\n")
+  person_means <- data %>%
+    group_by(!!sym(id_var)) %>%
+    summarise(across(all_of(outcome_vars), ~mean(., na.rm = TRUE)))
+  
+  between_corr <- cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  results_matrix[upper.tri(results_matrix)] <- between_corr[upper.tri(between_corr)]
+  
+  # --- Step 3: Calculate Intra-Class Correlations (Diagonal) ---
+  cat("Calculating Intra-Class Correlations (diagonal)...\n")
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    formula <- as.formula(paste0(var, " ~ 1 + (1|", id_var, ")"))
+    
+    # Ensure there's enough data to fit the model
+    if (sum(!is.na(data[[var]])) > 1) {
+      model <- lmer(formula, data = data)
+      icc_val <- icc(model)$ICC_adjusted
+      results_matrix[i, i] <- icc_val
+    }
+  }
+  
+  # --- Step 4: Calculate Within-Person Correlations (Lower Triangle) ---
+  # Repeated measures correlation (rmcorr)
+  cat("Calculating within-person correlations (lower triangle)...\n")
+  for (i in 1:n_vars) {
+    for (j in 1:n_vars) {
+      if (i > j) { # Only calculate for the lower triangle
+        var1 <- outcome_vars[i]
+        var2 <- outcome_vars[j]
+        
+        # rmcorr requires a dataframe with no missing values for the pair
+        rmcorr_data <- data %>%
+          select(!!sym(id_var), !!sym(var1), !!sym(var2)) %>%
+          drop_na()
+        
+        # Ensure there's enough data
+        if (nrow(rmcorr_data) > 0) {
+          rmcorr_result <- rmcorr(participant = !!sym(id_var), 
+                                  measure1 = !!sym(var1), 
+                                  measure2 = !!sym(var2), 
+                                  dataset = rmcorr_data)
+          results_matrix[i, j] <- rmcorr_result$r
+        }
+      }
+    }
+  }
+  
+  # --- Step 5: Generate the Publication-Ready Plot ---
+  cat("Generating plot...\n")
+  
+  plot <- ggcorrplot(
+    corr = results_matrix,
+    method = "square",
+    type = "full",
+    lab = TRUE, # Add correlation coefficients
+    lab_size = 3.5,
+    outline.color = "white",
+    ggtheme = ggplot2::theme_minimal(base_size = 14),
+    colors = c("#6D9EC1", "white", "#E46726"), # Blue, white, orange color scheme
+    title = "Multilevel Correlation Matrix of Daily Outcomes",
+    legend.title = "Correlation"
+  ) +
+    labs(
+      caption = "Upper Triangle: Between-person Spearman ρ (on person-means)\nDiagonal: Intra-Class Correlation (ICC)\nLower Triangle: Within-person repeated measures r"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.caption = element_text(hjust = 0, size = 12),
+      axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y = element_text(face="bold"),
+      legend.position = "right",
+      panel.grid.major = element_blank() # Clean up the background
+    )
+  
+  return(plot)
+}
+
+# --- Example Usage ---
+
+# Define your list of daily outcome variables
+#my_dv_list <- c("CSS_Inatt", "CSS_HypImp", "BDEFS_Total", "UPPS_PU_avg", "DEBQ_Total")
+#alldailyvars
+
+# Generate the plot (assuming your data is in 'df' and ID is 'id')
+correlation_heatmap <- generate_correlation_heatmap(data = df_scaled, 
+                                                   outcome_vars = alldailyvars, 
+                                                   id_var = "id")
+
+# Print the plot to the screen
+print(correlation_heatmap)
+
+# Save the plot to your output folder
+ggsave(filename = file.path(output_folder, "multilevel_correlation_heatmap.png"), 
+       plot = correlation_heatmap, 
+       width = 12, height = 10, dpi = 300)
+```
+
+
+
+# 8\. EXPORT FINAL DATASETS
+
+```{r export-data}
+# --- Define File Names ---
+file_base_main <- paste0("adhd_daily_scaled_", format(Sys.Date(), "%Y%m%d"))
+file_base_sens <- paste0("adhd_daily_SENS_scaled_", format(Sys.Date(), "%Y%m%d"))
+
+# --- Save Main Scaled Dataset ---
+write.csv(df_scaled, file.path(output_folder, paste0(file_base_main, ".csv")), row.names = FALSE)
+save(df_scaled, file = file.path(output_folder, paste0(file_base_main, ".RData")))
+
+# --- Save Sensitivity Dataset ---
+write.csv(df_sens, file.path(output_folder, paste0(file_base_sens, ".csv")), row.names = FALSE)
+save(df_sens, file = file.path(output_folder, paste0(file_base_sens, ".RData")))
+
+cat("Final datasets exported successfully to:", output_folder, "\n")
+```
