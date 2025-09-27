@@ -259,15 +259,19 @@ final_df <- final_df %>%
   # Filter as character (assuming id is character or can be forced)
   filter(!(id == 270 & date > as.Date("2022-12-03"))) %>%
   filter(!(id == 279 & date > as.Date("2022-12-29"))) %>%
-  filter(!(id == 323 & date > as.Date("2023-01-14"))) %>%
+  filter(!(id == 323 & date > as.Date("2024-01-14"))) %>%
   filter(!(id == 327 & date > as.Date("2024-12-31"))) %>%
   filter(!(id == 347 & date < as.Date("2024-12-10"))) %>%
   filter(!(id == 210 & date > as.Date("2020-12-31"))) %>%
+  filter(!(id == 288 & date == as.Date("2021-12-14"))) %>% # Known bad data point
+  filter(!(id == 238 & date < as.Date("2021-04-21"))) %>% # Known bad data point
    mutate(id = as.factor(id)) # Convert to factor at the END
 cat("Filtered out known bad data points.\n")
 
 # Inspect specific participants
-#final_df %>% filter(id == 347) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
+final_df %>% filter(id == 323) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
+
+
 ```
 
 
@@ -520,8 +524,9 @@ df_sens <- df_scaled %>%
 
 cat("Analysis and PACTS scaling complete.\n")
 
-# View data for id 270
-View(df_scaled %>% filter(id == 323))
+
+#View(df_scaled)
+
 ```
 
 # 7\. GENERATE HORMONE PLOTS
