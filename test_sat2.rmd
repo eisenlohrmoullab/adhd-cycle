@@ -9,6 +9,7 @@ output:
 date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 ---
 
+
 ```{r setup, include=FALSE}
 # This chunk sets the global options for the entire R Markdown document.
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
@@ -47,6 +48,7 @@ conflict_prefer("select", "dplyr")
 # 3\. CONFIGURATION
 
 ```{r config}
+
 # This is the single control panel for the pipeline. To adapt this script for a
 # new project, a user should only need to edit the settings in this chunk.
 
@@ -54,22 +56,16 @@ conflict_prefer("select", "dplyr")
 # Define the full path to each raw data file needed for the analysis.
 
 path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
-
 path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24.Daily Master.xls"
-
 path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
-
 path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
-
 path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-27/ADHDCYCLE_menses_ov_dates_FINAL.xls"
-
 path_omit_ids <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_omit.xlsx"
 
 # --- Output Folder ---
 
 # Define a base output location and create a unique, timestamped subfolder for this specific run.
 output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
-
 output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
 if (!dir.exists(output_folder)) {
   dir.create(output_folder, recursive = TRUE)
@@ -77,14 +73,12 @@ if (!dir.exists(output_folder)) {
 
 # --- Variable Lists ---
 # Define the final variable names that will be processed and analyzed.
-
 dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
 hormlist <- c("E2", "P4", "LH")
 alldailyvars <- c(dv_list, hormlist)
 
 # --- Plotting Configuration ---
 # This table controls which plots are generated in the final plotting loop.
-
 metrics_to_plot <- tibble::tribble(
   # ~metric_filter: Which calculated metric to plot.
   # ~folder_name: The subfolder where these plots will be saved.
@@ -95,9 +89,8 @@ metrics_to_plot <- tibble::tribble(
   "raw", "01_raw_faceted", "Raw Daily Values", TRUE, "Hormone Value",
   "3roll", "02_raw_3roll_faceted", "3-Day Rolling Average", TRUE, "Hormone Value",
   "5roll", "03_raw_5roll_faceted", "5-Day Rolling Average", TRUE, "Hormone Value",
-  "zd", "04_person_standardized", "Person-Standardized Daily Values", FALSE, "Standardized Value (Z-Score)",
-  "szd", "05_sample_standardized", "Sample-Standardized Daily Values", FALSE, "Standardized Value (Z-Score)"
-)
+  "3roll.zd", "04_person_standardized_3roll", "Person-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)",
+  "3roll.szd", "05_sample_standardized_3roll", "Sample-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)")
 ```
 
 ```{r}
@@ -538,9 +531,10 @@ cat("Analysis and PACTS scaling complete.\n")
 hormones_long_all <- df %>%
   select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
   pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  # --- FIX: Use a more robust separator logic for names like "3roll.zd" ---
   separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
   mutate(
-    metric = replace_na(metric, "raw"),
+    metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
     hormone = factor(hormone, levels = c("E2", "LH", "P4"))
   )
 
@@ -550,25 +544,34 @@ for (row in 1:nrow(metrics_to_plot)) {
   metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
   plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
   y_label <- metrics_to_plot$y_axis_label[row]
+  
   current_output_dir <- file.path(output_folder, folder_name)
   if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  
   cat("--- Generating plots for metric:", metric_name, "---\n")
+  
   for (person_id in ids_list) {
     plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
     if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    
     vline_data <- df %>% filter(id == person_id)
+    
+    # --- FIX: Explicitly define the full date range for the participant ---
+    date_range <- range(vline_data$date, na.rm = TRUE)
+    
     p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
       geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
       geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "purple", linewidth = 1) +
       geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
-      scale_x_date(breaks = "1 day", date_labels = "%b %d") +
+      # --- FIX: Apply the date range limit to the x-axis scale ---
+      scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
       scale_color_manual(values = c("E2" = "#d95f02", "LH" = "#1b9e77", "P4" = "#7570b3")) +
       labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
       theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+      
     if (should_facet) {
-      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) + 
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) +
                theme(legend.position = "none")
-      # Horizontal line for P4 at y=82 if metric is raw, 3roll, or 5roll
       if (metric_name %in% c("raw", "3roll", "5roll")) {
         hline_data <- tibble(hormone = "P4", y = 82)
         p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
@@ -576,6 +579,7 @@ for (row in 1:nrow(metrics_to_plot)) {
     } else {
       p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
     }
+    
     plot_height <- if (should_facet) 8 else 7
     ggsave(filename = file.path(current_output_dir, paste0("plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
   }
@@ -600,3 +604,41 @@ save(df_sens, file = file.path(output_folder, paste0(file_base_sens, ".RData")))
 
 cat("Final datasets exported successfully to:", output_folder, "\n")
 ```
+
+# Hormone Data Cleaning
+# Calculate robust Z-scores for each hormone within each person
+
+```{r}
+df_with_robust_z <- df %>%
+  group_by(id) %>%
+  mutate(
+    E2_robust_z = (0.6745 * (E2 - median(E2, na.rm = TRUE))) / mad(E2, na.rm = TRUE),
+    P4_robust_z = (0.6745 * (P4 - median(P4, na.rm = TRUE))) / mad(P4, na.rm = TRUE),
+    LH_robust_z = (0.6745 * (LH - median(LH, na.rm = TRUE))) / mad(LH, na.rm = TRUE)
+  ) %>%
+  ungroup()
+```
+
+# Visualize the robust Z-scores to identify outliers
+
+```{r}
+
+robust_z_plot <- df_with_robust_z %>%
+  pivot_longer(cols = c(E2_robust_z, P4_robust_z, LH_robust_z), names_to = "hormone", values_to = "robust_z") %>%
+  ggplot(aes(x = robust_z, fill = hormone)) +
+  geom_histogram(bins = 50, alpha = 0.6, position = "identity") +
+  facet_wrap(~ hormone, scales = "free") +
+  labs(title = "Distribution of Robust Z-Scores for Hormones", x = "Robust Z-Score", y = "Count") +
+  theme_light() + theme(legend.position = "none")
+print (robust_z_plot)
+ggsave(filename = file.path(output_folder, "robust_z_score_distributions.png"), plot = robust_z_plot, width = 10, height = 6, dpi = 300)
+
+```
+
+# Now you could easily filter out for potential outliers
+
+```{r}
+#outliers_mad <- df_with_robust_z %>% filter(abs(E2_robust_z) > 3.5 | abs(P4_robust_z) > 3.5)
+```
+
+
