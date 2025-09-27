@@ -444,7 +444,13 @@ df <- df %>%
   # Step 3c: Calculate sample-standardized metrics (.szd).
   mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")), .fns = list(szd = ~ (. - mean(., na.rm=T)) / sd(., na.rm=T)), .names = "{.col}.{.fn}"))
 
+# Sort df by id and date
+df <- df %>%
+  arrange(id, date)
+
 cat("All processing and metric calculation complete.\n")
+
+
 ```
 
 # 6\. DATA EXPLORATION & ANALYSIS
@@ -483,12 +489,27 @@ df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars))
 df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
 
 # --- 4. Create PACTS Check Plots ---
-pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
-if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder)
+# Set your variables to check
 pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DEBQ_Total")
+
+# Run the check function ONCE for all variables
+results <- menstrualcycleR::cycledata_check(df_scaled, symptom_columns = pacts_vars_to_check)
+
+# Print each plot to the active R device (e.g., RStudio Plots pane)
 for (var in pacts_vars_to_check) {
-  p <- cycledata_check(df_scaled, var)
-  ggsave(filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")), plot = p, width = 8, height = 6, dpi = 300)
+  print(results$data_symptom_plots[[var]])
+}
+
+# Save each plot to PNG
+pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
+if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder, recursive = TRUE)
+
+for (var in pacts_vars_to_check) {
+  ggsave(
+    filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")),
+    plot = results$data_symptom_plots[[var]],
+    width = 8, height = 6, dpi = 300
+  )
 }
 
 # --- 5. Create Sensitivity Dataset ---
