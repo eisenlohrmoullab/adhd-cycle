@@ -73,7 +73,7 @@ standardize_index_names <- function(df) {
 
 path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
 
-path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24.Daily Master.csv"
+path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24.Daily Master.xls"
 
 path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
 
@@ -118,39 +118,76 @@ metrics_to_plot <- tibble::tribble(
 )
 ```
 
-
 ```{r}
-library(readr)
-library(haven)
-library(dplyr)
-library(lubridate)
-library(tidyr)
-library(rlang)
+# Load required libraries for data import, manipulation, visualization, and date handling
+library(readr)       # For reading CSV files
+library(readxl)      # For reading Excel files
+library(haven)       # For reading SPSS (SAV) files
+library(dplyr)       # For data wrangling
+library(lubridate)   # For date parsing/manipulation
+library(tidyr)       # For tidying data
+library(rlang)       # For tidy evaluation
+library(ggvenn)      # For Venn diagrams
+library(visdat)      # For missing data visualization
 
 # --- 1. Load All Data Sources ---
+# Read each raw data source from its respective file path
 raw_daily <- read_sav(path_raw_daily)
-raw_daily_2 <- read_csv(path_raw_daily_2)
+raw_daily_2 <- read_xls(path_raw_daily_2)
 supp_hormones_all <- read_csv(path_supp_hormones, show_col_types = FALSE)
 final_hormone_batch <- read_csv(path_final_hormone_batch, show_col_types = FALSE)
 
 # --- 2. Standardize id/daterated column names for all sources ---
+# Function to rename columns in each data frame to a common set for merging
 standardize_index_names <- function(df) {
   df %>%
     rename_with(~ case_when(
       str_detect(.x, regex("^(id|subjectid|ID)$", ignore_case=TRUE)) ~ "id",
       str_detect(.x, regex("^(date.?rated|date_rated|dateRated|rated_date|date)$", ignore_case=TRUE)) ~ "daterated",
+      str_detect(.x, regex("^(estradiol|estrogen|e2|E2)$", ignore_case=TRUE)) ~ "E2",
+      str_detect(.x, regex("^(progesterone|p4|prog|P4)$", ignore_case=TRUE)) ~ "P4",
+      str_detect(.x, regex("^(lh|LH|LH_level)$", ignore_case=TRUE)) ~ "LH",
+      str_detect(.x, regex("^(LH_sterr)$", ignore_case=TRUE)) ~ "LH_sterr",
       TRUE ~ .x
     ))
 }
+# Apply renaming function to all data frames
 raw_daily <- standardize_index_names(raw_daily)
 raw_daily_2 <- standardize_index_names(raw_daily_2)
 supp_hormones_all <- standardize_index_names(supp_hormones_all)
 final_hormone_batch <- standardize_index_names(final_hormone_batch)
 
-# --- 3. Harmonize column types across all files ---
+# --- 3. Create provenance flags for Venn diagram ---
+# Add indicator columns to track which source each row came from
+raw_daily <- raw_daily %>% mutate(source_raw_daily = TRUE)
+raw_daily_2 <- raw_daily_2 %>% mutate(source_raw_daily_2 = TRUE)
+supp_hormones_all <- supp_hormones_all %>% mutate(source_supp_hormones = TRUE)
+final_hormone_batch <- final_hormone_batch %>% mutate(source_final_batch = TRUE)
+
+# --- 4. Force all daterated columns to "YYYY-MM-DD" string and remove missing keys ---
+# Function to parse dates, coercing to "YYYY-MM-DD" format or fallback to "MM/DD/YYYY"
+force_ymd <- function(x) {
+  x <- as.character(x)
+  ymd_x <- suppressWarnings(ymd(x))
+  ifelse(!is.na(ymd_x), as.character(ymd_x), suppressWarnings(as.character(mdy(x))))
+}
+# Apply date coercion to each data frame's 'daterated' column
+raw_daily$daterated <- force_ymd(raw_daily$daterated)
+raw_daily_2$daterated <- force_ymd(raw_daily_2$daterated)
+supp_hormones_all$daterated <- force_ymd(supp_hormones_all$daterated)
+final_hormone_batch$daterated <- force_ymd(final_hormone_batch$daterated)
+
+# Remove rows where 'id' or 'daterated' is missing in any data frame
+for (df_name in c("raw_daily", "raw_daily_2", "supp_hormones_all", "final_hormone_batch")) {
+  df <- get(df_name)
+  df <- df %>% filter(!is.na(id) & !is.na(daterated))
+  assign(df_name, df)
+}
+
+# --- 5. Harmonize column types across all files ---
+# Function to make sure columns with the same name have the same type (convert to character if types mismatch)
 harmonize_types <- function(dfs) {
   all_names <- unique(unlist(lapply(dfs, names)))
-  # Get the first non-NULL type for each column in each df
   get_type <- function(x) if (is.null(x)) NA else class(x)[1]
   types <- lapply(dfs, function(df) sapply(all_names, function(nm) get_type(df[[nm]])))
   type_matrix <- do.call(rbind, types)
@@ -164,27 +201,51 @@ harmonize_types <- function(dfs) {
   }
   dfs
 }
+# Harmonize types across all four sources
 data_sources <- harmonize_types(list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch))
-
 raw_daily      <- data_sources[[1]]
 raw_daily_2    <- data_sources[[2]]
 supp_hormones_all <- data_sources[[3]]
 final_hormone_batch <- data_sources[[4]]
 
-# --- 4. Full outer join all data sources by id/daterated ---
-# (Reduce full_join over all sources)
+# --- 6. Full outer join all data sources by id/daterated ---
+# Merge all four data frames fully by 'id' and 'daterated'
 all_dfs <- list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch)
 merged_df <- Reduce(function(x, y) full_join(x, y, by = c("id", "daterated")), all_dfs)
 
-# --- 5. Coalesce all columns with duplicate names (maximally filled version) ---
-# Get all unique variable stems (ignore .x/.y/.final/etc)
-base_vars <- unique(gsub("\\..*$", "", names(merged_df)))
-# Remove id/daterated from base_vars, will handle separately
-base_vars <- setdiff(base_vars, c("id", "daterated"))
-
-# For each variable, coalesce all columns with that stem
+# --- 7. Maximally fill each key variable from your explicit list ---
+# List of all output variables to fill
+final_vars <- c(
+  "id", "daterated", "TubeNumber", "E2", "P4", "LH", "E2_stderr", "P4_stderr", "LH_sterr",
+  "VisitNumbers", "DEBQ_avg", "BDEFS_1", "BDEFS_2", "BDEFS_3", "BDEFS_4", "BDEFS_5", "BDEFS_6",
+  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7",
+  "DRSP_8", "DRSP_9", "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14",
+  "DRSP_15", "DRSP_16", "DRSP_17", "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21",
+  "DRSP_22", "DRSP_23", "CSS_B_1", "CSS_B_2", "CSS_B_3", "CSS_B_4",
+  "CSS_B_5", "CSS_B_6", "CSS_B_7", "CSS_B_8", "CSS_B_9", "CSS_B_10",
+  "CSS_B_11", "CSS_B_12", "CSS_B_13", "CSS_B_14", "CSS_B_15", "CSS_B_16",
+  "CSS_B_17", "CSS_B_18", "CSS_Function_1", "CSS_Function_2", "CSS_Function_3",
+  "CSS_Function_4", "CSS_Function_5", "CSS_Function_6", "CSS_Function_7",
+  "CSS_Function_8", "CSS_Function_9", "CSS_Function_10", "CSS_B2_1",
+  "CSS_B2_2", "CSS_B2_3", "CSS_B2_4", "CSS_B2_5", "CSS_B2_6", "CSS_B2_7",
+  "CSS_B2_8", "UPPS_1", "UPPS_2", "UPPS_3", "UPPS_4", "UPPS_5", "UPPS_6",
+  "UPPS_7", "UPPS_8", "UPPS_9", "UPPS_10", "UPPS_11", "UPPS_12", "UPPS_13",
+  "UPPS_14", "UPPS_15", "DEBQ_1", "DEBQ_2", "DEBQ_3", "DEBQ_4", "DEBQ_5",
+  "DEBQ_6", "DEBQ_7", "DEBQ_8", "DEBQ_9", "DEBQ_10", "DEBQ_11", "DEBQ_12",
+  "DEBQ_13", "CSS_1_Count", "CSS_2_Count", "CSS_3_Count", "CSS_4_Count",
+  "CSS_5_Count", "CSS_6_Count", "CSS_7_Count", "CSS_8_Count", "CSS_9_Count",
+  "CSS_10_Count", "CSS_11_Count", "CSS_12_Count", "CSS_13_Count", "CSS_14_Count",
+  "CSS_15_Count", "CSS_16_Count", "CSS_17_Count", "CSS_18_Count", "UPPS_NU_avg",
+  "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg",
+  "score_pinball", "score_robot", "hormone_assay_note",
+  "source_raw_daily", "source_raw_daily_2", "source_supp_hormones", "source_final_batch"
+)
+# Helper functions for maximal filling via coalescing values across columns that share a base name
+get_base_names <- function(nms) {
+  gsub("\\..*$", "", nms)
+}
 maxfill_coalesce <- function(df, base) {
-  cols <- names(df)[grepl(paste0("^", base, "(\\.|$)"), names(df))]
+  cols <- names(df)[get_base_names(names(df)) == base]
   if (length(cols) == 0) {
     return(rep(NA, nrow(df)))
   } else if (length(cols) == 1) {
@@ -193,164 +254,125 @@ maxfill_coalesce <- function(df, base) {
     return(coalesce(!!!df[cols]))
   }
 }
-
-# Get all unique variable stems (ignore .x/.y/.final/etc)
-base_vars <- unique(gsub("\\..*$", "", names(merged_df)))
-base_vars <- setdiff(base_vars, c("id", "daterated", "")) # Remove id, daterated, and empty string
-
-# For each variable, coalesce all columns with that stem
-for (v in base_vars) {
+# Apply maximal fill for each variable in the output list
+for (v in final_vars) {
   merged_df[[v]] <- maxfill_coalesce(merged_df, v)
 }
 
-# Keep only maximally-filled columns (id, daterated, and all base_vars)
+# --- 8. Select only the manually specified variables in the final output (including provenance flags) ---
+# Subset merged data to just those columns, and filter out any rows missing 'id' or 'daterated'
 final_df <- merged_df %>%
-  select(id, daterated, all_of(base_vars)) %>%
+  select(all_of(final_vars)) %>%
   filter(!is.na(id) & !is.na(daterated))
+
+# --- 9. Restore id/daterated types for analysis
+# Convert 'id' to numeric, 'daterated' to Date, and set NA provenance flags to FALSE (logical)
+final_df <- final_df %>%
+  mutate(
+    id = as.numeric(id),
+    daterated = as.Date(daterated),
+    source_raw_daily = ifelse(is.na(source_raw_daily), FALSE, source_raw_daily),
+    source_raw_daily_2 = ifelse(is.na(source_raw_daily_2), FALSE, source_raw_daily_2),
+    source_supp_hormones = ifelse(is.na(source_supp_hormones), FALSE, source_supp_hormones),
+    source_final_batch = ifelse(is.na(source_final_batch), FALSE, source_final_batch)
+  )
 
 cat("Final maximally-filled merged dataset ready.\n")
 
-df <- final_df %>%
-  mutate(
-    id = as.factor(id),
-    daterated = as.Date(daterated),
-    E2 = as.numeric(E2),
-    P4 = as.numeric(P4),
-    LH = as.numeric(LH)
-  )
+# --- 10. Sort by id and daterated ---
+# Arrange rows for analysis, convert id to factor, and create a 'date' column for downstream usage
+final_df <- final_df %>%
+  arrange(id, daterated) %>%
+  mutate(id = as.factor(id)) %>% # Convert id to a factor for analysis 
+  mutate(date=daterated)         # Create a 'date' column for menstrualcycleR functions
 
-
+#View(final_df) # View final data interactively
 ```
 
+
+```{r}
+# Rename final_df to df
+df <- final_df
+```
+
+
+```{r}
+# --- 11. Visualize missing hormone data ---
+# Visualize missingness in key columns using visdat::vis_miss
+miss_plot <- visdat::vis_miss(df %>% select(id, daterated, E2, BDEFS_1, score_pinball))
+# Save plot to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("missingness_", Sys.Date(), ".png")),
+  plot = miss_plot, width = 8, height = 5
+)
+
+# --- 12. Check which ids have the most missing hormone data ---
+# Summarize missing values by id for hormones
+missing_summary <- df %>%
+  group_by(id) %>%
+  summarise(
+    total_days = n(),
+    missing_E2 = sum(is.na(E2)),
+    missing_P4 = sum(is.na(P4)),
+    missing_LH = sum(is.na(LH))
+  ) %>%
+  arrange(desc(missing_E2), desc(missing_P4), desc(missing_LH))
+
+#View(missing_summary) # View summary interactively
+
+# Save summary table to a CSV file
+write_csv(missing_summary, file.path(output_folder, paste0("missing_hormones_by_id_", Sys.Date(), ".csv")))
+
+# --- Venn diagram for IDs with E2 and/or BDEFS data ---
+# Make sets for Venn diagram
+ids_e2 <- df %>%
+  filter(!is.na(E2)) %>%
+  distinct(id) %>%
+  pull(id)
+
+ids_bdefs <- df %>%
+  filter(!is.na(BDEFS_1)) %>%
+  distinct(id) %>%
+  pull(id)
+
+venn_data_e2_bdefs <- list(
+  Has_E2 = ids_e2,
+  Has_BDEFS = ids_bdefs
+)
+
+venn_plot <- ggvenn(venn_data_e2_bdefs, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("e2_bdefs_venn_", Sys.Date(), ".png")),
+  plot = venn_plot, width = 6, height = 4
+)
+
+# --- List IDs with NO E2 and NO BDEFS ---
+# Find IDs lacking both key variables
+ids_all <- unique(df$id)
+ids_neither <- setdiff(ids_all, union(ids_e2, ids_bdefs))
+print(ids_neither)
+# Save to text file
+write_lines(ids_neither, file.path(output_folder, paste0("ids_neither_e2_bdefs_", Sys.Date(), ".txt")))
+
+# --- Table of which IDs have E2 and/or BDEFS ---
+summary_df <- tibble(
+  id = ids_all,
+  has_e2 = id %in% ids_e2,
+  has_bdefs = id %in% ids_bdefs
+)
+#View(summary_df)
+# Save table to CSV
+write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", Sys.Date(), ".csv")))
+
+```
 
 
 # Check Merging and data availability across E2, P4, LH, and CSS_inatt
 ```{r}
 # Check how many unique IDs are present in the final dataset
-unique_ids <- unique(final_df$id)
+unique_ids <- unique(df$id)
 cat("Number of unique IDs in the final dataset:", length(unique_ids), "\n")
-```
-
-
-
-```{r}
-# Check the distribution of days per participant
-days_per_participant <- df %>%
-  group_by(id) %>%
-  summarize(total_days = n(),
-            days_with_E2 = sum(!is.na(E2)),
-            days_with_P4 = sum(!is.na(P4)),
-            days_with_LH = sum(!is.na(LH)),
-            days_with_CSS_Inatt = sum(!is.na(CSS_Inatt)))
-print(head(days_per_participant))
-# Summary statistics for days per participant
-summary(days_per_participant)
-# Histogram of total days per participant
-hist(days_per_participant$total_days, main = "Histogram of Total Days per Participant", xlab = "Total Days", breaks = 20)
-# Histogram of days with E2 per participant
-hist(days_per_participant$days_with_E2, main = "Histogram of Days with E2 per Participant", xlab = "Days with E2", breaks = 20)
-# Histogram of days with P4 per participant
-hist(days_per_participant$days_with_P4, main = "Histogram of Days with P4 per Participant", xlab = "Days with P4", breaks = 20)
-# Histogram of days with LH per participant
-hist(days_per_participant$days_with_LH, main = "Histogram of Days with LH per Participant", xlab = "Days with LH", breaks = 20)
-# Histogram of days with CSS_Inatt per participant
-hist(days_per_participant$days_with_CSS_Inatt, main = "Histogram of Days with CSS_Inatt per Participant", xlab = "Days with CSS_Inatt", breaks = 20)
-# Check for duplicates in id and daterated
-duplicates <- df %>%
-  group_by(id, daterated) %>%
-  filter(n() > 1)
-if (nrow(duplicates) > 0) {
-  cat("Warning: There are duplicate entries for the following id and daterated combinations:\n")
-  print(duplicates)
-} else {
-  cat("No duplicate entries found for id and daterated combinations.\n")
-}
-# Check the range of dates for each participant
-date_range_per_participant <- df %>%
-  group_by(id) %>%
-  summarize(start_date = min(daterated, na.rm = TRUE),
-            end_date = max(daterated, na.rm = TRUE),
-            total_days = n())
-print(head(date_range_per_participant))
-summary(date_range_per_participant)
-# Histogram of total days in study per participant
-hist(date_range_per_participant$total_days, main = "Histogram of Total Days in Study per Participant", xlab = "Total Days in Study", breaks = 20)
-# Check for any IDs with no data at all
-ids_with_no_data <- setdiff(unique_ids, unique(df$id))
-if (length(ids_with_no_data) > 0) {
-  cat("Warning: The following IDs have no data at all:\n")
-  print(ids_with_no_data)
-} else {
-  cat("All IDs have some data.\n")
-}
-# Check the first few rows of the final dataframe
-print(head(df))
-# Check the structure of the final dataframe
-str(df)
-# Check for any unexpected NA values in key columns
-for (var in key_vars) {
-  na_count <- sum(is.na(df[[var]]))
-  cat("Number of NA values for", var, ":", na_count, "\n")
-}
-# Check the overall dimensions of the final dataframe
-cat("Dimensions of the final dataframe (rows, columns):", dim(df), "\n")
-# Check the column names of the final dataframe
-cat("Column names in the final dataframe:\n")
-print(colnames(df))
-# Check the data types of key columns
-cat("Data types of key columns:\n")
-print(sapply(df[key_vars], class))
-# Check for any outliers in key variables using boxplots
-par(mfrow = c(2, 2)) # Set up a 2x2 plotting area
-for (var in key_vars) {
-  boxplot(df[[var]], main = paste("Boxplot of", var), ylab = var)
-}
-par(mfrow = c(1, 1)) # Reset plotting area
-# Check the correlation between key variables
-correlation_matrix <- cor(df[key_vars], use = "pairwise.complete.obs")
-cat("Correlation matrix between key variables:\n")
-print(correlation_matrix)
-# Check the number of unique dates in the dataset
-unique_dates <- unique(df$daterated)
-cat("Number of unique dates in the dataset:", length(unique_dates), "\n")
-# Check the date range of the dataset
-cat("Date range of the dataset:", min(df$daterated, na.rm = TRUE), "to", max(df$daterated, na.rm = TRUE), "\n")
-# Check for any IDs that have data only for a very short period (e.g., less than 7 days)
-short_term_ids <- date_range_per_participant %>%
-  filter(total_days < 7) %>%
-  pull(id)
-if (length(short_term_ids) > 0) {
-  cat("Warning: The following IDs have data for less than 7 days:\n")
-  print(short_term_ids)
-} else {
-  cat("All IDs have data for at least 7 days.\n")
-}
-# Check the distribution of E2, P4, and LH values
-par(mfrow = c(1, 3)) # Set up a 1x3 plotting area
-hist(df$E2, main = "Histogram of E2", xlab = "E2 Values", breaks = 20)
-hist(df$P4, main = "Histogram of P4", xlab = "P4 Values", breaks = 20)
-hist(df$LH, main = "Histogram of LH", xlab = "LH Values", breaks = 20)
-par(mfrow = c(1, 1)) # Reset plotting area
-# Check the distribution of CSS_Inatt values
-hist(df$CSS_Inatt, main = "Histogram of CSS_Inatt", xlab = "CSS_Inatt Values", breaks = 20)
-# Check for any IDs with extreme values in key variables (e.g., beyond 3 standard deviations)
-for (var in key_vars) {
-  mean_val <- mean(df[[var]], na.rm = TRUE)
-  sd_val <- sd(df[[var]], na.rm = TRUE)
-  extreme_ids <- df %>%
-    filter(!is.na(.data[[var]])) %>%
-    filter(.data[[var]] > (mean_val + 3 * sd_val) | .data[[var]] < (mean_val - 3 * sd_val)) %>%
-    pull(id) %>%
-    unique()
-  if (length(extreme_ids) > 0) {
-    cat("Warning: The following IDs have extreme values in", var, ":\n")
-    print(extreme_ids)
-  } else {
-    cat("No extreme values found in", var, "\n")
-  }
-}
-
-
 ```
 
 
