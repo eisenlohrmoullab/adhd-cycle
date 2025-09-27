@@ -1068,35 +1068,8 @@ final_dates <- updates %>%
   arrange(id, date)
 
 View(final_dates)
-
-#names(final_dates)
-#names(df)
-
-# Identify and fix any potential issues with merging df and final_dates by id and date
-# Check for duplicate id and date combinations in final_dates
-duplicates_final_dates <- final_dates %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-View(duplicates_final_dates) #None
-# Check for duplicate id and date combinations in df
-duplicates_df <- df %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-#View(duplicates_df) #several 
-# remove duplicate id and date combinations in df
-df <- df %>%
-  distinct(id, date, .keep_all = TRUE)
-# Recheck for duplicates
-duplicates_df <- df %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-#View(duplicates_df) #None
-
-# Check for ids in final_dates that are not in df
-ids_not_in_df <- setdiff(final_dates$id, df$id)
-ids_not_in_df
-
 ```
+
 
 ```{r}
 # set all menses and ovtoday as missing in df before the upsert
@@ -1106,16 +1079,13 @@ df <- df %>%
 
 # set id and date to be the same format in df and final_dates
 df <- df %>%
-  mutate(id = as.character(id),
+  mutate(id = as.factor(id),
          date = as.Date(date))
 
 final_dates <- final_dates %>%
-  mutate(id = as.character(id),
+  mutate(id = as.factor(id),
          date = as.Date(date))
-```
 
-
-```{r}
 # Merge in updates to menses and ovtoday using rows_upsert to replace existing values by id and date
 # This will add new rows if the id and date combination does not already exist in df
 # Ensure date is in Date format in both dataframes
@@ -1124,6 +1094,24 @@ df <- df %>%
   mutate(date = as.Date(date)) %>%
   rows_upsert(final_dates, by = c("id","date")) %>%
   arrange(id, date)
+```
+
+
+
+```{r}
+# Suppose your original data is in a data frame called 'df'
+
+# Filter rows where menses == 1 or ovtoday == 1
+filtered_df <- subset(df, menses == 1 | ovtoday == 1)
+
+# Select only the specified columns
+output_df <- filtered_df[, c("id", "date", "menses", "ovtoday", "E2", "P4", "LH")]
+
+# Output the resulting data frame (e.g., to the console)
+print(output_df)
+
+# If you want to save it to a CSV file:
+write.csv(output_df, "filtered_observations.csv", row.names = FALSE)
 
 ```
 

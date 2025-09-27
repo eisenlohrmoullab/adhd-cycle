@@ -11,3 +11,11 @@ Encoding: UTF-8
 
 RnwWeave: Sweave
 LaTeX: pdfLaTeX
+
+StripTrailingWhitespace: Yes
+
+MarkdownReferences: Block
+
+ZoteroLibraries: "CLEAR Lab"
+
+SpellingDictionary: en_US

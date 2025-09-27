@@ -1,0 +1,500 @@
+---
+title: "ADHDCYCLE Individual GAM Reports"
+author: "Tory Eisenlohr-Moul, PhD"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: html_document
+---
+
+> **Script Purpose:** Automated, participant-centric analysis of symptom cyclicity using cyclic GAMs.
+> 1) **Setup & Preparation** — load data, define outcomes/layouts, precompute transforms.
+> 2) **Automated Reporting** — one **landscape** PDF per participant with compact cover and paged plots.
+> 3) **CSV Audit** — per-ID × outcome × time-var stats for triage/QC.
+
+---
+
+### 1. Setup & Configuration
+
+#### 1.1: Load Libraries
+```{r setup, message=FALSE}
+#install.packages(c("dplyr","ggplot2","mgcv","patchwork","gridExtra","grid","tibble","tidyr","knitr"))
+
+library(dplyr)
+library(ggplot2)
+library(mgcv)
+library(patchwork)
+library(gridExtra)
+library(grid)
+library(tibble)
+library(tidyr)
+library(knitr)
+
+options(scipen = 999)
+set.seed(12345)
+```
+
+```{r}
+# --- Path to the main output directory ---
+gam_output_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies/Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/6_GAMs/"
+
+# --- Define all Time Variables to iterate over (must be scaled to [-1, 1]) ---
+time_vars_to_run <- c("cyclic_time", "cyclic_time_ov", "cyclic_time_impute", "cyclic_time_imp_ov")
+
+# --- Table Formatting ---
+table_cols_per_page <- 6
+
+# --- Plot Layout (grid per page) ---
+plots_per_col <- 3
+plots_per_row <- 3 
+
+```
+
+```{r}
+# --- Create output folder with current date ---
+current_date <- format(Sys.Date(), "%Y%m%d")
+output_folder <- file.path(gam_output_base, paste0("GAM_Reports_", current_date))
+dir.create(output_folder, showWarnings = FALSE, recursive = TRUE)
+
+# --- Load Scaled Dataset ---
+cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/1_interim_datasets/adhd_daily_df_scaled_20250922.RData"))
+
+# --- Robustness: Verify time variables exist ---
+time_vars <- intersect(time_vars_to_run, names(cycle_df_scaled))
+if (length(time_vars) < length(time_vars_to_run)) {
+  missing_vars <- setdiff(time_vars_to_run, time_vars)
+  warning("The following time_vars were not found and will be skipped: ", paste(missing_vars, collapse = ", "))
+}
+
+```
+
+```{r}
+# --- Define Outcomes to Model ---
+outcomes <- c(
+  "CSS_Inatt_Count" = "CSS Inattention Sx Count", "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
+  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_Inatt" = "CSS Inattention Sx Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity", "score_pinball" = "Working Memory Score (Pinball)",
+  "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", "DRSP_1" = "Depressed Mood", "DRSP_2" = "Hopelessness",
+  "DRSP_3" = "Worthlessness/Guilt", "DRSP_4" = "Anxiety", "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity", "DRSP_7" = "Irritability", "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities", "DRSP_10" = "Difficulty Concentrating", "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite/Overate", "DRSP_13" = "Food Cravings", "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia", "DRSP_16" = "Overwhelmed/Couldn't Cope", "DRSP_17" = "Felt Out of Control",
+  "DRSP_18" = "Breast Tenderness", "DRSP_19" = "Swelling/Bloating", "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain", "DRSP_22" = "Work Impairment", "DRSP_23" = "Relationship Impairment",
+  "E2" = "Estradiol", "P4" = "Progesterone", "LH" = "Luteinizing Hormone"
+)
+
+# --- Define Categories for organization ---
+outcome_categories <- tribble(
+  ~category, ~variable,
+  "ADHD Symptoms (CSS)", "CSS_Inatt_Count", "ADHD Symptoms (CSS)", "CSS_Hyp_Count",
+  "ADHD Symptoms (CSS)", "CSS_Imp_Count", "ADHD Symptoms (CSS)", "CSS_Inatt",
+  "ADHD Symptoms (CSS)", "CSS_HypImp",
+  "Cognitive Score", "score_pinball", "Cognitive Score", "score_robot",
+  "Executive Function (BDEFS)", "BDEFS_WM_avg", "Executive Function (BDEFS)", "BDEFS_RI_avg",
+  "Hormone", "E2", "Hormone", "P4", "Hormone", "LH",
+  "Mood & Physical (DRSP)", "DRSP_1", "Mood & Physical (DRSP)", "DRSP_2", "Mood & Physical (DRSP)", "DRSP_3",
+  "Mood & Physical (DRSP)", "DRSP_4", "Mood & Physical (DRSP)", "DRSP_5", "Mood & Physical (DRSP)", "DRSP_6",
+  "Mood & Physical (DRSP)", "DRSP_7", "Mood & Physical (DRSP)", "DRSP_8", "Mood & Physical (DRSP)", "DRSP_9",
+  "Mood & Physical (DRSP)", "DRSP_10", "Mood & Physical (DRSP)", "DRSP_11", "Mood & Physical (DRSP)", "DRSP_12",
+  "Mood & Physical (DRSP)", "DRSP_13", "Mood & Physical (DRSP)", "DRSP_14", "Mood & Physical (DRSP)", "DRSP_15",
+  "Mood & Physical (DRSP)", "DRSP_16", "Mood & Physical (DRSP)", "DRSP_17", "Mood & Physical (DRSP)", "DRSP_18",
+  "Mood & Physical (DRSP)", "DRSP_19", "Mood & Physical (DRSP)", "DRSP_20", "Mood & Physical (DRSP)", "DRSP_21",
+  "Impairment (DRSP)", "DRSP_22", "Impairment (DRSP)", "DRSP_23"
+) %>%
+  right_join(enframe(outcomes, name = "variable", value = "outcome_label"), by = "variable")
+
+# --- Define custom page layouts ---
+page_definitions <- c(
+  list(
+    CSS_Page = outcome_categories %>% filter(category == "ADHD Symptoms (CSS)") %>% pull(outcome_label),
+    Hormone_Page = outcome_categories %>% filter(category == "Hormone") %>% pull(outcome_label),
+    Cog_EF_Page = c("Response Inhibition (Robot Factory)", "Response Inhibition Sx (BDEFS)",
+                    "Working Memory Score (Pinball)", "Working Memory Sx (BDEFS)")
+  ),
+  split(
+    outcome_categories %>% filter(grepl("DRSP", category)) %>% pull(outcome_label),
+    ceiling(seq_along(outcome_categories %>% filter(grepl("DRSP", category)) %>% pull(outcome_label)) / 9)
+  )
+)
+names(page_definitions)[4:length(page_definitions)] <- paste0("DRSP_Page_", 1:(length(page_definitions)-3))
+
+# --- Pre-calculate log-transformations ---
+for (var in names(outcomes)) {
+  if (var %in% names(cycle_df_scaled)) {
+    log_var_name <- paste0(var, "_Log")
+    cycle_df_scaled[[log_var_name]] <- log(cycle_df_scaled[[var]] + 1)
+  }
+}
+
+```
+
+```{r}
+# --- Prediction grids reused per time var ---
+pred_grid_list <- setNames(lapply(time_vars, function(tv) {
+  df <- data.frame(seq(-1, 1, by = 0.05))
+  names(df) <- tv
+  df
+}), time_vars)
+
+# --- Axis labels + reference lines per time var ---
+axis_meta <- lapply(time_vars, function(tv) {
+  if (grepl("ov", tv, ignore.case = TRUE)) {
+    list(labels = c("Menses", "50%F", "Ovulation", "50%L", "Menses"),
+         menses = c(-1, 1), ov = 0)
+  } else {
+    list(labels = c("Ovulation", "50%L", "Menses", "50%F", "Ovulation"),
+         menses = 0, ov = c(-1, 1))
+  }
+})
+names(axis_meta) <- time_vars
+
+# --- Fit + predict one outcome for one time var (bam + predict) ---
+fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
+  log_out <- paste0(outcome_var, "_Log")
+  keep <- c(log_out, tv)
+  if (!all(keep %in% names(dat))) return(NULL)
+  dat <- dat[complete.cases(dat[, keep]), keep, drop = FALSE]
+  if (nrow(dat) < 10 || var(dat[[log_out]], na.rm = TRUE) < 1e-6) return(NULL)
+
+  k <- min(k_max, nrow(dat) - 1L); if (k < 3L) return(NULL)
+
+  fml <- as.formula(paste0(log_out, " ~ s(", tv, ", bs = 'cc', k = ", k, ")"))
+  knots <- setNames(list(c(-1, 1)), tv)
+
+  mf <- try(mgcv::bam(fml, data = dat, knots = knots, method = "fREML",
+                      discrete = TRUE, select = TRUE),
+            silent = TRUE)
+  if (inherits(mf, "try-error")) return(NULL)
+
+  s  <- summary(mf)
+  p  <- suppressWarnings(as.numeric(s$s.pv[1]))
+  st <- s$s.table
+  edf <- suppressWarnings(as.numeric(st[1, "edf"]))
+  Fval <- suppressWarnings(as.numeric(st[1, "F"]))
+
+  pg <- pred_grid_list[[tv]]
+  pr <- predict(mf, newdata = pg, se.fit = TRUE, type = "link")  # link scale for log(y+1)
+  est <- exp(pr$fit) - 1
+  conf.low  <- exp(pr$fit - 1.96 * pr$se.fit) - 1
+  conf.high <- exp(pr$fit + 1.96 * pr$se.fit) - 1
+
+  pred <- cbind(pg, estimate = est, conf.low = conf.low, conf.high = conf.high)
+  pred$outcome_label <- outcomes_map[[outcome_var]]
+  pred$p.value <- p
+  pred$raw_range <- diff(range(est, na.rm = TRUE))
+
+  list(
+    pred = pred,
+    sig  = tibble::tibble(
+      variable = outcome_var,
+      outcome_label = outcomes_map[[outcome_var]],
+      time_var = tv,
+      p.value = p,
+      edf = edf,
+      F = Fval,
+      n = nrow(dat),
+      range = diff(range(est, na.rm = TRUE))
+    )
+  )
+}
+
+# --- Plot one outcome curve with annotations ---
+create_annotated_plot <- function(plot_df, tv, axis_meta_list) {
+  if (is.null(plot_df) || nrow(plot_df) == 0) return(NULL)
+  max_pt <- dplyr::slice_max(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
+  min_pt <- dplyr::slice_min(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
+  rng   <- dplyr::first(plot_df$raw_range)
+  p_val <- dplyr::first(plot_df$p.value)
+  stars <- dplyr::case_when(
+    is.finite(p_val) & p_val < 0.001 ~ "***",
+    is.finite(p_val) & p_val < 0.01  ~ "**",
+    is.finite(p_val) & p_val < 0.05  ~ "*",
+    TRUE ~ ""
+  )
+  ann   <- sprintf("%s Range = %.2f", stars, rng)
+  meta  <- axis_meta_list[[tv]]
+
+  ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate)) +
+    ggplot2::geom_vline(xintercept = meta$menses, color = "red") +
+    ggplot2::geom_vline(xintercept = meta$ov,     color = "forestgreen") +
+    ggplot2::geom_line(linewidth = 1, color = "#0072B2") +
+    ggplot2::geom_ribbon(ggplot2::aes(ymin = conf.low, ymax = conf.high),
+                         alpha = 0.2, fill = "#0072B2") +
+    ggplot2::geom_point(data = max_pt, size = 2.5) +
+    ggplot2::geom_point(data = min_pt, size = 2.5) +
+    ggplot2::annotate("text", x = -1, y = Inf, label = ann,
+                      hjust = -0.1, vjust = 1.5, size = 3, fontface = "bold") +
+    ggplot2::labs(title = dplyr::first(plot_df$outcome_label), x = "Cycle Phase", y = NULL) +
+    ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.5),
+                                labels = meta$labels) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5))
+}
+
+```
+
+```{r}
+report_folder <- file.path(output_folder, "Participant_Reports_PDF_byID")
+dir.create(report_folder, showWarnings = FALSE, recursive = TRUE)
+
+ids_to_run    <- unique(cycle_df_scaled$id)   # set to subset for testing, e.g., c("203","109")
+skip_existing <- TRUE                         # set FALSE to overwrite
+
+# collector for a single CSV at the end
+all_ids_signif <- list()
+
+# fixed layout controls
+max_plots_per_page <- plots_per_col * plots_per_row
+table_theme <- gridExtra::ttheme_default(
+  base_size = 9,
+  core   = list(fg_params = list(hjust = 0, x = 0.05)),
+  colhead = list(fg_params = list(hjust = 0, x = 0.05))
+)
+
+for (current_id in ids_to_run) {
+  message(sprintf("--- Processing ID: %s ---", current_id))
+  datSX_id <- subset(cycle_df_scaled, id == current_id)
+
+  # Pass 1: fit & collect
+  preds_by_tv <- list()
+  sig_by_tv   <- list()
+
+  for (tv in time_vars) {
+    message(sprintf("  ... time variable: %s", tv))
+    all_preds <- list()
+    sig_list  <- list()
+
+    for (outcome_var in names(outcomes)) {
+      res <- fit_outcome(datSX_id, outcome_var, tv, outcomes)
+      if (is.null(res)) next
+      all_preds[[length(all_preds) + 1]] <- res$pred
+      sig_list[[length(sig_list) + 1]]  <- res$sig
+    }
+
+    if (length(all_preds) > 0) {
+      preds_by_tv[[tv]] <- dplyr::bind_rows(all_preds)
+      sig_by_tv[[tv]]   <- dplyr::bind_rows(sig_list)
+    }
+  }
+
+  if (!length(preds_by_tv)) {
+    message("    -> No successful models for this ID; skipping.")
+    next
+  }
+
+  # Build per-ID significance object for CSV
+  sig_all <- dplyr::bind_rows(sig_by_tv)
+  sig_all$id <- current_id
+  all_ids_signif[[as.character(current_id)]] <- sig_all
+
+  # ---- Open a single LANDSCAPE PDF per participant ----
+  pdf_filename <- file.path(report_folder, sprintf("Report_ID_%s.pdf", current_id))
+  if (isTRUE(skip_existing) && file.exists(pdf_filename)) {
+    message("    -> File exists; skipping. Set skip_existing=FALSE to overwrite.")
+    next
+  }
+  grDevices::pdf(pdf_filename, width = 11, height = 8.5)   # LANDSCAPE
+
+  # ---- COVER: Compact counts by category x time_var ----
+  sig_all_clean <- sig_all %>%
+    dplyr::mutate(
+      stars = dplyr::case_when(
+        is.finite(p.value) & p.value < 0.001 ~ "***",
+        is.finite(p.value) & p.value < 0.01  ~ "**",
+        is.finite(p.value) & p.value < 0.05  ~ "*",
+        TRUE ~ ""
+      )
+    ) %>%
+    dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable")
+
+  cover_counts <- sig_all_clean %>%
+    dplyr::group_by(category, time_var) %>%
+    dplyr::summarise(
+      tested = dplyr::n(),
+      n_sig  = sum(stars != "", na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    tidyr::unite("count", n_sig, tested, sep = " / ") %>%
+    tidyr::pivot_wider(names_from = time_var, values_from = count, values_fill = "0 / 0") %>%
+    dplyr::arrange(category)
+
+  cover_theme <- gridExtra::ttheme_default(
+    base_size = 9,
+    core = list(
+      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"),
+      padding  = grid::unit(c(2, 2), "mm")
+    ),
+    colhead = list(
+      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
+    )
+  )
+
+  title_grob    <- grid::textGrob(paste("Compact Summary — ID:", current_id),
+                                  gp = grid::gpar(fontsize = 16, fontface = "bold"))
+  subtitle_grob <- grid::textGrob("Cells show: # significant / # tested (p < .05) per category × time variable",
+                                  gp = grid::gpar(fontsize = 9))
+  cover_grob    <- gridExtra::tableGrob(cover_counts, rows = NULL, theme = cover_theme)
+  gridExtra::grid.arrange(title_grob, subtitle_grob, cover_grob,
+                          ncol = 1, heights = grid::unit(c(0.12, 0.08, 0.80), "npc"))
+
+  # ---- OPTIONAL: compact stars matrix for outcomes with any significance ----
+  compact_stars <- sig_all_clean %>%
+    dplyr::group_by(variable) %>%
+    dplyr::mutate(any_sig = any(is.finite(p.value) & p.value < 0.05, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(any_sig) %>%
+    dplyr::mutate(Outcome = dplyr::coalesce(outcome_label, variable)) %>%
+    dplyr::mutate(
+      Outcome = ifelse(nchar(Outcome) > 22, variable, Outcome),
+      stars = dplyr::case_when(
+        is.finite(p.value) & p.value < 0.001 ~ "***",
+        is.finite(p.value) & p.value < 0.01  ~ "**",
+        is.finite(p.value) & p.value < 0.05  ~ "*",
+        TRUE ~ ""
+      )
+    ) %>%
+    dplyr::select(category, Outcome, time_var, stars) %>%
+    tidyr::pivot_wider(names_from = time_var, values_from = stars, values_fill = "") %>%
+    dplyr::arrange(category, Outcome)
+
+  if (nrow(compact_stars) > 0) {
+    compact_theme <- gridExtra::ttheme_default(
+      base_size = 8,
+      core = list(
+        fg_params = list(hjust = 0, x = 0.02),
+        padding = grid::unit(c(1.5, 2), "mm")
+      ),
+      colhead = list(fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"))
+    )
+    header <- grid::textGrob("Significant Outcomes Only (★ = p < .05)",
+                             gp = grid::gpar(fontsize = 12, fontface = "bold"))
+    tbl <- gridExtra::tableGrob(compact_stars, rows = NULL, theme = compact_theme)
+    gridExtra::grid.arrange(header, tbl, ncol = 1, heights = grid::unit(c(0.10, 0.90), "npc"))
+  }
+  
+  # ---- PAGE 2: Significant EDFs ranked by Range (across all time vars) ----
+sig_ranked <- sig_all_clean %>%
+  dplyr::filter(is.finite(p.value) & p.value < 0.05) %>%     # keep significant smooths
+  dplyr::mutate(
+    Outcome = dplyr::coalesce(outcome_label, variable),
+    Outcome = ifelse(nchar(Outcome) > 40, variable, Outcome) # shorten long names
+  ) %>%
+  dplyr::transmute(
+    Category = category,
+    Outcome,
+    TimeVar  = time_var,
+    EDF      = round(edf, 2),
+    Range    = round(range, 2),
+    F        = round(F, 2),
+    N        = n
+  ) %>%
+  dplyr::arrange(dplyr::desc(Range), Category, Outcome, TimeVar)
+
+if (nrow(sig_ranked) == 0) {
+  # show an empty-state page
+  header <- grid::textGrob(
+    paste("Significant Smooths — ID:", current_id, "(none at p < .05)"),
+    gp = grid::gpar(fontsize = 14, fontface = "bold")
+  )
+  sub <- grid::textGrob("No significant cyclic effects detected across any time variable.",
+                        gp = grid::gpar(fontsize = 10, fontface = "italic"))
+  gridExtra::grid.arrange(header, sub, ncol = 1,
+                          heights = grid::unit(c(0.2, 0.8), "npc"))
+} else {
+  # compact table theme to fit on a single landscape page
+  ranked_theme <- gridExtra::ttheme_default(
+    base_size = 8,
+    core = list(
+      fg_params = list(hjust = 0, x = 0.02),
+      padding = grid::unit(c(1.2, 2), "mm")
+    ),
+    colhead = list(
+      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
+    )
+  )
+  title_grob <- grid::textGrob(
+    paste("Significant Smooths (p < .05), Ranked by Range — ID:", current_id),
+    gp = grid::gpar(fontsize = 14, fontface = "bold")
+  )
+  note_grob <- grid::textGrob(
+    "Columns: EDF = effective degrees of freedom; Range = max(pred) − min(pred) on original scale.",
+    gp = grid::gpar(fontsize = 9, fontface = "italic")
+  )
+  ranked_tbl <- gridExtra::tableGrob(sig_ranked, rows = NULL, theme = ranked_theme)
+
+  gridExtra::grid.arrange(
+    title_grob, note_grob, ranked_tbl,
+    ncol = 1,
+    heights = grid::unit(c(0.12, 0.06, 0.82), "npc")
+  )
+}
+
+  # ---- Sections per time variable: compact table + pages of plots ----
+  for (tv in names(preds_by_tv)) {
+
+    # NA-safe compact significance table (optionally filter to significant only)
+    summary_df <- sig_by_tv[[tv]] %>%
+      dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable") %>%
+      dplyr::mutate(
+        stars = dplyr::case_when(
+          is.finite(p.value) & p.value < 0.001 ~ "***",
+          is.finite(p.value) & p.value < 0.01  ~ "**",
+          is.finite(p.value) & p.value < 0.05  ~ "*",
+          TRUE ~ ""
+        ),
+        Outcome = dplyr::coalesce(outcome_label, variable)
+      ) %>%
+      dplyr::select(Category = category, Outcome, N = n, EDF = edf, F = F, Range = range, Sig = stars) %>%
+      dplyr::arrange(Category, Outcome)
+    # Uncomment to show significant rows only:
+    # summary_df <- dplyr::filter(summary_df, Sig != "")
+
+    tv_title <- grid::textGrob(paste("Significance — ID:", current_id, "| Time Variable:", tv),
+                               gp = grid::gpar(fontsize = 14, fontface = "bold"))
+    tv_table <- gridExtra::tableGrob(summary_df, rows = NULL, theme = table_theme)
+    gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
+                            heights = grid::unit(c(0.12, 0.88), "npc"))
+
+    # Plots by predefined pages
+    combined_plot_data <- preds_by_tv[[tv]]
+    for (page_name in names(page_definitions)) {
+      page_outcomes <- page_definitions[[page_name]]
+      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
+      if (nrow(page_data) == 0) next
+
+      plot_list <- lapply(page_outcomes, function(lab) {
+        plot_df <- dplyr::filter(page_data, outcome_label == lab)
+        create_annotated_plot(plot_df, tv, axis_meta)
+      })
+      plot_list <- Filter(Negate(is.null), plot_list)
+
+      if (length(plot_list) > 0) {
+        if (length(plot_list) < max_plots_per_page) {
+          plot_list <- c(plot_list,
+                         rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
+        }
+        page_title <- paste("Symptom & Hormone Trajectories — ID:", current_id, "| Time Variable:", tv)
+        final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
+          patchwork::plot_annotation(
+            title = page_title,
+            theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 14, face = "bold"))
+          )
+        print(final_page)
+      }
+    }
+  }
+
+  grDevices::dev.off()
+  message(sprintf("    --- ✅ Saved Report: %s ---", pdf_filename))
+}
+
+# ---- Write long CSV for evaluation across IDs ----
+if (length(all_ids_signif)) {
+  eval_csv <- file.path(output_folder, paste0("participant_significance_summary_", current_date, ".csv"))
+  write.csv(dplyr::bind_rows(all_ids_signif), eval_csv, row.names = FALSE)
+  message(sprintf("Wrote summary CSV: %s", eval_csv))
+}
+
+```
+

@@ -1,0 +1,536 @@
+---
+title: "ADHDCYCLE_daily"
+output: 
+  html_document: 
+    toc: true
+    fig_caption: true
+    number_sections: true
+    df_print: default
+date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
+---
+
+# Setup and Configuration
+
+This section sets up the global environment, configures options for code chunks, and defines key variables for file management.
+
+```{r setup, include=FALSE}
+# ---- Global Options ----
+knitr::opts_chunk$set(
+  echo = TRUE,       # Display code in the final document
+  warning = FALSE,   # Suppress warning messages
+  message = FALSE    # Suppress other messages
+)
+options(scipen = 999, digits = 3) # Prevent scientific notation, set digits
+
+# ---- File and Date Management ----
+current_date <- format(Sys.Date(), "%Y%m%d")
+output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/"
+
+# add current date folder to end of output folder
+output_folder <- file.path(output_folder, current_date)
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder)
+}
+
+# Set working directory to output folder
+setwd(output_folder)
+cat("Output directory set to:", output_folder, "\n")
+
+```
+
+# ---- Load Required Libraries ----
+```{r}
+# ---- Load Libraries ----
+library(tidyverse)      # Core suite for data manipulation and visualization
+library(janitor)        # Data cleaning utilities
+library(skimr)          # Quick data summaries
+library(haven)          # Read SPSS, Stata, and SAS files
+library(readxl)         # Read Excel files
+library(pdftools)       # Work with PDF files
+library(ggdist)         # Advanced ggplot2 visualizations
+library(ggforce)        # More ggplot2 extensions
+library(ggrepel)        # Prevent text label overlap in plots
+library(visdat)         # Visualize dataframes and missingness
+library(sjPlot)         # Plotting for statistical models
+library(corrplot)       # Correlation matrix visualizations
+library(gridExtra)      # Arrange multiple plots
+library(see)            # Visualizations for model diagnostics
+library(DescTools)      # Descriptive statistics tools
+library(magick)         # Image processing
+library(zoo)            # Tools for time series data (rolling averages)
+library(lubridate)      # Tools for working with dates and times
+library(lme4)           # Linear and generalized linear mixed-effects models
+library(lmerTest)       # p-values for lme4 models
+library(nlme)           # Linear and nonlinear mixed-effects models
+library(emmeans)        # Estimated marginal means
+library(broom.mixed)    # Tidy mixed-effects model results
+library(performance)    # Model performance metrics
+library(pbkrtest)       # Parametric bootstrap methods
+library(mgcv)           # Generalized additive models (GAMs)
+library(marginaleffects)# Calculate marginal effects
+library(rmcorr)         # Repeated measures correlation
+library(careless)       # Detect careless survey responses
+library(responsePatterns)# Analyze response patterns
+library(usethis)        # Project and package setup utilities
+library(gitcreds)       # Manage Git credentials
+library(conflicted)     # Manage function name conflicts
+library(remotes)        # Install packages from remote repositories
+# remotes::install_github("eisenlohrmoullab/menstrualcycleR")
+library(menstrualcycleR)
+
+# ---- Resolve Conflicts ----
+# Explicitly state our function preferences to avoid ambiguity
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("complete", "tidyr")
+conflict_prefer("select", "dplyr")
+```
+
+# ---- Custom Functions ----
+```{r}
+## standardize_index_names(): Robustly standardizes common variable names
+standardize_index_names <- function(df) {
+  df %>%
+    rename_with(~ case_when(
+      # Use word boundaries (\b) to match only whole words
+      grepl("\\b([Dd]ate.?rated)\\b", .x) ~ "daterated",
+      # Specifically match columns named exactly 'ID' (case-insensitive)
+      grepl("^ID$", .x, ignore.case = TRUE) ~ "id",
+      grepl("\\b([Ee]strogen|[Ee]stradiol|[Ee]2)\\b", .x) ~ "E2",
+      grepl("\\b([Pp]rogesterone|[Pp]4)\\b", .x) ~ "P4",
+      # If no match, keep the original name
+      TRUE ~ .x
+    ))
+}
+
+## count_rows_ids(): Prints the number of rows and unique IDs in a dataframe
+count_rows_ids <- function(df) {
+  cat("Number of rows:", nrow(df), "\n")
+  cat("Number of unique ids:", n_distinct(df$id), "\n\n")
+}
+
+## print.variable.names(): Prints all variable names in a comma-separated list
+print.variable.names <- function(df) {
+  cat("-------- Variable Names --------\n", paste(names(df), collapse = ", "), "\n")
+}
+
+## create.person.metrics(): Calculates person-level metrics (mean, sd, deviation scores)
+create.person.metrics <- function(df, var, id) {
+  var <- enquo(var)
+  var_name <- quo_name(var)
+  
+  df %>%
+    group_by({{ id }}) %>%
+    mutate(
+      pm = mean(!!var, na.rm = TRUE),
+      psd = sd(!!var, na.rm = TRUE)
+    ) %>%
+    ungroup() %>%
+    mutate(
+      "{{var_name}}.m"  := .data$pm,
+      "{{var_name}}.sd" := .data$psd,
+      "{{var_name}}.d"  := (!!var) - .data$pm,
+      "{{var_name}}.zd" := ((!!var) - .data$pm) / .data$psd
+    ) %>%
+    select(-pm, -psd)
+}
+
+## create.rolling.avgs(): Creates 3- and 5-day rolling averages
+create.rolling.avgs <- function(df, var) {
+  df %>%
+    group_by(id) %>%
+    mutate(
+      "{{var}}.3roll" := rollapply({{var}}, 3, mean, na.rm = TRUE, align = "center", fill = NA, partial = TRUE),
+      "{{var}}.5roll" := rollapply({{var}}, 5, mean, na.rm = TRUE, align = "center", fill = NA, partial = TRUE)
+    ) %>%
+    ungroup()
+}
+```
+
+# ---- End of Setup ----
+
+# ---- Define Key Variables ----
+```{r}
+dv_list <- c(
+  "CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_Total", 
+  "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", 
+  "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total",
+  "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count",
+  paste0("DRSP_", 1:23)
+)
+
+names(dv_list) <- c(
+  "Inattention Symptoms", "Hyperactivity/Impulsivity Symptoms", "Pinball Score", 
+  "Robot Score", "BDEFS Total", "BDEFS Working Memory", "BDEFS Response Inhibition", 
+  "Negative Urgency", "Positive Urgency", "Lack of Premeditation", 
+  "Lack of Perseverance", "Sensation Seeking", "DEBQ Total", 
+  "Inattention Sx Count", "Hyperactivity Sx Count", "Impulsivity Sx Count", 
+  "Hyperactivity/Impulsivity Sx Count", "Depressed Mood", "Hopelessness", 
+  "Worthlessness/Guilt", "Anxiety/Tension", "Mood Swings", 
+  "Rejection Sensitivity", "Anger/Irritability", "Interpersonal Conflict", 
+  "Less Interest", "Difficulty Concentrating", "Lethargy/Fatigue", 
+  "Increased Appetite/Overate", "Food Cravings", "Hypersomnia", "Insomnia", 
+  "Overwhelm/Can't Cope", "Out of Control", "Breast Tenderness", 
+  "Swelling/Bloating/Weight Gain", "Joint/Muscle Pain", "Headache", 
+  "Work/School Impairment", "Relational Impairment"
+)
+
+hormlist <- c("E2", "P4", "LH")
+alldailyvars <- c(dv_list, hormlist)
+```
+
+# ---- Load and Merge Datasets ----
+```{r}
+# ---- 1. Load Main Daily Data (SPSS File) ----
+raw_daily <- read_sav("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav") %>%
+  standardize_index_names() %>%
+  mutate(id = as.numeric(id)) %>%
+  select(id, everything())
+
+# ---- 2. Load and Merge Supplemental Hormone Data (CSV) ----
+supp_hormones <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv") %>%
+  # FIX: Explicitly rename 'date' to 'daterated' to solve the error.
+  # If the column has a different name, change 'date' to the correct name.
+  rename(daterated = date) %>%
+  standardize_index_names() %>%
+  mutate(
+    id = as.numeric(id),
+    daterated = as.Date(daterated)
+  ) %>%
+  select(id, daterated, E2, P4, LH, StartPeriod, PosLHTest)
+
+# ---- 3. Load and Merge Knapp Cycle Dates (CSV) ----
+knapp_dates <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/cycadhd_mensov_iso.csv") %>%
+  standardize_index_names() %>%
+  mutate(id = as.numeric(id))
+
+# ---- 4. Load and Merge Final Hormone Batch (CSV) ----
+final_hormone_batch <- read_csv("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv") %>%
+  standardize_index_names() %>%
+  mutate(
+    id = as.numeric(id),
+    daterated = as.Date(daterated, format = "%Y-%m-%d")
+  ) %>%
+  select(id, daterated, E2, P4, LH, hormone_assay_note)
+
+# ---- 5. Combine All Datasets into a Master 'df' ----
+df <- raw_daily %>%
+  # Merge supplemental hormones, giving meaningful suffixes to conflicting columns
+  left_join(supp_hormones, by = c("id", "daterated"), suffix = c(".raw", ".supp")) %>%
+  
+  # Merge Knapp dates
+  left_join(knapp_dates, by = "id") %>%
+  
+  # Merge final hormone batch. Its 'E2' column will be added without a suffix
+  # because the existing columns are now named E2.raw and E2.supp.
+  left_join(final_hormone_batch, by = c("id", "daterated")) %>%
+  
+  # Intelligently combine hormone columns, prioritizing in this order:
+  # 1. final_hormone_batch (named 'E2')
+  # 2. supp_hormones (now named 'E2.supp')
+  # 3. raw_daily (now named 'E2.raw')
+  mutate(
+    E2 = coalesce(E2, E2.supp, E2.raw),
+    P4 = coalesce(P4, P4.supp, P4.raw),
+    LH = coalesce(LH, LH.supp, LH.raw),
+    daterated = as.Date(daterated) # Ensure date format is correct
+  ) %>%
+  
+  # Clean up the temporary suffixed columns
+  select(-ends_with(".raw"), -ends_with(".supp")) %>%
+  
+  # Remove rows that are completely empty or have no ID/date
+  filter(!is.na(id) & !is.na(daterated)) %>%
+  
+  # Fill in any missing dates to create a continuous daily timeline for each person
+  group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated, na.rm = TRUE), max(daterated, na.rm = TRUE), by = "day")) %>%
+  ungroup() %>%
+  
+  # Create a 'date' alias for 'daterated' for consistency
+  mutate(date = daterated) %>%
+  arrange(id, daterated)
+
+cat("Initial data loading and merging complete.\n")
+count_rows_ids(df)
+```
+
+
+```{r}
+# ---- 1. Standardize and Rename Variables ----
+df <- df %>%
+  rename(
+    CSS_Inatt_Count = IA_Count, 
+    CSS_Hyp_Count = Hyp_Count, 
+    CSS_Imp_Count = Imp_Count
+  ) %>%
+  standardize_index_names()
+
+# ---- 2. Calculate Questionnaire Scores ----
+df <- df %>%
+  mutate(
+    across(starts_with(c("CSS_B_", "CSS_Function_", "DEBQ_", "BDEFS_")), as.numeric), # Ensure items are numeric
+    
+    CSS_Inatt = rowMeans(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17)), na.rm = TRUE),
+    CSS_HypImp = rowMeans(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8, CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18)), na.rm = TRUE),
+    CSS_HypImp_Count = CSS_Imp_Count + CSS_Hyp_Count,
+    CSS_Fx_Total = rowMeans(across(starts_with("CSS_Function_")), na.rm = TRUE),
+    DEBQ_Total = rowMeans(across(starts_with("DEBQ_")), na.rm = TRUE),
+    BDEFS_Total = rowMeans(across(starts_with("BDEFS_")), na.rm = TRUE),
+    
+    # Reverse code pinball and robot scores
+    score_robot = max(score_robot, na.rm = TRUE) - score_robot,
+    score_pinball = max(score_pinball, na.rm = TRUE) - score_pinball
+  )
+
+
+cat("Questionnaire scores calculated.\n")
+```
+
+```{r}
+# ---- 1. Load the Single Source of Truth for Cycle Dates ----
+final_dates <- read_xls("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-26/ADHDCYCLE_menses_ov_dates_FINAL.xls")
+
+# ---- 2. Prepare the Final Dates for Merging ----
+# Select only the key columns, rename them, and ensure types are correct.
+final_dates <- final_dates %>%
+  select(
+    id, 
+    date, 
+    menses = menses_final, 
+    ovtoday = ovtoday_final
+  ) %>%
+  mutate(
+    id = as.character(id),
+    date = as.Date(date),
+    menses = as.integer(menses),
+    ovtoday = as.integer(ovtoday)
+  ) %>%
+  filter(menses == 1 | ovtoday == 1)
+
+# ---- 3. Merge the Final Dates and Finalize Column Types ----
+df <- df %>%
+  # First, remove any old/existing menses or ovtoday columns to ensure a clean merge.
+  select(-any_of(c("menses", "ovtoday", "StartPeriod", "PosLHTest", "LHposdayfirst"))) %>%
+  
+  # Ensure the 'id' column in 'df' is character type before joining.
+  mutate(id = as.character(id)) %>%
+  
+  # Now, the join will work because the 'id' types match.
+  left_join(final_dates, by = c("id", "date")) %>%
+  
+  # Finalize the columns: replace NAs with 0 and convert 'id' to a factor.
+  mutate(
+    menses = coalesce(menses, 0L),
+    ovtoday = coalesce(ovtoday, 0L),
+    id = as.factor(id) # Convert id to a factor for future steps
+  )
+
+cat("Successfully merged the final menses and ovulation dates. 'id' is now a factor.\n")
+```
+# ---- Create Person-Level Metrics and Rolling Averages ----
+```{r}
+# This single, efficient pipe performs all calculations in the correct order.
+df <- df %>%
+  # --------------------------------------------------------------------------------
+  # Start by grouping the data by participant ID. From this point until 'ungroup()',
+  # every calculation (like mean() or sd()) will be performed separately for each
+  # person's own data. It's like working on a mini-spreadsheet for each participant.
+  # --------------------------------------------------------------------------------
+  group_by(id) %>%
+  
+  # --- Step 1: Calculate rolling averages on raw daily variables (within-person) ---
+  # 'mutate(across(...))' lets us apply the same functions to many columns at once.
+  mutate(
+    across(
+      # .cols: Specifies which columns to apply the functions to.
+      # Here, we select all the raw variable names from your 'alldailyvars' list.
+      .cols = all_of(alldailyvars),
+      
+      # .fns: A list of new columns to create. We're creating a 3-day and 5-day version.
+      .fns = list(
+        # The `~` creates a formula, telling R to apply this function to each column.
+        # `zoo::rollapply()` is the function that calculates a rolling windowed average.
+        `3roll` = ~ zoo::rollapply(., 3, mean, na.rm = TRUE, align = "center", fill = NA, partial = TRUE),
+        `5roll` = ~ zoo::rollapply(., 5, mean, na.rm = TRUE, align = "center", fill = NA, partial = TRUE)
+      ),
+      
+      # .names: A template for how to name the new columns.
+      # "{.col}.{.fn}" means "OriginalColumnName.FunctionListName" (e.g., "CSS_Inatt.3roll").
+      .names = "{.col}.{.fn}"
+    )
+  ) %>%
+  
+  # --- Step 2: Calculate person-standardized metrics (.d, .zd) on ALL variables ---
+  # We are still grouped by 'id', so these are all WITHIN-PERSON calculations.
+  mutate(
+    across(
+      # .cols: Here, we select the ORIGINAL variables AND all the new '.3roll'
+      # and '.5roll' variables we just created in the step above.
+      .cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+      
+      # .fns: We define two new metrics to calculate for every column selected above.
+      .fns = list(
+        # 'd' for "deviation": How different is today's value from this person's own average?
+        d = ~ . - mean(., na.rm = TRUE),
+        
+        # 'zd' for "z-scored deviation": How many of this person's own standard deviations
+        # is today's value away from their own average? (A within-person z-score).
+        zd = ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)
+      ),
+      .names = "{.col}.{.fn}"
+    )
+  ) %>%
+  
+  # --------------------------------------------------------------------------------
+  # This is a critical step! We are now REMOVING the grouping. All calculations
+  # from this point forward will be performed on the ENTIRE dataset as a whole,
+  # not person by person.
+  # --------------------------------------------------------------------------------
+  ungroup() %>% 
+  
+  # --- Step 3: Calculate sample-standardized metrics (.szd) on ALL variables ---
+  # Because we are no longer grouped, mean() and sd() will now calculate the
+  # GRAND mean and GRAND standard deviation across all participants.
+  mutate(
+    across(
+      # .cols: Again, we select the original, .3roll, and .5roll variables.
+      .cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+      
+      # .fns: We define one new metric.
+      .fns = list(
+        # 'szd' for "sample z-scored deviation": How does this value compare to the
+        # average and standard deviation of the entire study sample? (A grand z-score).
+        szd = ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)
+      ),
+      .names = "{.col}.{.fn}"
+    )
+  )
+
+cat("Person-level metrics and rolling averages created.\n")
+
+#names(df)
+```
+
+# ---- Generate Hormone Plots for Each Participant ----
+# Iterations include raw values, rolling averages, and standardized scores.
+```{r}
+# This chunk reshapes your data from wide to long format.
+# It also cleverly splits the column names like "E2.3roll.zd" into a "hormone"
+# column ("E2") and a "metric" column ("3roll.zd").
+
+hormones_long_all <- df %>%
+  # Select only the columns we need for plotting
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)")) %>%
+  
+  # Pivot all hormone columns into two new columns: 'name' and 'value'
+  pivot_longer(
+    cols = -c(id, date, menses, ovtoday),
+    names_to = "name",
+    values_to = "value"
+  ) %>%
+  
+  # Split the 'name' column into 'hormone' and 'metric'
+  separate(
+    name, 
+    into = c("hormone", "metric"), 
+    sep = "\\.", 
+    extra = "merge", 
+    fill = "right"
+  ) %>%
+  
+  # The raw values (E2, P4, LH) won't have a metric, so their 'metric' is NA.
+  # We'll replace NA with the label "raw" for clarity.
+  mutate(metric = replace_na(metric, "raw"))
+```
+
+# ---- Dynamic Plotting Loop ----
+```{r}
+# --- Configuration: Define all plots and their specific settings ---
+# We've added two new columns:
+# 1. needs_facet: TRUE for plots that need separate panels (like raw values).
+# 2. y_axis_label: A custom y-axis label for each plot type.
+metrics_to_plot <- tibble::tribble(
+  ~metric_filter, ~folder_name,             ~plot_subtitle,                                  ~needs_facet, ~y_axis_label,
+  "raw",          "01_raw_faceted",           "Raw Daily Values",                              TRUE,         "Hormone Value",
+  "3roll",        "02_raw_3roll_faceted",     "3-Day Rolling Average",                         TRUE,         "Hormone Value",
+  "5roll",        "03_raw_5roll_faceted",     "5-Day Rolling Average",                         TRUE,         "Hormone Value",
+  "3roll.zd",     "04_person_standardized",   "Person-Standardized 3-Day Rolling Avg",         FALSE,        "Standardized Value (Z-Score)",
+  "3roll.szd",    "05_sample_standardized",   "Sample-Standardized 3-Day Rolling Avg",         FALSE,        "Standardized Value (Z-Score)"
+)
+
+# Get a list of unique IDs to loop through
+ids_list <- unique(df$id)
+
+# --- Main Loop: This loop now dynamically changes the plot structure ---
+for (row in 1:nrow(metrics_to_plot)) {
+  
+  # Get all the settings for the current plot type from our config table
+  metric_name    <- metrics_to_plot$metric_filter[row]
+  folder_name    <- metrics_to_plot$folder_name[row]
+  plot_subtitle  <- metrics_to_plot$plot_subtitle[row]
+  should_facet   <- metrics_to_plot$needs_facet[row]
+  y_label        <- metrics_to_plot$y_axis_label[row]
+  
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) {
+    dir.create(current_output_dir, recursive = TRUE)
+  }
+  
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  
+  for (person_id in ids_list) {
+    
+    plot_data <- hormones_long_all %>%
+      filter(id == person_id, metric == metric_name)
+    
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) {
+      next
+    }
+    
+    vline_data <- df %>% filter(id == person_id)
+
+    # Create the base plot with all the common elements
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "purple", linewidth = 1) +
+      geom_line(linewidth = 0.8) +
+      geom_point(size = 1.5) +
+      scale_x_date(breaks = "1 day", date_labels = "%b %d") +
+      labs(
+        title = paste("Participant:", person_id),
+        subtitle = plot_subtitle,
+        x = "Date",
+        y = y_label, # Use the dynamic y-axis label from our table
+        color = "Hormone"
+      ) +
+      theme_light() +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+    # --- This is the key conditional logic ---
+    # If the config table says this plot needs faceting, add the facet_wrap layer.
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y") +
+               theme(legend.position = "none") # Hide legend for faceted plots
+    } else {
+      # For non-faceted plots, we can add a horizontal line at y=0 for reference
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    
+    # Dynamically set the plot height for better viewing
+    plot_height <- if (should_facet) 8 else 7
+    
+    # Save the plot
+    ggsave(
+      filename = file.path(current_output_dir, paste0("plot_", person_id, ".png")),
+      plot = p,
+      width = 11,
+      height = plot_height,
+      dpi = 300
+    )
+  }
+}
+
+cat("--- All plots generated successfully! ---\n")
+```
+

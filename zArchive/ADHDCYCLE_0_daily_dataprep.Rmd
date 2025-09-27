@@ -1068,35 +1068,8 @@ final_dates <- updates %>%
   arrange(id, date)
 
 View(final_dates)
-
-#names(final_dates)
-#names(df)
-
-# Identify and fix any potential issues with merging df and final_dates by id and date
-# Check for duplicate id and date combinations in final_dates
-duplicates_final_dates <- final_dates %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-View(duplicates_final_dates) #None
-# Check for duplicate id and date combinations in df
-duplicates_df <- df %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-#View(duplicates_df) #several 
-# remove duplicate id and date combinations in df
-df <- df %>%
-  distinct(id, date, .keep_all = TRUE)
-# Recheck for duplicates
-duplicates_df <- df %>%
-  group_by(id, date) %>%
-  filter(n() > 1)
-#View(duplicates_df) #None
-
-# Check for ids in final_dates that are not in df
-ids_not_in_df <- setdiff(final_dates$id, df$id)
-ids_not_in_df
-
 ```
+
 
 ```{r}
 # set all menses and ovtoday as missing in df before the upsert
@@ -1106,16 +1079,13 @@ df <- df %>%
 
 # set id and date to be the same format in df and final_dates
 df <- df %>%
-  mutate(id = as.character(id),
+  mutate(id = as.factor(id),
          date = as.Date(date))
 
 final_dates <- final_dates %>%
-  mutate(id = as.character(id),
+  mutate(id = as.factor(id),
          date = as.Date(date))
-```
 
-
-```{r}
 # Merge in updates to menses and ovtoday using rows_upsert to replace existing values by id and date
 # This will add new rows if the id and date combination does not already exist in df
 # Ensure date is in Date format in both dataframes
@@ -1124,6 +1094,24 @@ df <- df %>%
   mutate(date = as.Date(date)) %>%
   rows_upsert(final_dates, by = c("id","date")) %>%
   arrange(id, date)
+```
+
+
+
+```{r}
+# Suppose your original data is in a data frame called 'df'
+
+# Filter rows where menses == 1 or ovtoday == 1
+filtered_df <- subset(df, menses == 1 | ovtoday == 1)
+
+# Select only the specified columns
+output_df <- filtered_df[, c("id", "date", "menses", "ovtoday", "E2", "P4", "LH")]
+
+# Output the resulting data frame (e.g., to the console)
+print(output_df)
+
+# If you want to save it to a CSV file:
+write.csv(output_df, "filtered_observations.csv", row.names = FALSE)
 
 ```
 
@@ -1177,7 +1165,142 @@ for (var in alldailyvars) {
 
 ```
 
+# Calculate sample-standardized values for E2, P4, and LH
+```{r}
 
+# Create new variables for sample-standardized E2, P4, and LH
+df <- df %>%
+  mutate(
+    E2szd = (E2 - mean(E2, na.rm = TRUE))
+           / sd(E2, na.rm = TRUE),
+    P4szd = (P4 - mean(P4, na.rm = TRUE))
+           / sd(P4, na.rm = TRUE),
+    LHszd = (LH - mean(LH, na.rm = TRUE))
+           / sd(LH, na.rm = TRUE)
+  )
+
+# See histograms for all 
+hist(df$E2szd, breaks = 20, main = "Histogram of E2szd", xlab = "E2szd", col = "lightblue")
+hist(df$P4szd, breaks = 20, main = "Histogram of P4szd", xlab = "P4szd", col = "lightblue")
+hist(df$LHszd, breaks = 20, main = "Histogram of LHszd", xlab = "LHszd", col = "lightblue")
+
+
+# Save those variables
+
+dat4 <- df %>% select(id, date, menses, ovtoday, E2szd, P4szd, LHszd)
+
+```
+
+
+# Create plots by id with date on the x axis and person-standardized E2, P4, and LH values on the Y axis
+```{r}
+
+dat <- df %>% select(id, date, menses, ovtoday, E2.zd, P4.zd, LH.zd)
+dat3 <- df %>% select(id, date, menses, ovtoday, E2.zd.3roll, P4.zd.3roll, LH.zd.3roll)
+dat5 <- df %>% select(id, date, menses, ovtoday, E2.zd.5roll, P4.zd.5roll, LH.zd.5roll)
+
+
+#E2, P4, LH, E2.zd, P4.zd, LH.zd 
+
+dat <- dat %>%
+  arrange(id, date)
+
+```
+
+
+```{r}
+
+dat.long.z = pivot_longer(dat, cols = c("E2.zd", "P4.zd", "LH.zd"), names_to = "hormone", values_to = "value")
+dat.long.z3r = pivot_longer(dat3, cols = c("E2.zd.3roll", "P4.zd.3roll", "LH.zd.3roll"), names_to = "hormone", values_to = "value")
+dat.long.z5r = pivot_longer(dat5, cols = c("E2.zd.5roll", "P4.zd.5roll", "LH.zd.5roll"), names_to = "hormone", values_to = "value")
+dat.long.szd = pivot_longer(dat4, cols = c("E2szd", "P4szd", "LHszd"), names_to = "hormone", values_to = "value")
+
+#View(dat.long.z)
+```
+
+
+# z-scoring 
+
+```{r}
+
+# how many ids with hormones are there? N=89
+length(ids_with_E2_list)
+
+# 203 205 206 207 208 209 210 213 214 218 219 221 223 224 225 227 228 230 232 233 235 237 239 241 242 243 245 246 248 249 252 254 256 258 259 260 261 262 263 265 266 267 268 270 271 272 273 275 277 278 279 281 283 284 286 287 289 290 293 305 307 310 312 314 317 318 321 323 324 325 326 327 329 330 331 332 333 334 336 337 338 340 341 343 344 345 346 347 348
+
+```
+
+```{r}
+# how many menses rows exist vs have non-missing x-var used in the plot?
+df %>% filter(StartPeriod %in% c(1L, TRUE)) %>% summarise(
+  total_markers = n(),
+  markers_with_date  = sum(!is.na(date)),       # if your ggplot x uses 'date'
+  markers_with_drate = sum(!is.na(daterated))   # if ggplot x uses 'daterated'
+)
+
+```
+
+```{r}
+# Create a list of all the unique ids in the dataset
+ids_list <- unique(df$id)
+```
+
+
+# SAMPLE-STANDARDIZED z-scored plots - +3roll
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(zoo)
+library(tidyr)
+
+for (i in ids_list){
+  # Get all relevant data for this participant
+  base_df <- dat.long.szd %>%
+    filter(id == i) %>%
+    select(id, date, menses, ovtoday) %>%
+    distinct() %>%
+    filter(!is.na(date)) %>%
+    mutate(date = as.POSIXct(date))
+
+  # Ensure a complete sequence of dates for this participant and hormone
+  all_dates <- seq(min(base_df$date), max(base_df$date), by = "day")
+  complete_df <- expand.grid(date = all_dates, hormone = unique(dat.long.szd$hormone)) %>%
+    mutate(id = i) %>%
+    left_join(dat.long.szd %>% filter(id == i), by = c("id", "date", "hormone"))
+
+  # Do NOT interpolate missing values! The rolling mean will be NA if any day in the window is NA.
+  complete_df <- complete_df %>%
+    arrange(hormone, date) %>%
+    group_by(hormone) %>%
+    mutate(rollmean3 = zoo::rollapply(value, width = 3, FUN = mean, align = "center", fill = NA, partial = TRUE, na.rm = FALSE)) %>%
+    ungroup()
+
+  # Prepare vertical lines for menses/ovulation
+  menses_df  <- base_df %>% filter(menses == 1)  %>% distinct(date) %>% transmute(xintercept = date)
+  ov_df      <- base_df %>% filter(ovtoday == 1) %>% distinct(date) %>% transmute(xintercept = date)
+
+  # Plot: dots and lines for 3-day rolling mean only
+  p <- ggplot() +
+    geom_vline(data = menses_df, aes(xintercept = xintercept), color = "red", linewidth = 1) +
+    geom_vline(data = ov_df,     aes(xintercept = xintercept), color = "purple", linewidth = 1) +
+    scale_x_datetime(date_breaks = "1 day") +
+    theme_light() +
+    theme(axis.text.x = element_text(size = 7.5, angle = 90, hjust = 1)) +
+    ggtitle(i, subtitle = "dots/lines = 3-day rolling mean of zscore; missing values NOT filled; red = menses, purple = post-LH")
+
+  # Only add points/lines if rolling mean data is present
+  if(any(!is.na(complete_df$rollmean3))){
+    p <- p +
+      geom_point(data = complete_df, aes(x = date, y = rollmean3, color = hormone, group = hormone), size = 2, alpha = 0.85) +
+      geom_line(data = complete_df, aes(x = date, y = rollmean3, color = hormone, group = hormone), linewidth = 1.2)
+  }
+
+  print(p)
+  out <- paste0("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/daily_hormone_plots_SAMPLEzscored_20250926/samplezhormoneplot_", i, ".png")
+  ggsave(out, p, width = 10, height = 6, dpi = 300)
+}
+```
 
 # z-scored plots - no roll
 
