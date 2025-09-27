@@ -29,21 +29,11 @@ library(conflicted)      # Helps manage function name conflicts between packages
 library(menstrualcycleR) # For cycle-specific analyses like PACTS scaling.
 library(gridExtra)       # For arranging multiple plots on one page.
 library(ggvenn)          # For creating Venn diagrams.
-library(readr)
-library(haven)
-library(dplyr)
-library(lubridate)
-library(tidyr)
-library(rlang)
-library(visdat)
 library(readr)       # For reading CSV files
-library(readxl)      # For reading Excel files
-library(haven)       # For reading SPSS (SAV) files
 library(dplyr)       # For data wrangling
 library(lubridate)   # For date parsing/manipulation
 library(tidyr)       # For tidying data
 library(rlang)       # For tidy evaluation
-library(ggvenn)      # For Venn diagrams
 library(visdat)      # For missing data visualization
 
 # Explicitly state our function preferences to avoid ambiguity when multiple
@@ -53,23 +43,6 @@ conflict_prefer("lag", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 
-# 2\. Custom Function
-
-```{r define-functions}
-# This function is used during the data loading step to ensure key columns
-# (like ID, date, and hormone names) have consistent names across all raw files,
-# even if the original files used different spellings or capitalization.
-standardize_index_names <- function(df) {
-  df %>%
-    rename_with(~ case_when(
-      grepl("\\b([Dd]ate.?rated)\\b", .x) ~ "daterated",
-      grepl("^ID$", .x, ignore.case = TRUE) ~ "id",
-      grepl("\\b([Ee]strogen|[Ee]stradiol|[Ee]2)\\b", .x) ~ "E2",
-      grepl("\\b([Pp]rogesterone|[Pp]4)\\b", .x) ~ "P4",
-      TRUE ~ .x # If no match, keep the original name
-    ))
-}
-```
 
 # 3\. CONFIGURATION
 
@@ -88,7 +61,7 @@ path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Fol
 
 path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
 
-path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-26/ADHDCYCLE_menses_ov_dates_FINAL.xls"
+path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-27/ADHDCYCLE_menses_ov_dates_FINAL.xls"
 
 path_omit_ids <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_omit.xlsx"
 
@@ -282,18 +255,19 @@ cat("Final maximally-filled merged dataset ready.\n")
 # Arrange rows for analysis, convert id to factor, and create a 'date' column for downstream usage
 final_df <- final_df %>%
   arrange(id, daterated) %>%
-  mutate(id = as.factor(id)) %>% # Convert id to a factor for analysis 
-  mutate(date=daterated) %>% # Create a 'date' column for menstrualcycleR functions
-  # remove all observations where id == 210 and date is after 2020 or id==270 and date is after 2022-12-03
+  mutate(date = daterated) %>% # Create 'date' column first
+  # Filter as character (assuming id is character or can be forced)
   filter(!(id == 270 & date > as.Date("2022-12-03"))) %>%
   filter(!(id == 279 & date > as.Date("2022-12-29"))) %>%
-  filter(!(id == 210 & date > as.Date("2020-12-31")))
-
-#View(final_df) # View final data interactively
-
+  filter(!(id == 323 & date > as.Date("2023-01-14"))) %>%
+  filter(!(id == 327 & date > as.Date("2024-12-31"))) %>%
+  filter(!(id == 347 & date < as.Date("2024-12-10"))) %>%
+  filter(!(id == 210 & date > as.Date("2020-12-31"))) %>%
+   mutate(id = as.factor(id)) # Convert to factor at the END
+cat("Filtered out known bad data points.\n")
 
 # Inspect specific participants
-final_df %>% filter(id == 279) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
+#final_df %>% filter(id == 347) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
 ```
 
 
@@ -386,76 +360,97 @@ cat("Number of unique IDs in the final dataset:", length(unique_ids), "\n")
 # 5\. PROCESS & CALCULATE METRICS
 
 ```{r process-data}
-# This chunk performs all the main data transformations, including merging the
-# final cycle dates, scoring all questionnaires, and calculating derived metrics.
+# 5. PROCESS & CALCULATE METRICS
 
 # --- 1. Merge Final Manually-Confirmed Cycle Dates ---
-# This is the single source of truth for menses and ovulation events.
 final_dates <- read_xls(path_final_dates) %>%
   select(id, date, menses = menses_final, ovtoday = ovtoday_final) %>%
-  mutate(id = as.character(id), date = as.Date(date), menses = as.integer(menses), ovtoday = as.integer(ovtoday)) %>%
+  mutate(
+    id = as.character(id),
+    date = as.Date(date),
+    menses = as.integer(menses),
+    ovtoday = as.integer(ovtoday)
+  ) %>%
   filter(menses == 1 | ovtoday == 1)
 
 df <- df %>%
-  mutate(id = as.character(id)) %>% # Convert id to character for the join
+  mutate(id = as.character(id)) %>%
   left_join(final_dates, by = c("id", "date")) %>%
-  # After joining, non-event days are NA. coalesce() turns them into 0.
   mutate(
     menses = coalesce(menses, 0L),
     ovtoday = coalesce(ovtoday, 0L),
-    id = as.factor(id) # Convert id to a factor for analysis
+    id = as.factor(id)
   )
 
-# --- 2. Score Questionnaires (using original CamelCase names) ---
-# This step calculates all summary scores from the raw item-level data.
+# --- 2. Score Questionnaires ---
 df <- df %>%
   mutate(
-    # Ensure all raw item columns are numeric before calculations.
     across(starts_with(c("CSS_B_", "DEBQ_", "BDEFS_")), ~as.numeric(as.character(.))),
-    
-    # Calculate mean scores for each scale.
     CSS_Inatt = rowMeans(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17)), na.rm = TRUE),
     CSS_HypImp = rowMeans(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8, CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18)), na.rm = TRUE),
-    
-    # Calculate symptom counts (number of items rated 2 or higher).
     CSS_Inatt_Count = rowSums(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17), ~ .x >= 2), na.rm = TRUE),
     CSS_Hyp_Count   = rowSums(across(c(CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18), ~ .x >= 2), na.rm = TRUE),
     CSS_Imp_Count   = rowSums(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8), ~ .x >= 2), na.rm = TRUE),
     CSS_HypImp_Count = CSS_Hyp_Count + CSS_Imp_Count,
-    
     BDEFS_Total = rowMeans(across(starts_with("BDEFS_")), na.rm = TRUE),
     BDEFS_WM_avg = rowMeans(across(c(BDEFS_5)), na.rm = TRUE),
     BDEFS_RI_avg = rowMeans(across(c(BDEFS_6)), na.rm = TRUE),
     DEBQ_Total = rowMeans(across(starts_with("DEBQ_")), na.rm = TRUE),
-    
-    # Reverse code cognitive task scores where higher raw score = worse performance.
     score_pinball = as.numeric(score_pinball),
-    score_robot = as.numeric(score_robot),
-    score_pinball = max(score_pinball, na.rm = TRUE) - score_pinball,
-    score_robot = max(score_robot, na.rm = TRUE) - score_robot
-  )
+    score_robot = as.numeric(score_robot))
+    #score_pinball = max(score_pinball, na.rm = TRUE) - score_pinball, #Keep scores in the "right" direction
+    #score_robot = max(score_robot, na.rm = TRUE) - score_robot #Keep scores in the "right" direction
+  
 
-# --- 3. Calculate All Derived Metrics (Rolling Averages & Standardized Scores) ---
-# This single, efficient pipe creates all the .3roll, .5roll, .d, .zd, and .szd variables.
+# --- 3. Calculate All Derived Metrics ---
 df <- df %>%
-  group_by(id) %>% # All calculations until ungroup() are WITHIN-PERSON
-  
-  # Step 3a: Calculate rolling averages.
-  mutate(across(.cols = all_of(alldailyvars), .fns = list(`3roll` = ~zoo::rollapply(., 3, mean, na.rm=T, align="center", fill=NA, partial=T), `5roll` = ~zoo::rollapply(., 5, mean, na.rm=T, align="center", fill=NA, partial=T)), .names = "{.col}.{.fn}")) %>%
-  
-  # Step 3b: Calculate person-standardized metrics (.d and .zd).
-  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")), .fns = list(d = ~. - mean(., na.rm=T), zd = ~ (. - mean(., na.rm=T)) / sd(., na.rm=T)), .names = "{.col}.{.fn}")) %>%
-  
-  ungroup() %>% # Remove grouping to perform SAMPLE-WIDE calculations
-  
-  # Step 3c: Calculate sample-standardized metrics (.szd).
-  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")), .fns = list(szd = ~ (. - mean(., na.rm=T)) / sd(., na.rm=T)), .names = "{.col}.{.fn}"))
+  group_by(id) %>%
+  # Rolling averages (.3roll, .5roll):
+  mutate(across(.cols = all_of(alldailyvars),
+                .fns = list(
+                  `3roll` = ~zoo::rollapply(., 3, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE),
+                  `5roll` = ~zoo::rollapply(., 5, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  # Person-standardized metrics (.d, .zd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  d = ~. - mean(., na.rm=TRUE),
+                  zd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  ungroup() %>%
+  # Sample-standardized metrics (.szd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  szd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          ))
+
+# --- NEW: Sample-standardized AFTER 3roll (per hormone/per person then sample-wide) ---
+for (hormone in c("E2", "LH", "P4")) {
+  raw_col <- paste0(hormone)
+  roll_col <- paste0(hormone, ".3roll")
+  std_col <- paste0(hormone, ".3roll.szd")
+  # first, get 3roll (already calculated above), then sample-standardize
+  df[[std_col]] <- (df[[roll_col]] - mean(df[[roll_col]], na.rm=TRUE)) / sd(df[[roll_col]], na.rm=TRUE)
+}
 
 # Sort df by id and date
-df <- df %>%
-  arrange(id, date)
+df <- df %>% arrange(id, date)
+
+
+# ---  Run menstrualcycleR PACTS Scaling ---
+
+df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars))
+df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
+
 
 cat("All processing and metric calculation complete.\n")
+
 
 
 ```
@@ -464,7 +459,7 @@ cat("All processing and metric calculation complete.\n")
 
 ```{r analysis}
 # --- 1. Visualize Data Availability ---
-data_counts <- df %>%
+data_counts <- df_scaled %>%
   group_by(id) %>%
   summarize(
     days_in_study = n(),
@@ -491,9 +486,6 @@ venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_
   labs(title = "Overlap of Participants with Survey and Hormone Data")
 ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
 
-# --- 3. Run menstrualcycleR PACTS Scaling ---
-df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars))
-df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
 
 # --- 4. Create PACTS Check Plots ---
 # Set your variables to check
@@ -529,12 +521,14 @@ df_sens <- df_scaled %>%
 cat("Analysis and PACTS scaling complete.\n")
 
 # View data for id 270
-View(df_scaled %>% filter(id == 270))
+View(df_scaled %>% filter(id == 323))
 ```
 
 # 7\. GENERATE HORMONE PLOTS
 
 ```{r generate-plots}
+# 7. GENERATE HORMONE PLOTS
+
 # --- Prepare Data for Plotting ---
 hormones_long_all <- df %>%
   select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
@@ -543,7 +537,7 @@ hormones_long_all <- df %>%
   mutate(
     metric = replace_na(metric, "raw"),
     hormone = factor(hormone, levels = c("E2", "LH", "P4"))
-    )
+  )
 
 # --- Dynamic Plotting Loop ---
 ids_list <- unique(df$id)
@@ -569,8 +563,8 @@ for (row in 1:nrow(metrics_to_plot)) {
     if (should_facet) {
       p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) + 
                theme(legend.position = "none")
-      # ADD HORIZONTAL LINE AT Y=82 FOR RAW PROGESTERONE
-      if (metric_name == "raw") {
+      # Horizontal line for P4 at y=82 if metric is raw, 3roll, or 5roll
+      if (metric_name %in% c("raw", "3roll", "5roll")) {
         hline_data <- tibble(hormone = "P4", y = 82)
         p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
       }
