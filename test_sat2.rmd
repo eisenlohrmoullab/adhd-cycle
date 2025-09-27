@@ -36,6 +36,15 @@ library(lubridate)
 library(tidyr)
 library(rlang)
 library(visdat)
+library(readr)       # For reading CSV files
+library(readxl)      # For reading Excel files
+library(haven)       # For reading SPSS (SAV) files
+library(dplyr)       # For data wrangling
+library(lubridate)   # For date parsing/manipulation
+library(tidyr)       # For tidying data
+library(rlang)       # For tidy evaluation
+library(ggvenn)      # For Venn diagrams
+library(visdat)      # For missing data visualization
 
 # Explicitly state our function preferences to avoid ambiguity when multiple
 # packages have a function with the same name.
@@ -119,16 +128,6 @@ metrics_to_plot <- tibble::tribble(
 ```
 
 ```{r}
-# Load required libraries for data import, manipulation, visualization, and date handling
-library(readr)       # For reading CSV files
-library(readxl)      # For reading Excel files
-library(haven)       # For reading SPSS (SAV) files
-library(dplyr)       # For data wrangling
-library(lubridate)   # For date parsing/manipulation
-library(tidyr)       # For tidying data
-library(rlang)       # For tidy evaluation
-library(ggvenn)      # For Venn diagrams
-library(visdat)      # For missing data visualization
 
 # --- 1. Load All Data Sources ---
 # Read each raw data source from its respective file path
@@ -284,9 +283,17 @@ cat("Final maximally-filled merged dataset ready.\n")
 final_df <- final_df %>%
   arrange(id, daterated) %>%
   mutate(id = as.factor(id)) %>% # Convert id to a factor for analysis 
-  mutate(date=daterated)         # Create a 'date' column for menstrualcycleR functions
+  mutate(date=daterated) %>% # Create a 'date' column for menstrualcycleR functions
+  # remove all observations where id == 210 and date is after 2020 or id==270 and date is after 2022-12-03
+  filter(!(id == 270 & date > as.Date("2022-12-03"))) %>%
+  filter(!(id == 279 & date > as.Date("2022-12-29"))) %>%
+  filter(!(id == 210 & date > as.Date("2020-12-31")))
 
 #View(final_df) # View final data interactively
+
+
+# Inspect specific participants
+final_df %>% filter(id == 279) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
 ```
 
 
@@ -520,6 +527,9 @@ df_sens <- df_scaled %>%
   mutate(id = as.factor(id))
 
 cat("Analysis and PACTS scaling complete.\n")
+
+# View data for id 270
+View(df_scaled %>% filter(id == 270))
 ```
 
 # 7\. GENERATE HORMONE PLOTS
@@ -559,6 +569,11 @@ for (row in 1:nrow(metrics_to_plot)) {
     if (should_facet) {
       p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) + 
                theme(legend.position = "none")
+      # ADD HORIZONTAL LINE AT Y=82 FOR RAW PROGESTERONE
+      if (metric_name == "raw") {
+        hline_data <- tibble(hormone = "P4", y = 82)
+        p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
+      }
     } else {
       p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
     }
