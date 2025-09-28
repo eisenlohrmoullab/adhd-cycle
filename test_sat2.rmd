@@ -76,6 +76,7 @@ if (!dir.exists(output_folder)) {
 dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
 hormlist <- c("E2", "P4", "LH")
 alldailyvars <- c(dv_list, hormlist)
+corrplotlist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_16",  "E2", "P4", "LH")
 
 # --- Plotting Configuration ---
 # This table controls which plots are generated in the final plotting loop.
@@ -751,9 +752,136 @@ ggsave(
 
 ```
 
+
+
+```{r}
+# --- Final Corrected Function ---
+
+# 1. Load necessary libraries
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggcorrplot)
+
+# 2. Define the corrected function
+generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
+  
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  
+  # --- Steps 2, 3, 4: Calculate all values ---
+  
+  # Between-Person (Upper)
+  cat("Calculating between-person correlations...\n")
+  person_means <- data %>%
+    group_by(!!sym(id_var)) %>%
+    summarise(across(all_of(outcome_vars), ~mean(., na.rm = TRUE)))
+  between_corr <- cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  results_matrix[upper.tri(results_matrix)] <- between_corr[upper.tri(between_corr)]
+  
+  # ICC (Diagonal)
+  cat("Calculating Intra-Class Correlations...\n")
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]; formula <- as.formula(paste0(var, " ~ 1 + (1|", id_var, ")"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(formula, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        results_matrix[i, i] <- icc(model_fit)$ICC_adjusted
+      }
+    }
+  }
+  
+  # Within-Person (Lower)
+  cat("Calculating within-person correlations...\n")
+  within_corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars,
+                               dimnames = list(outcome_vars, outcome_vars))
+  
+  for (i in 1:n_vars) {
+    for (j in 1:n_vars) {
+      if (i > j) {
+        var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+        rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+        if (nrow(rmcorr_data) > 2) {
+            rmcorr_result <- rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+            results_matrix[i, j] <- rmcorr_result$r
+            within_corr_matrix[i, j] <- within_corr_matrix[j, i] <- rmcorr_result$r
+        }
+      }
+    }
+  }
+  
+  # --- Step 5: Determine Clustering Order and Reorder the Matrix ---
+  cat("Reordering matrix by clustering...\n")
+  
+  # --- THIS IS THE CORRECTED PART ---
+  # Perform hierarchical clustering manually to get the correct order
+  # 1. Calculate a distance matrix (1 - correlation)
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  # 2. Perform clustering
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  # 3. Get the reordered variable names
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+  # --- END OF CORRECTION ---
+  
+  # Apply this order to your final composite matrix
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  
+  # --- Step 6: Generate the Plot ---
+  cat("Generating plot...\n")
+  
+  plot <- ggcorrplot(
+    corr = results_matrix_ordered,
+    method = "square",
+    type = "full",
+    lab = TRUE,
+    lab_size = 3.5,
+    outline.color = "white",
+    ggtheme = ggplot2::theme_minimal(base_size = 14),
+    colors = c("#6D9EC1", "white", "#E46726"),
+    title = "Multilevel Correlation Matrix of Daily Outcomes",
+    legend.title = "Correlation"
+  ) +
+    labs(
+      caption = "Upper Triangle: Between-person Spearman ρ (on person-means)\nDiagonal: Intra-Class Correlation (ICC)\nLower Triangle: Within-person repeated measures r"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.caption = element_text(hjust = 0, size = 12),
+      axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y = element_text(face="bold"),
+      legend.position = "right",
+      panel.grid.major = element_blank()
+    )
+  
+  return(plot)
+}
+
+# --- Example Usage ---
+
+# Define your list of daily outcome variables
+#my_dv_list <- c("CSS_Inatt", "CSS_HypImp", "BDEFS_Total", "UPPS_PU_avg", "DEBQ_Total")
+#corrplotlist
+
+# Generate the plot (assuming your data is in 'df' and ID is 'id')
+correlation_heatmap <- generate_correlation_heatmap(data = df_scaled, 
+                                                   outcome_vars = corrplotlist, 
+                                                   id_var = "id")
+
+# Print the plot to the screen
+print(correlation_heatmap)
+
+# Save the plot to your output folder
+ggsave(filename = file.path(output_folder, "multilevel_correlation_heatmap.png"), 
+       plot = correlation_heatmap, 
+       width = 12, height = 10, dpi = 300)
+
+```
+
 # Plot Correlations
 ```{r}
-# --- Add this code chunk to your R Markdown file ---
+# --- Corrected Function ---
 
 # 1. Load necessary libraries (if not already loaded)
 library(tidyverse)
@@ -763,7 +891,7 @@ library(lme4)
 library(ggcorrplot)
 library(RColorBrewer)
 
-# 2. Define the function
+# 2. Define the corrected function
 generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
   
   # --- Step 1: Initialize the results matrix ---
@@ -772,7 +900,6 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
                            dimnames = list(outcome_vars, outcome_vars))
   
   # --- Step 2: Calculate Between-Person Correlations (Upper Triangle) ---
-  # Spearman correlation on person-mean scores
   cat("Calculating between-person correlations (upper triangle)...\n")
   person_means <- data %>%
     group_by(!!sym(id_var)) %>%
@@ -789,14 +916,16 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
     
     # Ensure there's enough data to fit the model
     if (sum(!is.na(data[[var]])) > 1) {
-      model <- lmer(formula, data = data)
-      icc_val <- icc(model)$ICC_adjusted
-      results_matrix[i, i] <- icc_val
+      # Use try() to catch potential model convergence errors
+      model_fit <- try(lmer(formula, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+      }
     }
   }
   
   # --- Step 4: Calculate Within-Person Correlations (Lower Triangle) ---
-  # Repeated measures correlation (rmcorr)
   cat("Calculating within-person correlations (lower triangle)...\n")
   for (i in 1:n_vars) {
     for (j in 1:n_vars) {
@@ -804,18 +933,19 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
         var1 <- outcome_vars[i]
         var2 <- outcome_vars[j]
         
-        # rmcorr requires a dataframe with no missing values for the pair
         rmcorr_data <- data %>%
-          select(!!sym(id_var), !!sym(var1), !!sym(var2)) %>%
+          select(all_of(c(id_var, var1, var2))) %>%
           drop_na()
         
-        # Ensure there's enough data
-        if (nrow(rmcorr_data) > 0) {
-          rmcorr_result <- rmcorr(participant = !!sym(id_var), 
-                                  measure1 = !!sym(var1), 
-                                  measure2 = !!sym(var2), 
-                                  dataset = rmcorr_data)
-          results_matrix[i, j] <- rmcorr_result$r
+        # Ensure there are enough paired observations for rmcorr
+        if (nrow(rmcorr_data) > 2) {
+            # --- THIS IS THE CORRECTED PART ---
+            # rmcorr expects strings for participant and measure names, not symbols.
+            rmcorr_result <- rmcorr(participant = id_var, 
+                                    measure1 = var1, 
+                                    measure2 = var2, 
+                                    dataset = rmcorr_data)
+            results_matrix[i, j] <- rmcorr_result$r
         }
       }
     }
@@ -825,14 +955,16 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
   cat("Generating plot...\n")
   
   plot <- ggcorrplot(
-    corr = results_matrix,
+  corr = results_matrix,
+  hclust = TRUE,          # Add this line to reorder by clustering
+  hclust.method = "ward.D2", # A good clustering algorithm
     method = "square",
     type = "full",
-    lab = TRUE, # Add correlation coefficients
+    lab = TRUE, 
     lab_size = 3.5,
     outline.color = "white",
     ggtheme = ggplot2::theme_minimal(base_size = 14),
-    colors = c("#6D9EC1", "white", "#E46726"), # Blue, white, orange color scheme
+    colors = c("#6D9EC1", "white", "#E46726"), 
     title = "Multilevel Correlation Matrix of Daily Outcomes",
     legend.title = "Correlation"
   ) +
@@ -845,21 +977,20 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
       axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
       axis.text.y = element_text(face="bold"),
       legend.position = "right",
-      panel.grid.major = element_blank() # Clean up the background
+      panel.grid.major = element_blank()
     )
   
   return(plot)
 }
-
 # --- Example Usage ---
 
 # Define your list of daily outcome variables
 #my_dv_list <- c("CSS_Inatt", "CSS_HypImp", "BDEFS_Total", "UPPS_PU_avg", "DEBQ_Total")
-#alldailyvars
+#corrplotlist
 
 # Generate the plot (assuming your data is in 'df' and ID is 'id')
 correlation_heatmap <- generate_correlation_heatmap(data = df_scaled, 
-                                                   outcome_vars = alldailyvars, 
+                                                   outcome_vars = corrplotlist, 
                                                    id_var = "id")
 
 # Print the plot to the screen
@@ -869,6 +1000,8 @@ print(correlation_heatmap)
 ggsave(filename = file.path(output_folder, "multilevel_correlation_heatmap.png"), 
        plot = correlation_heatmap, 
        width = 12, height = 10, dpi = 300)
+
+
 ```
 
 
