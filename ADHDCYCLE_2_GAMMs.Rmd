@@ -5,18 +5,47 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
-# To Do List for this file
-# - Make sure all outcomes are included
-# - Update so that the time variable can be easily switched between cyclic_time and cyclic_time_imp_ov
-# - Update the labels on the X axis of the cycle to switch between orders
-
-
-
-
-
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+# This chunk sets the global options for the entire R Markdown document.
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(scipen = 999, digits = 3)
+```
+
+```{r load-libraries}
+
+# This chunk loads all the packages needed for the analysis.
+library(tidyverse)       # A collection of essential packages for data manipulation and visualization (includes dplyr, ggplot2, etc.)
+library(janitor)         # Provides functions for cleaning data and table creation.
+library(haven)           # For reading data from other statistical software like SPSS (.sav).
+library(readxl)          # For reading data from Excel files (.xls, .xlsx).
+library(zoo)             # For calculating rolling averages.
+library(lubridate)       # For making it easier to work with dates and times.
+library(conflicted)      # Helps manage function name conflicts between packages.
+library(menstrualcycleR) # For cycle-specific analyses like PACTS scaling.
+library(gridExtra)       # For arranging multiple plots on one page.
+library(ggvenn)          # For creating Venn diagrams.
+library(readr)       # For reading CSV files
+library(dplyr)       # For data wrangling
+library(lubridate)   # For date parsing/manipulation
+library(tidyr)       # For tidying data
+library(rlang)       # For tidy evaluation
+library(visdat)      # For missing data visualization
+library(ggpubr)      # For publication-ready plots
+library(mgcv)        # For Generalized Additive Models (GAMs)
+library(gamm4)       # For GAMs with mixed effects
+library(ggplot2)     # For data visualization
+library(marginaleffects) # For calculating marginal effects and predictions
+library(glue)        # For string interpolation
+library(broom)       # For tidying model outputs
+
+
+# Explicitly state our function preferences to avoid ambiguity when multiple
+# packages have a function with the same name.
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("summarize", "dplyr")
+
 ```
 
 
@@ -27,8 +56,14 @@ knitr::opts_chunk$set(echo = TRUE)
 # --- 1. Setup ---
 # Assume 'cycle_df_scaled' is your pre-existing dataframe
 
-# Define your output folder and current date
-gamm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/"
+# --- Output Folder ---
+
+# Define a base output location and create a unique, timestamped subfolder for this specific run.
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+gamm_output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_GAMMs/"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
 
 current_date <- format(Sys.Date(), "%Y%m%d")
 
@@ -46,11 +81,11 @@ full_path <- paste0(gamm_output_folder, file_name)
 # Create a named vector. The 'names' are the column names in your dataframe.
 # The 'values' are the pretty labels you want on your plots.
 outcomes <- c(
-  "CSS_Inatt_Count" = "CSS Inattention Sx Count",
-  "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
-  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
   "CSS_Inatt" = "CSS Inattention Sx Severity",
   "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
+   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
+  "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
+  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
     "score_pinball" = "Working Memory Score (Pinball)", 
     "score_robot" = "Reponse Inhibition (Robot Factory)", 
     "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
@@ -103,7 +138,7 @@ for (outcome_to_check in names(outcomes)) {
 # --- 1. Define the time variable you want to use ---
 
 # You can easily switch this back to "cyclic_time" if needed
-time_var <- "cyclic_time_ov"
+time_var <- "cyclic_time_imp_ov"
 
 
 ```
@@ -130,7 +165,7 @@ for (outcome_var in names(outcomes)) {
   # Dynamically create the formula for the GAM model using time_var
   gamm_formula <- as.formula(paste(
     log_outcome_var,
-    "~ s(", time_var, ", bs = 'cc', k = 10) + s(id, bs = 're') + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
+    "~ s(id, bs = 're') + s(", time_var, ", bs = 'cc', k = 10) + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
   ))
   
   # Create the knots list dynamically
@@ -195,109 +230,4 @@ for (outcome_var in names(outcomes)) {
 ```
 
 
-# Run iterations with the sensitivity analysis dataset removing folks with messy hormones/cycles
-```{r}
-
-
-# --- 1. Define the time variable you want to use ---
-
-# You can easily switch this back to "cyclic_time" if needed
-#time_var <- "cyclic_time_impute"
-
-#time_var <- "cyclic_time"
-
-# change labels
-
-time_var <- "cyclic_time_imp_ov"
-time_var <- "cyclic_time_ov"
-
-
-```
-
-
-```{r}
-
-# --- 3. Loop Through Each Outcome ---
-for (outcome_var in names(outcomes)) {
-
-  outcome_label <- outcomes[outcome_var]
-  log_outcome_var <- paste0(outcome_var, "_Log")
-
-  message(paste("Processing outcome:", outcome_label, "with time variable:", time_var))
-
-  # Log-transform the current outcome variable
-  df_sens[[log_outcome_var]] <- log(df_sens[[outcome_var]] + 1)
-
-  # Prepare data for the model using the specified time_var
-  selected_vars <- c(time_var, log_outcome_var, "id")
-  datSX <- df_sens[complete.cases(df_sens[selected_vars]), ]
-  datSX$id <- as.factor(datSX$id)
-
-  # Dynamically create the formula for the GAM model using time_var
-  gamm_formula <- as.formula(paste(
-    log_outcome_var,
-    "~ s(", time_var, ", bs = 'cc', k = 10) + s(id, bs = 're') + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
-  ))
-  
-  # Create the knots list dynamically
-  knots_list <- list(c(-1, 1))
-  names(knots_list) <- time_var
-
-  # Run the GAMM model
-  gamm <- mgcv::gam(
-    formula = gamm_formula,
-    data = datSX,
-    knots = knots_list,
-    method = 'REML'
-  )
-
-  # Save the model summary to a dynamically named .txt file
-  summary_filename <- paste0(gamm_output_folder, "gamm_", log_outcome_var, "_", time_var, "_summary_", current_date, ".txt")
-  sink(summary_filename)
-  print(summary(gamm))
-  sink()
-
-  # --- Plotting ---
-  
-  # Create a named list for expand.grid using the time_var string
-  grid_list <- list(seq(-1, 1, by = 0.05), id = 0)
-  names(grid_list)[1] <- time_var
-  plotdat <- do.call(expand.grid, grid_list)
-
-  # Get predictions and back-transform them
-  pred <- marginaleffects::predictions(
-    gamm,
-    newdata = plotdat,
-    type = "response",
-    transform = function(x) exp(x) - 1
-  )
-
-  plotdat$estimate <- pred$estimate
-  plotdat$conf.low <- pred$conf.low
-  plotdat$conf.high <- pred$conf.high
-
-  # Generate the plot with the dynamic y-axis label
-  gamplot <- ggplot(plotdat, aes(x = .data[[time_var]], y = estimate)) +
-    scale_x_continuous(
-      limits = c(-1, 1),
-      breaks = seq(-1, 1, by = 0.50),
-      # IMPORTANT: You may need to change these labels to match the meaning of cyclic_time_ov
-      labels = c("Menses Onset", "50%F", "Ovulation", "50%L", "Menses Onset")
-    ) +
-    labs(x = "", y = outcome_label) +
-    geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf, fill = "grey70", alpha = 0.2, color = "white") +
-    geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf, fill = "grey87", alpha = 0.2, color = "white") +
-    geom_line(linewidth = 1) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "lightgrey", alpha = 0.3) +
-    theme_minimal()
-
-  print(gamplot)
-
-  # Save the plot to a dynamically named .png file
-  plot_filename <- paste0(gamm_output_folder, "gamplot_", log_outcome_var, "_", time_var, "_sensitivity_", current_date, ".png")
-  ggsave(plot_filename, gamplot, width = 8, height = 6, dpi = 300)
-
-}
-
-```
 

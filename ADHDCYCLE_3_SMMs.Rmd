@@ -33,7 +33,7 @@ source("~/CLEAR Lab Repositories/proj_BEARS/scripts/subset_by_phase_cyclic.R")
 ```{r}
 
 # Define the file path
-file_path <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-22/datasets_interim/adhd_daily_df_scaled_20250922.RData"
+file_path <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-27_Interim_Datasets/adhd_daily_scaled_20250927.RData"
 
 # Load the .RData file. This will restore the object with its original name, 'df_scaled'.
 load(file_path)
@@ -47,27 +47,31 @@ load(file_path)
 # --- 1. Setup ---
 
 ```{r}
-# Assumes 'cycle_df_scaled' is your pre-existing dataframe
 
-# Define your base output folder
+# Assume 'cycle_df_scaled' is your pre-existing dataframe
 
-smm_output_folder <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-22/SMMs"
+# --- Output Folder ---
 
-# Get the current date as a string
+# Define a base output location and create a unique, timestamped subfolder for this specific run.
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+smm_output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_SMMs/"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
+
 current_date <- format(Sys.Date(), "%Y%m%d")
 
-# --- 2. Create Dated Output Folder ---
+# Create the full output file name with the date
+file_name <- paste0("SMM_", current_date, ".rds")
+full_path <- paste0(smm_output_folder, file_name)
 
-# Combine the base folder path and the current date to create the full path
-dated_output_folder <- file.path(smm_output_folder, current_date)
-
-# Check if the dated directory exists, and create it if it doesn't
-if (!dir.exists(dated_output_folder)) {
-  dir.create(dated_output_folder, recursive = TRUE)
-  message(paste("Successfully created directory:", dated_output_folder))
-} else {
-  message(paste("Directory already exists:", dated_output_folder))
+if (!dir.exists(smm_output_folder)) {
+  dir.create(smm_output_folder, recursive = TRUE)
 }
+
+# Example of how you would save your data using the full path
+# saveRDS(cycle_df_scaled, file = full_path)
+
 ```
 
 # --- 2. Define Outcomes and Their Plot Labels ---
@@ -78,11 +82,11 @@ if (!dir.exists(dated_output_folder)) {
 # NAMES = the column names in your dataframe (e.g., dep)
 # VALUES = the pretty labels for your plots (e.g., "Depressed Mood")
 outcomes <- c(
+  "CSS_Inatt" = "CSS Inattention Sx Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
   "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
   "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
-  "CSS_Inatt" = "CSS Inattention Sx Severity",
-  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
     "score_pinball" = "Working Memory Score (Pinball)", 
     "score_robot" = "Reponse Inhibition (Robot Factory)", 
     "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
@@ -144,11 +148,12 @@ for (outcome_variable in names(outcomes)) {
 
 # --- ‼️ CHOOSE YOUR TIME VARIABLES HERE ‼️ ---
 # Set the exact variable name for menses-centered analysis
-menses_time_variable <- "cyclic_time"  # Or "cyclic_time_impute"
+menses_time_variable <- "cyclic_time"  # Or "cyclic_time"
 
 # Set the exact variable name for ovulation-centered analysis
-ovulation_time_variable <- "cyclic_time_ov"  # Or "cyclic_time_ov_imp"
+ovulation_time_variable <- "cyclic_time_ov"  # Or "cyclic_time_ov"
 
+cycle_df_scaled$cyclic_time_imp_ov
 centering_methods <- c("menses", "ovulation")
 
 ```
@@ -208,7 +213,7 @@ for (i in 1:nrow(analysis_combinations)) {
     data = preprocessed_data,
     outcome = current_outcome,
     time_var = current_time_var,
-    min_obs = 5
+    min_obs = 3
   )
   data_for_analysis <- subset_result$data_subset
   
@@ -216,12 +221,12 @@ for (i in 1:nrow(analysis_combinations)) {
     data = data_for_analysis,
     outcome = current_outcome,
     time_var = current_time_var, # Pass the chosen time variable
-    g = 2:5,
+    g = 2:4,
     d_inter = 20,
     k_smooth = 10,
     plot = TRUE,
     centering = current_centering,
-    save_dir = dated_output_folder
+    save_dir = smm_output_folder
   )
   
   list_name <- paste0(current_outcome, "_", current_centering)
@@ -233,7 +238,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     centering = current_centering,
     smm_results = smm_results,
-    save_dir = dated_output_folder
+    save_dir = smm_output_folder
   )
   
   all_bic_results[[list_name]] <- bic_result
@@ -244,7 +249,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     smm_result = smm_results,
     centering = current_centering,
-    save_dir = dated_output_folder,
+    save_dir = smm_output_folder,
     k_smooth = 10
   )
   
@@ -315,7 +320,7 @@ for (i in 1:nrow(analysis_combinations)) {
     k_smooth = 10,
     plot = TRUE,
     centering = current_centering,
-    save_dir = dated_output_folder
+    save_dir = smm_output_folder
   )
   
   list_name <- paste0(current_outcome, "_", current_centering)
@@ -327,7 +332,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     centering = current_centering,
     smm_results = smm_results,
-    save_dir = dated_output_folder
+    save_dir = smm_output_folder
   )
   
   all_bic_results[[list_name]] <- bic_result
@@ -338,7 +343,7 @@ for (i in 1:nrow(analysis_combinations)) {
     time_var = current_time_var, # Pass the chosen time variable
     smm_result = smm_results,
     centering = current_centering,
-    save_dir = dated_output_folder,
+    save_dir = smm_output_folder,
     k_smooth = 10
   )
   

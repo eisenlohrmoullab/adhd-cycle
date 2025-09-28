@@ -51,9 +51,6 @@ conflict_prefer("summarize", "dplyr")
 
 ```{r config}
 
-# This is the single control panel for the pipeline. To adapt this script for a
-# new project, a user should only need to edit the settings in this chunk.
-
 # --- Input File Paths (Using Your Direct, Hardcoded Paths) ---
 # Define the full path to each raw data file needed for the analysis.
 
@@ -267,7 +264,7 @@ final_df <- final_df %>%
 cat("Filtered out known bad data points.\n")
 
 # Inspect specific participants
-final_df %>% filter(id == 292) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
+#final_df %>% filter(id == 292) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
 
 
 ```
@@ -276,78 +273,6 @@ final_df %>% filter(id == 292) %>% select(id, date, E2, P4, LH, BDEFS_1, score_p
 ```{r}
 # Rename final_df to df
 df <- final_df
-```
-
-
-```{r}
-# --- 11. Visualize missing hormone data ---
-# Visualize missingness in key columns using visdat::vis_miss
-miss_plot <- visdat::vis_miss(df %>% select(id, daterated, E2, BDEFS_1, score_pinball))
-# Save plot to output folder with a dated descriptive name
-ggsave(
-  filename = file.path(output_folder, paste0("missingness_", Sys.Date(), ".png")),
-  plot = miss_plot, width = 8, height = 5
-)
-
-# --- 12. Check which ids have the most missing hormone data ---
-# Summarize missing values by id for hormones
-missing_summary <- df %>%
-  group_by(id) %>%
-  summarise(
-    total_days = n(),
-    missing_E2 = sum(is.na(E2)),
-    missing_P4 = sum(is.na(P4)),
-    missing_LH = sum(is.na(LH))
-  ) %>%
-  arrange(desc(missing_E2), desc(missing_P4), desc(missing_LH))
-
-#View(missing_summary) # View summary interactively
-
-# Save summary table to a CSV file
-write_csv(missing_summary, file.path(output_folder, paste0("missing_hormones_by_id_", Sys.Date(), ".csv")))
-
-# --- Venn diagram for IDs with E2 and/or BDEFS data ---
-# Make sets for Venn diagram
-ids_e2 <- df %>%
-  filter(!is.na(E2)) %>%
-  distinct(id) %>%
-  pull(id)
-
-ids_bdefs <- df %>%
-  filter(!is.na(BDEFS_1)) %>%
-  distinct(id) %>%
-  pull(id)
-
-venn_data_e2_bdefs <- list(
-  Has_E2 = ids_e2,
-  Has_BDEFS = ids_bdefs
-)
-
-venn_plot <- ggvenn(venn_data_e2_bdefs, fill_color = c("#E69F00", "#56B4E9"))
-# Save Venn diagram to output folder with a dated descriptive name
-ggsave(
-  filename = file.path(output_folder, paste0("e2_bdefs_venn_", Sys.Date(), ".png")),
-  plot = venn_plot, width = 6, height = 4
-)
-
-# --- List IDs with NO E2 and NO BDEFS ---
-# Find IDs lacking both key variables
-ids_all <- unique(df$id)
-ids_neither <- setdiff(ids_all, union(ids_e2, ids_bdefs))
-print(ids_neither)
-# Save to text file
-write_lines(ids_neither, file.path(output_folder, paste0("ids_neither_e2_bdefs_", Sys.Date(), ".txt")))
-
-# --- Table of which IDs have E2 and/or BDEFS ---
-summary_df <- tibble(
-  id = ids_all,
-  has_e2 = id %in% ids_e2,
-  has_bdefs = id %in% ids_bdefs
-)
-#View(summary_df)
-# Save table to CSV
-write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", Sys.Date(), ".csv")))
-
 ```
 
 
@@ -371,8 +296,7 @@ final_dates <- read_xls(path_final_dates) %>%
     id = as.character(id),
     date = as.Date(date),
     menses = as.integer(menses),
-    ovtoday = as.integer(ovtoday)
-  ) %>%
+    ovtoday = as.integer(ovtoday)) %>%
   filter(menses == 1 | ovtoday == 1)
 
 df <- df %>%
@@ -447,7 +371,9 @@ df <- df %>% arrange(id, date)
 
 # ---  Run menstrualcycleR PACTS Scaling ---
 
-df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars))
+# Subset to only necessary columns for PACTS scaling and all rolling and deviation and standardized variables
+df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars), matches("\\.(3roll|5roll|d|zd|szd)$"))
+
 df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
 
 
@@ -456,67 +382,76 @@ cat("All processing and metric calculation complete.\n")
 
 
 ```
+# 7\. GENERATE HORMONE PLOTS
 
-# 6\. DATA EXPLORATION & ANALYSIS
+```{r generate-plots}
+# 7. GENERATE HORMONE PLOTS
 
-```{r analysis}
-# --- 1. Visualize Data Availability ---
-data_counts <- df_scaled %>%
-  group_by(id) %>%
-  summarize(
-    days_in_study = n(),
-    survey_days = sum(!is.na(DRSP_1)),
-    hormone_days = sum(!is.na(E2))
-  ) %>%
-  pivot_longer(cols = -id, names_to = "data_type", values_to = "count")
-
-availability_plot <- ggplot(data_counts, aes(x = data_type, y = count)) +
-  geom_violin(aes(fill = data_type), alpha = 0.5, trim = FALSE) +
-  geom_boxplot(width = 0.1, outlier.shape = NA) +
-  geom_jitter(width = 0.1, alpha = 0.6) +
-  facet_wrap(~ data_type, scales = "free_x") +
-  labs(title = "Data Availability per Participant", y = "Number of Days", x = "") +
-  theme_light() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
-ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
-
-# --- 2. Venn Diagram of Data Overlap ---
-venn_list <- list(
-  Survey_Data = data_counts %>% filter(data_type == "survey_days" & count > 0) %>% pull(id) %>% as.character(),
-  Hormone_Data = data_counts %>% filter(data_type == "hormone_days" & count > 0) %>% pull(id) %>% as.character()
-)
-venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_size = 0.5, set_name_size = 4) +
-  labs(title = "Overlap of Participants with Survey and Hormone Data")
-ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
-
-
-# --- 4. Create PACTS Check Plots ---
-# Set your variables to check
-pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DEBQ_Total")
-
-# Run the check function ONCE for all variables
-results <- menstrualcycleR::cycledata_check(df_scaled, symptom_columns = pacts_vars_to_check)
-
-# Print each plot to the active R device (e.g., RStudio Plots pane)
-for (var in pacts_vars_to_check) {
-  print(results$data_symptom_plots[[var]])
-}
-
-# Save each plot to PNG
-pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
-if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder, recursive = TRUE)
-
-for (var in pacts_vars_to_check) {
-  ggsave(
-    filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")),
-    plot = results$data_symptom_plots[[var]],
-    width = 8, height = 6, dpi = 300
+# --- Prepare Data for Plotting ---
+hormones_long_all <- df_scaled %>%
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  # --- FIX: Use a more robust separator logic for names like "3roll.zd" ---
+  separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
+  mutate(
+    metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
+    hormone = factor(hormone, levels = c("E2", "LH", "P4"))
   )
+
+# --- Dynamic Plotting Loop ---
+ids_list <- unique(df_scaled$id)
+for (row in 1:nrow(metrics_to_plot)) {
+  metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
+  plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
+  y_label <- metrics_to_plot$y_axis_label[row]
+  
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  
+  for (person_id in ids_list) {
+    plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    
+    vline_data <- df_scaled %>% filter(id == person_id)
+    
+    # --- FIX: Explicitly define the full date range for the participant ---
+    date_range <- range(vline_data$date, na.rm = TRUE)
+    
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
+      # --- FIX: Apply the date range limit to the x-axis scale ---
+      scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
+      scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
+      labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
+      theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+      
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) +
+               theme(legend.position = "none")
+      if (metric_name %in% c("raw", "3roll", "5roll")) {
+        hline_data <- tibble(hormone = "P4", y = 82)
+        p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
+      }
+    } else {
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    
+    plot_height <- if (should_facet) 8 else 7
+    ggsave(filename = file.path(current_output_dir, paste0("raw_plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
+  }
 }
+cat("--- All pre-cleaning hormone plots generated successfully! ---\n")
 ```
 
 # Set final hormone/cycle missingness based on hormone plots
 ```{r}
 # --- 3. Final Removals Based on Hormone Plots ---
+
+# Discussions and details are documented in greatest detail in the CLEAR Lab slack channel for the primary ADHD R01 Primary ms.
 
 # --- Omit Hormone Data ---
 # Set hormone values to missing for a list of ids
@@ -585,6 +520,11 @@ cat("P4 variables set to missing for ID 292 from 2023-05-03 onwards.\n")
 
 ```
 
+
+
+
+
+
 # 7\. GENERATE HORMONE PLOTS
 
 ```{r generate-plots}
@@ -617,7 +557,7 @@ for (row in 1:nrow(metrics_to_plot)) {
     plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
     if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
     
-    vline_data <- df %>% filter(id == person_id)
+    vline_data <- df_scaled %>% filter(id == person_id)
     
     # --- FIX: Explicitly define the full date range for the participant ---
     date_range <- range(vline_data$date, na.rm = TRUE)
@@ -647,11 +587,168 @@ for (row in 1:nrow(metrics_to_plot)) {
     ggsave(filename = file.path(current_output_dir, paste0("cleaned_final_plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
   }
 }
-cat("--- All cleaned hormone plots generated successfully! ---\n")
+cat("--- All cleaned FINAL hormone plots generated successfully! ---\n")
 ```
 
 
 
+# 6\. DATA EXPLORATION & ANALYSIS
+
+```{r analysis}
+# --- 1. Visualize Data Availability ---
+data_counts <- df_scaled %>%
+  group_by(id) %>%
+  summarize(
+    days_in_study = n(),
+    survey_days = sum(!is.na(DRSP_1)),
+    hormone_days = sum(!is.na(E2))
+  ) %>%
+  pivot_longer(cols = -id, names_to = "data_type", values_to = "count")
+
+availability_plot <- ggplot(data_counts, aes(x = data_type, y = count)) +
+  geom_violin(aes(fill = data_type), alpha = 0.5, trim = FALSE) +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.6) +
+  facet_wrap(~ data_type, scales = "free_x") +
+  labs(title = "Data Availability per Participant", y = "Number of Days", x = "") +
+  theme_light() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
+ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
+
+# --- 2. Venn Diagram of Data Overlap ---
+venn_list <- list(
+  Survey_Data = data_counts %>% filter(data_type == "survey_days" & count > 0) %>% pull(id) %>% as.character(),
+  Hormone_Data = data_counts %>% filter(data_type == "hormone_days" & count > 0) %>% pull(id) %>% as.character()
+)
+venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_size = 0.5, set_name_size = 4) +
+  labs(title = "Overlap of Participants with Survey and Hormone Data")
+ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
+
+
+# --- 4. Create PACTS Check Plots ---
+# Set your variables to check
+pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DEBQ_Total")
+
+# Run the check function ONCE for all variables
+results <- menstrualcycleR::cycledata_check(df_scaled, symptom_columns = pacts_vars_to_check)
+
+# Print each plot to the active R device (e.g., RStudio Plots pane)
+for (var in pacts_vars_to_check) {
+  print(results$data_symptom_plots[[var]])
+}
+
+# Save each plot to PNG
+pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
+if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder, recursive = TRUE)
+
+for (var in pacts_vars_to_check) {
+  ggsave(
+    filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")),
+    plot = results$data_symptom_plots[[var]],
+    width = 8, height = 6, dpi = 300
+  )
+}
+```
+
+
+```{r}
+# --- 11. Visualize missing hormone data ---
+# Visualize missingness in key columns using visdat::vis_miss
+miss_plot <- visdat::vis_miss(df %>% select(id, daterated, E2, BDEFS_1, score_pinball))
+# Save plot to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("missingness_", Sys.Date(), ".png")),
+  plot = miss_plot, width = 8, height = 5
+)
+
+# --- 12. Check which ids have the most missing hormone data ---
+# Summarize missing values by id for hormones
+missing_summary <- df %>%
+  group_by(id) %>%
+  summarise(
+    total_days = n(),
+    missing_E2 = sum(is.na(E2)),
+    missing_P4 = sum(is.na(P4)),
+    missing_LH = sum(is.na(LH))
+  ) %>%
+  arrange(desc(missing_E2), desc(missing_P4), desc(missing_LH))
+
+#View(missing_summary) # View summary interactively
+
+# Save summary table to a CSV file
+write_csv(missing_summary, file.path(output_folder, paste0("missing_hormones_by_id_", Sys.Date(), ".csv")))
+
+# --- Venn diagram for IDs with E2 and/or BDEFS data ---
+# Make sets for Venn diagram
+ids_e2 <- df %>%
+  filter(!is.na(E2)) %>%
+  distinct(id) %>%
+  pull(id)
+
+ids_bdefs <- df %>%
+  filter(!is.na(BDEFS_1)) %>%
+  distinct(id) %>%
+  pull(id)
+
+venn_data_e2_bdefs <- list(
+  Has_E2 = ids_e2,
+  Has_BDEFS = ids_bdefs
+)
+
+venn_plot <- ggvenn(venn_data_e2_bdefs, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("e2_bdefs_venn_", Sys.Date(), ".png")),
+  plot = venn_plot, width = 6, height = 4
+)
+
+# Now do this at the observation level
+venn_data_obs <- list(
+  Has_E2 = which(!is.na(df$E2)),
+  Has_BDEFS = which(!is.na(df$BDEFS_1)))
+venn_plot_obs <- ggvenn(venn_data_obs, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(filename = file.path(output_folder, paste0("e2_bdefs_venn_obs_", Sys.Date(), ".png")),
+  plot = venn_plot_obs, width = 6, height = 4)
+
+# Now do this at the person level for any participant with more than 10 days of both E2 and BDEFS
+ids_e2_10days <- df %>%
+  group_by(id) %>%
+  summarise(n_e2 = sum(!is.na(E2))) %>%
+  filter(n_e2 >= 10) %>%
+  pull(id)
+
+ids_bdefs_10days <- df %>%
+  group_by(id) %>%
+  summarise(n_bdefs = sum(!is.na(BDEFS_1))) %>%
+  filter(n_bdefs >= 10) %>%
+  pull(id)
+venn_data_10days <- list(
+  Has_E2_10days = ids_e2_10days,
+  Has_BDEFS_10days = ids_bdefs_10days)
+venn_plot_10days <- ggvenn(venn_data_10days, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(filename = file.path(output_folder, paste0("e2_bdefs_venn_10days_", Sys.Date(), ".png")),
+  plot = venn_plot_10days, width = 6, height = 4)
+
+# --- List IDs with NO E2 and NO BDEFS ---
+# Find IDs lacking both key variables
+ids_all <- unique(df$id)
+ids_neither <- setdiff(ids_all, union(ids_e2, ids_bdefs))
+print(ids_neither)
+# Save to text file
+write_lines(ids_neither, file.path(output_folder, paste0("ids_neither_e2_bdefs_", Sys.Date(), ".txt")))
+
+# --- Table of which IDs have E2 and/or BDEFS ---
+summary_df <- tibble(
+  id = ids_all,
+  has_e2 = id %in% ids_e2,
+  has_bdefs = id %in% ids_bdefs
+)
+#View(summary_df)
+# Save table to CSV
+write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", Sys.Date(), ".csv")))
+
+```
 
 # Print histogram of all E2 variables to visually inspect for outliers
 ```{r}
@@ -659,7 +756,7 @@ cat("--- All cleaned hormone plots generated successfully! ---\n")
 # Visualize distributions of E2, E2.zd, E2.szd, and log(E2 + 1)
 # Histogram of raw E2 values
 
-e2_histogram <- df %>%
+e2_histogram <- df_scaled %>%
   ggplot(aes(x = E2)) +
   geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
   labs(title = "Histogram of E2 Values", x = "E2", y = "Count") +
@@ -669,7 +766,7 @@ print(e2_histogram)
 ggsave(filename = file.path(output_folder, "e2_histogram.png"), plot = e2_histogram, width = 8, height = 5, dpi = 300)
 
 # now do the same for person-standardized values
-e2_person_std_histogram <- df %>%
+e2_person_std_histogram <- df_scaled %>%
   ggplot(aes(x = E2.zd)) +
   geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
   labs(title = "Histogram of Person-Standardized E2 Values", x = "E2 Person-Standardized (d)", y = "Count") +
@@ -678,7 +775,7 @@ print(e2_person_std_histogram)
 ggsave(filename = file.path(output_folder, "e2_person_standardized_histogram.png"), plot = e2_person_std_histogram, width = 8, height = 5, dpi = 300)
 
 # now do the same for sample-standardized values
-e2_sample_std_histogram <- df %>%
+e2_sample_std_histogram <- df_scaled %>%
   ggplot(aes(x = E2.szd)) +
   geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
   labs(title = "Histogram of Sample-Standardized E2 Values", x = "E2 Sample-Standardized (szd)", y = "Count") +
@@ -687,7 +784,7 @@ print(e2_sample_std_histogram)
 ggsave(filename = file.path(output_folder, "e2_sample_standardized_histogram.png"), plot = e2_sample_std_histogram, width = 8, height = 5, dpi = 300)
 
 # Test whether a log transform improves the distribution
-e2_log_histogram <- df %>%
+e2_log_histogram <- df_scaled %>%
   mutate(E2_log = log(E2 + 1)) %>% # Add 1
   ggplot(aes(x = E2_log)) +
   geom_histogram(bins = 100, fill = "orange", alpha = 0.7)+
@@ -719,7 +816,7 @@ ggsave(filename = file.path(output_folder, "combined_e2_histograms.png"),
 # Visualize distributions of P4, P4.zd, P4.szd, and
 # log(P4 + 1)
 # Histogram of raw P4 values
-p4_histogram <- df %>%
+p4_histogram <- df_scaled %>%
   ggplot(aes(x = P4)) +
   geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
   labs(title = "Histogram of P4 Values", x = "P4", y = "Count") +
@@ -728,7 +825,7 @@ print(p4_histogram)
 ggsave(filename = file.path(output_folder, "p4_histogram.png"), plot = p4_histogram, width = 8, height = 5, dpi = 300)
 
 # now do the same for person-standardized values
-p4_person_std_histogram <- df %>%
+p4_person_std_histogram <- df_scaled %>%
   ggplot(aes(x = P4.zd)) +
   geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
   labs(title = "Histogram of Person-Standardized P4 Values", x = "P4 Person-Standardized (d)", y = "Count") +
@@ -738,7 +835,7 @@ ggsave(filename = file.path(output_folder, "p4_person_standardized_histogram.png
        plot = p4_person_std_histogram, width = 8, height = 5, dpi = 300)
 
 # now do the same for sample-standardized values
-p4_sample_std_histogram <- df %>%
+p4_sample_std_histogram <- df_scaled %>%
   ggplot(aes(x = P4.szd)) +
   geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
   labs(title = "Histogram of Sample-Standardized P4 Values", x = "P4 Sample-Standardized (szd)", y = "Count") +
@@ -749,7 +846,7 @@ ggsave(filename = file.path(output_folder, "p4_sample_standardized_histogram.png
        , dpi = 300)
 
 # Test whether a log transform improves the distribution
-p4_log_histogram <- df %>%
+p4_log_histogram <- df_scaled %>%
   mutate(P4_log = log(P4 + 1)) %>% # Add 1
   ggplot(aes(x = P4_log)) +
   geom_histogram(bins = 100, fill = "orange", alpha = 0.7) +
@@ -818,7 +915,7 @@ plot_distributions <- function(data, var_name) {
 }
 
 # 2. Use the function to create, print, and save plots for E2
-e2_comparison_plot <- plot_distributions(df, "E2")
+e2_comparison_plot <- plot_distributions(df_scaled, "E2")
 print(e2_comparison_plot)
 ggsave(
   filename = file.path(output_folder, "E2_comparison_distributions.png"),
@@ -826,7 +923,7 @@ ggsave(
 )
 
 # 3. Do for P4
-p4_comparison_plot <- plot_distributions(df, "P4")
+p4_comparison_plot <- plot_distributions(df_scaled, "P4")
 print(p4_comparison_plot)
 ggsave(
   filename = file.path(output_folder, "P4_comparison_distributions.png"),
@@ -834,10 +931,9 @@ ggsave(
 )
 
 # 3. Do for LH
-LH_comparison_plot <- plot_distributions(df, "LH")
+LH_comparison_plot <- plot_distributions(df_scaled, "LH")
 print(LH_comparison_plot)
-ggsave(
-  filename = file.path(output_folder, "LH_comparison_distributions.png"),
+ggsave(filename = file.path(output_folder, "LH_comparison_distributions.png"),
   plot = p4_comparison_plot, width = 10, height = 8
 )
 
@@ -846,7 +942,6 @@ ggsave(
 # Between- and Within- Person Correlation Heatmap with Diagnal ICCs
 
 ```{r}
-# --- Final Corrected Function ---
 
 # 1. Load necessary libraries
 library(tidyverse)
@@ -955,7 +1050,7 @@ generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
 #my_dv_list <- c("CSS_Inatt", "CSS_HypImp", "BDEFS_Total", "UPPS_PU_avg", "DEBQ_Total")
 #corrplotlist
 
-# Generate the plot (assuming your data is in 'df' and ID is 'id')
+# Generate the plot (assuming your data is in '' and ID is 'id')
 correlation_heatmap <- generate_correlation_heatmap(data = df_scaled, 
                                                    outcome_vars = corrplotlist, 
                                                    id_var = "id")
@@ -969,9 +1064,10 @@ ggsave(filename = file.path(output_folder, "multilevel_correlation_heatmap.png")
        width = 12, height = 10, dpi = 300)
 
 ```
-
-
-
+# Make sure the final df_scaled dataset is also available via alias cycle_df_scaled
+```{r}
+cycle_df_scaled <- df_scaled
+```
 
 
 
