@@ -1,0 +1,287 @@
+---
+title: "ADHDCYCLE Daily Analysis Pipeline (Restored)"
+output:
+  html_document:
+    toc: true
+    fig_caption: true
+    number_sections: true
+    df_print: default
+date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
+---
+
+```{r setup, include=FALSE}
+# This chunk sets the global options for the entire R Markdown document.
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(scipen = 999, digits = 3)
+```
+
+# 1\. Load Required Libraries
+
+```{r load-libraries}
+library(tidyverse)
+library(janitor)
+library(haven)
+library(readxl)
+library(zoo)
+library(lubridate)
+library(conflicted)
+library(menstrualcycleR)
+library(gridExtra)
+library(ggvenn)
+
+# Explicitly state our function preferences to avoid ambiguity
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+
+# 3\. CONFIGURATION
+
+```{r config}
+# This is the single control panel for the pipeline.
+
+# --- Input File Paths (Using Your Direct, Hardcoded Paths) ---
+path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
+path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
+path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
+path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-26/ADHDCYCLE_menses_ov_dates_FINAL.xls"
+path_omit_ids <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-26/adhdcyc_omit.xlsx"
+
+# --- Output Folder ---
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
+
+# --- Variable Lists ---
+# Note: Column names are CamelCase to match the raw SPSS file.
+dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
+hormlist <- c("E2", "P4", "LH")
+alldailyvars <- c(dv_list, hormlist)
+
+# --- Plotting Configuration ---
+metrics_to_plot <- tibble::tribble(
+  ~metric_filter, ~folder_name, ~plot_subtitle, ~needs_facet, ~y_axis_label,
+  "raw", "01_raw_faceted", "Raw Daily Values", TRUE, "Hormone Value",
+  "3roll", "02_raw_3roll_faceted", "3-Day Rolling Average", TRUE, "Hormone Value",
+  "5roll", "03_raw_5roll_faceted", "5-Day Rolling Average", TRUE, "Hormone Value",
+  "zd", "04_person_standardized", "Person-Standardized Daily Values", FALSE, "Standardized Value (Z-Score)",
+  "szd", "05_sample_standardized", "Sample-Standardized Daily Values", FALSE, "Standardized Value (Z-Score)"
+)
+```
+
+# 4\. LOAD & PREPARE DATA
+
+```{r load-and-prep-data}
+# --- 1. Load All Data Sources ---
+raw_daily <- read_sav(path_raw_daily)
+supp_hormones <- read_csv(path_supp_hormones, show_col_types = FALSE)
+final_hormone_batch <- read_csv(path_final_hormone_batch, show_col_types = FALSE)
+
+# --- 2. Prepare Each Data Source ---
+raw_daily_prep <- raw_daily %>%
+  standardize_index_names() %>%
+  mutate(id = as.numeric(id), daterated = as.Date(daterated))
+
+supp_hormones_prep <- supp_hormones %>%
+  rename(daterated = date) %>%
+  mutate(id = as.numeric(ID), daterated = ymd(daterated))
+
+final_hormone_batch_prep <- final_hormone_batch %>%
+  standardize_index_names() %>%
+  mutate(id = as.numeric(id), daterated = as.Date(daterated))
+
+# --- 3. Build Final 'df' with Sequential Joins ---
+df <- raw_daily_prep %>%
+  # Sequentially join and coalesce data from supplemental files
+  left_join(supp_hormones_prep, by = c("id", "daterated"), suffix = c(".main", ".supp")) %>%
+  left_join(final_hormone_batch_prep, by = c("id", "daterated"), suffix = c(".main2", ".final")) %>%
+  mutate(
+    E2 = coalesce(E2.final, E2.supp, E2.main),
+    P4 = coalesce(P4.final, P4.supp, P4.main),
+    LH = coalesce(LH.final, LH.supp, LH.main),
+    daterated = as.Date(daterated)
+  ) %>%
+  select(-ends_with(c(".main", ".supp", ".main2", ".final"))) %>%
+  
+  # --- 4. Create Continuous Timeline ---
+  filter(!is.na(id) & !is.na(daterated)) %>%
+  distinct(id, daterated, .keep_all = TRUE) %>%
+  group_by(id) %>%
+  complete(daterated = seq.Date(min(daterated, na.rm = TRUE), max(daterated, na.rm = TRUE), by = "day")) %>%
+  ungroup() %>%
+  mutate(date = daterated) %>%
+  arrange(id, daterated)
+
+cat("Data loading and merging complete.\n")
+```
+
+# 5\. PROCESS & CALCULATE METRICS
+
+```{r process-data}
+# --- 1. Merge Final Manually-Confirmed Cycle Dates ---
+final_dates <- read_xls(path_final_dates) %>%
+  select(id, date, menses = menses_final, ovtoday = ovtoday_final) %>%
+  mutate(id = as.character(id), date = as.Date(date), menses = as.integer(menses), ovtoday = as.integer(ovtoday)) %>%
+  filter(menses == 1 | ovtoday == 1)
+
+df <- df %>%
+  mutate(id = as.character(id)) %>%
+  left_join(final_dates, by = c("id", "date")) %>%
+  mutate(
+    menses = coalesce(menses, 0L),
+    ovtoday = coalesce(ovtoday, 0L),
+    id = as.factor(id)
+  )
+
+# --- 2. Score Questionnaires (using original CamelCase names) ---
+df <- df %>%
+  mutate(
+    across(starts_with(c("CSS_B_", "DEBQ_", "BDEFS_")), ~as.numeric(as.character(.))),
+    CSS_Inatt = rowMeans(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17)), na.rm = TRUE),
+    CSS_HypImp = rowMeans(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8, CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18)), na.rm = TRUE),
+    CSS_Inatt_Count = rowSums(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17), ~ .x >= 2), na.rm = TRUE),
+    CSS_Hyp_Count   = rowSums(across(c(CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18), ~ .x >= 2), na.rm = TRUE),
+    CSS_Imp_Count   = rowSums(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8), ~ .x >= 2), na.rm = TRUE),
+    CSS_HypImp_Count = CSS_Hyp_Count + CSS_Imp_Count,
+    BDEFS_Total = rowMeans(across(starts_with("BDEFS_")), na.rm = TRUE),
+    BDEFS_WM_avg = rowMeans(across(c(BDEFS_5)), na.rm = TRUE),
+    BDEFS_RI_avg = rowMeans(across(c(BDEFS_6)), na.rm = TRUE),
+    DEBQ_Total = rowMeans(across(starts_with("DEBQ_")), na.rm = TRUE),
+    score_pinball = as.numeric(score_pinball),
+    score_robot = as.numeric(score_robot),
+    score_pinball = max(score_pinball, na.rm = TRUE) - score_pinball,
+    score_robot = max(score_robot, na.rm = TRUE) - score_robot
+  )
+
+# --- 3. Calculate All Derived Metrics ---
+df <- df %>%
+  group_by(id) %>%
+  mutate(across(.cols = all_of(alldailyvars), .fns = list(`3roll` = ~zoo::rollapply(., 3, mean, na.rm=T, align="center", fill=NA, partial=T), `5roll` = ~zoo::rollapply(., 5, mean, na.rm=T, align="center", fill=NA, partial=T)), .names = "{.col}.{.fn}")) %>%
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")), .fns = list(d = ~. - mean(., na.rm=T), zd = ~ (. - mean(., na.rm=T)) / sd(., na.rm=T)), .names = "{.col}.{.fn}")) %>%
+  ungroup() %>%
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")), .fns = list(szd = ~ (. - mean(., na.rm=T)) / sd(., na.rm=T)), .names = "{.col}.{.fn}"))
+
+cat("All processing and metric calculation complete.\n")
+```
+
+# 6\. DATA EXPLORATION & ANALYSIS
+
+```{r analysis}
+# --- 1. Visualize Data Availability ---
+data_counts <- df %>%
+  group_by(id) %>%
+  summarize(
+    days_in_study = n(),
+    survey_days = sum(!is.na(DRSP_1)),
+    hormone_days = sum(!is.na(E2))
+  ) %>%
+  pivot_longer(cols = -id, names_to = "data_type", values_to = "count")
+
+availability_plot <- ggplot(data_counts, aes(x = data_type, y = count)) +
+  geom_violin(aes(fill = data_type), alpha = 0.5, trim = FALSE) +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.6) +
+  facet_wrap(~ data_type, scales = "free_x") +
+  labs(title = "Data Availability per Participant", y = "Number of Days", x = "") +
+  theme_light() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
+ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
+
+# --- 2. Venn Diagram of Data Overlap ---
+venn_list <- list(
+  Survey_Data = data_counts %>% filter(data_type == "survey_days" & count > 0) %>% pull(id) %>% as.character(),
+  Hormone_Data = data_counts %>% filter(data_type == "hormone_days" & count > 0) %>% pull(id) %>% as.character()
+)
+venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_size = 0.5, set_name_size = 4) +
+  labs(title = "Overlap of Participants with Survey and Hormone Data")
+ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
+
+# --- 3. Run menstrualcycleR PACTS Scaling ---
+df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars))
+df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
+
+# --- 4. Create PACTS Check Plots ---
+pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
+if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder)
+pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DEBQ_Total")
+for (var in pacts_vars_to_check) {
+  p <- cycledata_check(df_scaled, var)
+  ggsave(filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")), plot = p, width = 8, height = 6, dpi = 300)
+}
+
+# --- 5. Create Sensitivity Dataset ---
+omit_ids <- read_xlsx(path_omit_ids)
+df_sens <- df_scaled %>%
+  mutate(id = as.character(id)) %>%
+  anti_join(mutate(omit_ids, id = as.character(id)), by = "id") %>%
+  mutate(id = as.factor(id))
+
+cat("Analysis and PACTS scaling complete.\n")
+```
+
+# 7\. GENERATE HORMONE PLOTS
+
+```{r generate-plots}
+# --- Prepare Data for Plotting ---
+hormones_long_all <- df %>%
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
+  mutate(
+    metric = replace_na(metric, "raw"),
+    hormone = factor(hormone, levels = c("E2", "LH", "P4"))
+    )
+
+# --- Dynamic Plotting Loop ---
+ids_list <- unique(df$id)
+for (row in 1:nrow(metrics_to_plot)) {
+  metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
+  plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
+  y_label <- metrics_to_plot$y_axis_label[row]
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  for (person_id in ids_list) {
+    plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    vline_data <- df %>% filter(id == person_id)
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "purple", linewidth = 1) +
+      geom_line(linewidth = 0.8) + geom_point(size = 1.5) +
+      scale_x_date(breaks = "1 day", date_labels = "%b %d") +
+      scale_color_manual(values = c("E2" = "#d95f02", "LH" = "#1b9e77", "P4" = "#7570b3")) +
+      labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
+      theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) + 
+               theme(legend.position = "none")
+    } else {
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    plot_height <- if (should_facet) 8 else 7
+    ggsave(filename = file.path(current_output_dir, paste0("plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
+  }
+}
+cat("--- All hormone plots generated successfully! ---\n")
+```
+
+# 8\. EXPORT FINAL DATASETS
+
+```{r export-data}
+# --- Define File Names ---
+file_base_main <- paste0("adhd_daily_scaled_", format(Sys.Date(), "%Y%m%d"))
+file_base_sens <- paste0("adhd_daily_SENS_scaled_", format(Sys.Date(), "%Y%m%d"))
+
+# --- Save Main Scaled Dataset ---
+write.csv(df_scaled, file.path(output_folder, paste0(file_base_main, ".csv")), row.names = FALSE)
+save(df_scaled, file = file.path(output_folder, paste0(file_base_main, ".RData")))
+
+# --- Save Sensitivity Dataset ---
+write.csv(df_sens, file.path(output_folder, paste0(file_base_sens, ".csv")), row.names = FALSE)
+save(df_sens, file = file.path(output_folder, paste0(file_base_sens, ".RData")))
+
+cat("Final datasets exported successfully to:", output_folder, "\n")
+```
