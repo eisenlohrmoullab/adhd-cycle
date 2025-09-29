@@ -1,0 +1,327 @@
+---
+title: "ADHD Across the Menstrual Cycle: Group-Level Cyclicity and Individual Differences in Estradiol and Progesterone Sensitivity"
+affiliations:
+  - id: uic-psychiatry
+    name: "Department of Psychiatry, University of Illinois Chicago"
+  - id: uky-psychology
+    name: "Department of Psychology, University of Kentucky"
+author:
+  - name: "Tory A. Eisenlohr-Moul"
+    affiliations: [uic-psychiatry]
+  - name: "Ashley Eng"
+    affiliations: [uky-psychology]
+  - name: "Jackie Ross"
+    affiliations: [uic-psychiatry]
+  - name: "Katja Schmalenberger"
+    affiliations: [uic-psychiatry]
+  - name: "Anisha Nagpal"
+    affiliations: [uic-psychiatry]
+  - name: "Michelle Martel"
+    affiliations: [uky-psychology]
+date: last-modified
+execute:
+  echo: true
+format:
+  html:
+    fig-format: png
+    toc: true
+  docx: default
+keywords: ["menstrual cycle", "ovarian hormones", "estrogen", "progesterone", "ADHD", "working memory", "inhibition"]
+abstract: |
+  **Background:** Females with Attention-Deficit/Hyperactivity Disorder (ADHD) face unique developmental challenges, with symptom severity and comorbidity escalating around puberty. Despite this, female-specific risk mechanisms remain critically understudied. Ovarian hormones---particularly estradiol---have emerged as biologically plausible, yet largely untested, modulators of ADHD symptom expression and cognitive function in females.
+  **Methods:** We conducted an intensive longitudinal study across the menstrual cycle in a clinical sample of naturally-cycling adults with ADHD (N = XX). Participants provided daily ratings of ADHD symptoms and completed cognitive tasks assessing response inhibition and working memory across two full cycles. E2, P4, and LH were measured daily via salivary assays. Generalized additive mixed models (GAMMs) tested for group average and individual differences in the effects of both daily cycle time and hormones on symptoms and cognitive performance.
+  **Results:** As hypothesized, phases marked by rapid estradiol withdrawal (post-ovulatory and perimenstrual) were associated with clinically significant increases in ADHD symptoms. Cognitive performance also declined during hormone withdrawal phases. Random slopes indicated prominent individual differences in the effects of the cycle and hormones on symptom exacerbation.
+  **Conclusions:** These findings provide the first direct evidence in humans that dynamic changes in ovarian hormones exacerbate core symptoms of ADHD and impair related cognitive mechanisms. This work supports the specification of a hormone-sensitive modifier of ADHD diagnosis in females.
+bibliography: ["ADHDPrimary.bib"]
+csl: "apa.csl"
+---
+
+# Title Options to Consider:
+
+-   ADHD Symptoms and Cognition Across the Menstrual Cycle: A Longitudinal Study of Divergent Individual Sensitivity to Estradiol and Progesterone
+
+-   Menstrual Cycle–Linked Fluctuations in ADHD Symptoms: A Longitudinal Study of Group and Individual Differences in Relation to Daily Estradiol and Progesterone
+
+-   Individual Differences in Hormone Sensitivity and ADHD Symptom Expression Across the Menstrual Cycle: Independent and Overlapping Vulnerabilities
+
+-   ADHD Across the Menstrual Cycle: Group-Level Cyclicity and Individual Differences in Estradiol and Progesterone Sensitivity
+
+# Import data
+
+```{r}
+load("~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+```
+
+
+# Extract chunks from other documents
+
+```{r}
+##| label: setup-rmd-mirroring
+# Pick the source Rmd (path is relative to THIS .qmd when rendering)
+set_mirror_source <- function(path) {
+  if (!file.exists(path)) stop("File not found: ", path)
+  options(mirror_rmd = path)
+  invisible(path)
+}
+set_mirror_source("ADHDCYCLE_0_daily_dataprep.Rmd")
+
+# Parse labeled R chunks (label + line + fence)
+.get_labeled_chunks <- function(rmd_path) {
+  lines <- readLines(rmd_path, warn = FALSE)
+  idx <- grep("^\\s*([`~]{3,})\\{[^}]*\\}\\s*$", lines, perl = TRUE)
+  out <- data.frame(line=integer(), fence=character(), label=character(), header=character(), stringsAsFactors=FALSE)
+  for (i in idx) {
+    hdr   <- lines[i]
+    fence <- sub("^\\s*([`~]{3,})\\{.*", "\\1", hdr, perl = TRUE)               # ``` or ~~~
+    ins   <- sub("^\\s*[`~]{3,}\\{(.*)\\}\\s*$", "\\1", hdr, perl = TRUE)
+    ins   <- gsub("\\s+", " ", ins)
+    if (!grepl("^\\s*[rR](\\s|,|\\})", ins, perl = TRUE)) next
+    mA <- regexec("^\\s*[rR]\\s+([^,}]+)", ins, perl = TRUE)
+    gA <- regmatches(ins, mA)[[1]]
+    lab <- if (length(gA) >= 2) trimws(gA[2]) else NA_character_
+    if (is.na(lab) || lab=="" || grepl("^,", lab)) {
+      mB <- regexec("label\\s*=\\s*([\"'“”‘’]?)([^,}\"'“”‘’]+)\\1", ins, perl = TRUE)
+      gB <- regmatches(ins, mB)[[1]]
+      if (length(gB) >= 3) lab <- trimws(gB[2])
+    }
+    if (!is.na(lab) && nzchar(lab)) {
+      out <- rbind(out, data.frame(line=i, fence=fence, label=lab, header=hdr, stringsAsFactors=FALSE))
+    }
+  }
+  out[order(out$line), , drop=FALSE]
+}
+
+# Show labels anywhere
+list_chunks <- function(rmd = getOption("mirror_rmd")) {
+  if (is.null(rmd)) stop("Call set_mirror_source() first")
+  df <- .get_labeled_chunks(rmd)
+  print(df[, c("label","line")])
+  invisible(df)
+}
+
+# Relabel child header to avoid duplicate-label collisions
+.relabel_header_unique <- function(header, orig_label) {
+  ins <- sub("^\\s*[`~]{3,}\\{(.*)\\}\\s*$", "\\1", header, perl = TRUE)
+  uid <- paste0("mirror-", orig_label, "-", as.integer(Sys.time()), "-", sample(1000:9999,1))
+  if (grepl("^\\s*[rR]\\s+[^,}]+", ins, perl = TRUE)) {
+    ins <- sub("^\\s*([rR]\\s+)[^,}]+", paste0("\\1", uid), ins, perl = TRUE)
+  }
+  if (grepl("label\\s*=", ins, perl = TRUE)) {
+    ins <- sub("label\\s*=\\s*([\"'“”‘’]?)[^,}\"'“”‘’]+\\1", paste0("label='", uid, "'"), ins, perl = TRUE)
+  }
+  paste0(substr(header, 1, regexpr("\\{", header)-1), "{", ins, "}")
+}
+
+# Slice child by header line → matching closing fence, relabeling header
+.extract_child <- function(rmd_path, header_line, fence, orig_label) {
+  lines <- readLines(rmd_path, warn = FALSE)
+  lines[header_line] <- .relabel_header_unique(lines[header_line], orig_label)
+  close_pat <- paste0("^\\s*", fence, "\\s*$")
+  rel_end <- grep(close_pat, lines[(header_line+1):length(lines)], perl = TRUE)
+  if (!length(rel_end)) stop("Closing code fence not found.")
+  j <- (header_line + 1) + rel_end[1] - 1
+  out <- tempfile(fileext = ".Rmd")
+  writeLines(lines[header_line:j], out)
+  out
+}
+
+# MAIN: render any labeled chunk inline (PNG in HTML, PDF in PDF)
+mirror_chunk <- function(label,
+                         rmd = getOption("mirror_rmd"),
+                         fig.width = NULL, fig.height = NULL,
+                         echo = FALSE, message = FALSE, warning = FALSE,
+                         fig.show = "hold") {
+  if (is.null(rmd)) stop("Call set_mirror_source() first")
+  df  <- .get_labeled_chunks(rmd)
+  hit <- df[df$label == label, , drop = FALSE]
+  if (!nrow(hit)) stop("Label not found: ", label, " (run list_chunks())")
+  if (nrow(hit) > 1) stop("Label appears more than once in source: ", label)
+
+  child <- .extract_child(rmd, header_line = hit$line, fence = hit$fence, orig_label = label)
+
+  opts <- list(echo=echo, message=message, warning=warning, fig.show=fig.show)
+  # Web-friendly device for HTML previews/renders
+  if (knitr::is_html_output()) { opts$dev <- "png"; opts$out.width <- "100%" } else { opts$dev <- "pdf" }
+  if (!is.null(fig.width))  opts$fig.width  <- fig.width
+  if (!is.null(fig.height)) opts$fig.height <- fig.height
+
+  md <- knitr::knit_child(child, quiet = TRUE, options = opts)
+  knitr::asis_output(md)
+}
+
+
+
+```
+
+
+
+```{r}
+# Set your source once here (adjust path if needed)
+set_mirror_source("ADHDCYCLE_0_daily_dataprep.Rmd")
+
+# List available chunks (optional)
+list_chunks()
+
+# 1 setup	13		
+# 2	load-libraries	21		
+# 3	config	58		
+# 4	process-data	295		
+# 5	generate-plots	393		
+# 6	generate-plots	536		
+# 7	adhd1-data-availability	603		
+# 8	adhd1-pacts-check	639		
+# 9	hellotest	954		
+# 10	correlationheatmap
+
+# To mirror a chunk, do this: 
+# mirror_chunk("setup", fig.width=8, fig.height=6)
+
+mirror_chunk("setup")
+mirror_chunk("libraries")
+mirror_chunk("varlists")
+
+```
+
+# Introduction
+
+Attention-Deficit/Hyperactivity Disorder (ADHD) is a neurodevelopmental disorder originating in childhood, yet often persisting into adulthood, particularly among females. Historically viewed as predominantly affecting males, the gender difference in ADHD prevalence narrows during adolescence, a period when females frequently experience heightened impairment and elevated comorbid conditions, including anxiety, depression, academic difficulties, and occupational underachievement (APA, 2013; Hinshaw et al., 2012; Quinn, 2005). Despite the significant clinical burden on women, little research has focused on biological processes unique to females, such as cyclic fluctuations in ovarian hormones and their potential impact on cognitive function and ADHD symptom expression.
+
+Activation of the hypothalamic-pituitary-gonadal (HPG) axis during puberty initiates monthly fluctuations in estradiol (E2) and progesterone (P4), continuing throughout reproductive life. While external factors undeniably contribute to symptom variability, the timing of increased ADHD-related impairments during adolescence implicates ovarian hormones in modulating cognitive domains critical to ADHD—particularly working memory and response inhibition—via estrogen-sensitive frontostriatal circuits (Jacobs & D’Esposito, 2011; Schmalenberger et al., 2024). Animal studies consistently demonstrate that low or declining E2 impairs working memory and inhibitory control, whereas E2 administration enhances these cognitive functions, especially in impulsive phenotypes (Bimonte & Denenberg, 1999; Daniel et al., 2006; Luine et al., 1998; Wang et al., 2011).
+
+Human studies provide further evidence linking lower estradiol levels to cognitive impairments in some individuals, particularly in memory and working memory, with estradiol administration reversing these deficits (Duff & Hampson, 2000; Maki, Rich & Rosenbaum, 2002; Shaywitz et al., 1999; Schmalenberger et al., 2024). Estradiol’s modulation of dopaminergic neurotransmission—critical for executive function—further supports its role in cognitive variability (Gibbs, 2010; Jacobs & D'Esposito, 2011; Volkow et al., 2001). Importantly, not all individuals demonstrate equivalent sensitivity to hormonal fluctuations, indicating variability in neurobehavioral sensitivity shaped by underlying neurobiological mechanisms. Individual differences may stem from genetic predispositions such as COMT genotype variations influencing dopaminergic activity (Ross et al review; jacobs papers) and related overall executive functioning vulnerabilities (Roberts et al., 2018), or factors such as trauma history, chronic stress, or personality traits (Peters et al., 2024).
+
+Our preliminary research (in an undergraduate sample oversampled for ADHD symptoms) shows substantial within-person variability in ADHD symptoms across the menstrual cycle, predominantly linked to daily estradiol fluctuations. Specifically, declining estradiol phases (post-ovulatory and perimenstrual) predicted marked exacerbations of ADHD symptoms, with effects amplified in women with higher baseline impulsivity (Roberts et al., 2018). This suggests a pathway by which neurobiological hormone sensitivities, while potentially correlated with ADHD, do not fully overlap with the disorder itself but moderate the hormonal effects on cognition and behavior, worsening outcomes for some patients, and to varying degrees (Peters et al., 2024; Eng et al., 2024).
+
+-   <https://pubmed.ncbi.nlm.nih.gov/40528384/>
+
+This study expands upon prior findings by investigating whether natural fluctuations in endogenous hormones predict cognitive performance and ADHD symptoms in clinically diagnosed young adult women with ADHD. Using an intensive longitudinal design across two menstrual cycles and applying Phase-Aligned Cycle Time Scaling (PACTS), we evaluate how declines in estradiol—potentially interacting with progesterone—predict cognitive impairments and increased ADHD symptoms. Furthermore, we explore cognitive performance as a potential mechanistic link mediating hormonal effects on ADHD symptoms. Given that hormonal sensitivity varies across individuals, we expect these relationships may be moderated by distinct neurobiological vulnerabilities, underscoring the need for personalized hormone-informed models of cognitive and symptom variability.
+
+Here, we aim to test the following hypotheses: 
+
+1.  ADHD symptoms will be highest and cognitive function (working memory, inhibition) lowest during phases of the menstrual cycle characterized by E2 withdrawal-- the post-ovulatory and perimenstrual phases.
+
+2.  ADHD symptoms will be highest and cognitive function (working memory, inhibition) lowest on days when E2 is lower or declining, particularly when P4 is low.
+
+3.  Whether cognitive task performance mediates hormone–ADHD symptom associations, suggesting a mechanistic cognitive pathway of hormone-linked ADHD exacerbation.\
+
+# Methods
+
+## Participants
+
+Women aged 18–35 with a confirmed DSM-5 diagnosis of attention-deficit/hyperactivity disorder (ADHD) and regular menstrual cycles (21–35 days) were recruited through community and online advertisements. Exclusion criteria included current pregnancy or breastfeeding, use of hormonal contraception within the prior three months, major medical illness, and any acute psychiatric condition requiring immediate intervention. Diagnostic confirmation was obtained via structured clinical interviews (SCID-5) and the Barkley Adult ADHD Rating Scale (BAARS-IV, current symptoms scale), completed by both the participant and an informant.
+
+## Procedure
+
+Participants completed up to 70 consecutive days of daily data collection at home, spanning approximately two full menstrual cycles. Daily assessments included self-reports of symptoms and cognitive functioning, as well as salivary hormone sampling.
+
+## Symptom and Cognitive Assessments
+
+Each evening (5:00–10:00 PM), participants completed electronic surveys assessing ADHD symptoms (BAARS-IV Current Symptoms Scale; CITE) and affective symptoms (Daily Record of Severity of Problems; CITE). Cognitive tasks were administered via mobile app (Lumosity) and included measures of response inhibition (“Robot Factory” task) and working memory (“Pinball” task).
+
+## Hormone Sampling
+
+Participants collected morning saliva samples approximately 30 minutes after waking, using Salimetrics passive drool collection kits. Samples were stored in home freezers and later delivered to the lab for assay of estradiol (E2), progesterone (P4), and luteinizing hormone (LH), following manufacturer protocols. Participants also completed daily reports of menses onset. Ovulation was tracked using urinary LH test kits (Clearblue Digital; 40 mIU/mL threshold), with results verified via timestamped photographs.
+
+## Ovulation Coding and Phase-Aligned Cycle Time Scaling (PACTS)
+
+The estimated day of ovulation (EDO) was defined based on hormonal criteria, including (1) a preovulatory E2 rise without concurrent P4 elevation, (2) a discrete LH surge without elevated P4, and (3) a subsequent rise in P4. In cases where biomarker data were incomplete or inconclusive, ovulation was estimated by backward count (15 days prior to next menses).
+
+To align participants’ data on a continuous menstrual cycle timeline, we used the Phase-Aligned Cycle Time Scaling (PACTS) method, implemented in our menstrualcycleR R package. This approach standardized daily observations to a continuous time variable ranging from -1 to +1, centered on either menses onset or the estimated day of ovulation. This allowed for improved alignment of hormone events across individuals and cycles.
+
+```{r}
+mirror_chunk("adhd1-data-availability", fig.width = 8, fig.height = 6)
+```
+
+## Statistical Analysis
+
+We modeled menstrual cycle–related variation in ADHD symptoms and cognitive performance using generalized additive mixed models (GAMMs). Standardized cycle time variables were entered as smooth terms to estimate nonlinear effects of cycle position. Models included both fixed smooths (group-level effects) and participant-level random smooths to capture individual variability in trajectory shape and timing. In outcomes with significant random smooths, smoothing mixture models were used to describe any potential trajectory subgroups to guide hypothesis generation regarding the timing and pathophysiology of observed differences in symptom cyclicity. 
+
+To assess the role of ovarian hormone levels and changes directly, we fit additional GAMMs using (1) daily person-centered E2 and P4 levels and (2) their daily derivatives as predictors. These models included univariate smooths and tensor product smooths (e.g., te(E2, P4)) to capture nonlinear and interactive hormone effects. Participant-level random intercepts and smooths were included to quantify individual differences in hormonal sensitivity.
+
+Finally, to explore temporal network relationships among hormones, cognition, and ADHD symptoms, we applied Group Iterative Multiple Model Estimation (GIMME) and Subgrouping within GIMME (S-GIMME). These person-specific and subgroup-level temporal models identify contemporaneous and lagged associations among daily E2, P4, cognitive performance, and symptoms, allowing us to explore dynamic mediation and individual heterogeneity in temporal hormone-cognition-symptom networks.
+
+# **Results**
+
+## **Participant Flow**
+
+```{r ref.label='adhd1-data-availability'}
+#| echo: false
+# This executes the imported code from ADHDCYCLE_0_daily_dataprep.Rmd.
+```
+
+## **Sample Characteristics**
+
+-   Descriptive statistics for demographics and clinical characteristics are presented in Table X.
+
+<!-- -->
+
+-   The final sample included N = XX participants across XX menstrual cycles.
+
+-   Participants ranged in age from XX to XX (M = XX, SD = XX).
+
+-   All participants met DSM-5 criteria for ADHD; subgroups?.
+
+-   At enrollment, XX% were taking a stimulant, and XX% were taking an antidepressant medication (predominantly selective serotonin reuptake inhibitor (SSRI)).
+
+-   Cycle lengths ranged from XX to XX days (M = XX, SD = XX).
+
+-   Saliva collection compliance was XX%; LH-confirmed ovulation was detected in XX% of cycles.
+
+## **Between- and Within-Person Associations of Study Variables**
+
+```{r corrheatmap, echo=TRUE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+# ===================================================================
+# Script: correlation_heatmap_runner.R
+# Purpose: Generate and save a multilevel correlation heatmap 
+#          for selected outcome variables.
+# Author: Tory E-M (CLEAR Lab)
+# ===================================================================
+
+# -------------------------------------------------------------------
+# 1. Source the correlation heatmap function
+# -------------------------------------------------------------------
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/corrplots_fx.R")
+
+# -------------------------------------------------------------------
+# 2. Define output directory for saving figures
+# -------------------------------------------------------------------
+# Make sure this folder exists and is writeable
+output_folder <- "~/CLEAR Lab Repositories/adhd-cycle/outputs/"
+
+# -------------------------------------------------------------------
+# 3. Specify outcome variables for correlation heatmap
+# -------------------------------------------------------------------
+corrplotlist <- c(
+  "CSS_Inatt", "CSS_HypImp",
+  "BDEFS_WM_avg", "BDEFS_RI_avg",
+  "score_pinball", "score_robot",
+  "DRSP_1", "DRSP_4", "DRSP_6", "DRSP_7", "DRSP_21"
+)
+
+# -------------------------------------------------------------------
+# 4. Check that required objects exist and generate heatmap
+# -------------------------------------------------------------------
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
+  
+  # Generate correlation heatmap from the scaled dataset
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = cycle_df_scaled,
+    outcome_vars = corrplotlist,
+    id_var = "id"
+  )
+  
+  # Print the heatmap to the RStudio plots pane
+  print(correlation_heatmap)
+  
+  # Save the heatmap to a high-resolution PNG file
+  ggsave(
+    filename = file.path(output_folder, "multilevel_correlation_heatmap.png"),
+    plot = correlation_heatmap,
+    width = 12, height = 11, dpi = 300
+  )
+  
+} else {
+  # Warn if required objects are missing
+  warning("Data 'cycle_df_scaled' or 'corrplotlist' not found. Cannot generate heatmap.")
+}
+```

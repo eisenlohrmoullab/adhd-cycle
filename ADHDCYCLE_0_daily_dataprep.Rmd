@@ -10,15 +10,15 @@ date: "Last compiled on `r format(Sys.time(), '%B %d, %Y')`"
 ---
 
 
-```{r setup, include=FALSE}
+```{r setup}
 # This chunk sets the global options for the entire R Markdown document.
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 options(scipen = 999, digits = 3)
 ```
 
-# 1\. Load Required Libraries
+# Load Required Libraries
 
-```{r load-libraries}
+```{r libraries}
 # This chunk loads all the packages needed for the analysis.
 library(tidyverse)       # A collection of essential packages for data manipulation and visualization (includes dplyr, ggplot2, etc.)
 library(janitor)         # Provides functions for cleaning data and table creation.
@@ -37,7 +37,13 @@ library(tidyr)       # For tidying data
 library(rlang)       # For tidy evaluation
 library(visdat)      # For missing data visualization
 library(ggpubr)      # For publication-ready plots
-
+library(tidyverse) 
+library(mgcv)      
+library(readr)     
+library(knitr)     
+library(lme4)
+library(gratia)
+library(patchwork)
 # Explicitly state our function preferences to avoid ambiguity when multiple
 # packages have a function with the same name.
 conflict_prefer("filter", "dplyr")
@@ -47,10 +53,9 @@ conflict_prefer("summarize", "dplyr")
 ```
 
 
-# 3\. CONFIGURATION
+# Configure 
 
-```{r config}
-
+```{r filepaths}
 # --- Input File Paths (Using Your Direct, Hardcoded Paths) ---
 # Define the full path to each raw data file needed for the analysis.
 
@@ -59,7 +64,10 @@ path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folde
 path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
 path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
 path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-27/ADHDCYCLE_menses_ov_dates_FINAL.xls"
+```
 
+
+```{r define_box_output}
 # --- Output Folder ---
 
 # Define a base output location and create a unique, timestamped subfolder for this specific run.
@@ -68,14 +76,20 @@ output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"
 if (!dir.exists(output_folder)) {
   dir.create(output_folder, recursive = TRUE)
 }
+```
 
+
+```{r varlists}
 # --- Variable Lists ---
 # Define the final variable names that will be processed and analyzed.
 dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
 hormlist <- c("E2", "P4", "LH")
 alldailyvars <- c(dv_list, hormlist)
 corrplotlist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_16",  "E2", "P4", "LH")
+```
 
+
+```{r plot-config}
 # --- Plotting Configuration ---
 # This table controls which plots are generated in the final plotting loop.
 metrics_to_plot <- tibble::tribble(
@@ -92,6 +106,7 @@ metrics_to_plot <- tibble::tribble(
   "3roll.szd", "05_sample_standardized_3roll", "Sample-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)")
 ```
 
+# Load, merge, and clean data
 ```{r}
 
 # --- 1. Load All Data Sources ---
@@ -276,17 +291,9 @@ df <- final_df
 ```
 
 
-# Check Merging and data availability across E2, P4, LH, and CSS_inatt
-```{r}
-# Check how many unique IDs are present in the final dataset
-unique_ids <- unique(df$id)
-cat("Number of unique IDs in the final dataset:", length(unique_ids), "\n")
-```
-
-
 # 5\. PROCESS & CALCULATE METRICS
 
-```{r process-data}
+```{r}
 # 5. PROCESS & CALCULATE METRICS
 
 # --- 1. Merge Final Manually-Confirmed Cycle Dates ---
@@ -384,7 +391,7 @@ cat("All processing and metric calculation complete.\n")
 ```
 # 7\. GENERATE HORMONE PLOTS
 
-```{r generate-plots}
+```{r hormone-plots}
 # 7. GENERATE HORMONE PLOTS
 
 # --- Prepare Data for Plotting ---
@@ -594,9 +601,9 @@ cat("--- All cleaned FINAL hormone plots generated successfully! ---\n")
 
 # 6\. DATA EXPLORATION & ANALYSIS
 
-```{r analysis}
+```{r adhd1-data-availability}
 # --- 1. Visualize Data Availability ---
-data_counts <- df_scaled %>%
+data_counts <- cycle_df_scaled %>%
   group_by(id) %>%
   summarize(
     days_in_study = n(),
@@ -612,7 +619,10 @@ availability_plot <- ggplot(data_counts, aes(x = data_type, y = count)) +
   facet_wrap(~ data_type, scales = "free_x") +
   labs(title = "Data Availability per Participant", y = "Number of Days", x = "") +
   theme_light() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
-ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
+
+print(availability_plot)
+
+#ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
 
 # --- 2. Venn Diagram of Data Overlap ---
 venn_list <- list(
@@ -621,10 +631,16 @@ venn_list <- list(
 )
 venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_size = 0.5, set_name_size = 4) +
   labs(title = "Overlap of Participants with Survey and Hormone Data")
-ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
+
+print(venn_plot)
+#ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
 
 
+
+```
 # --- 4. Create PACTS Check Plots ---
+
+```{r adhd1-pacts-check}
 # Set your variables to check
 pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DEBQ_Total")
 
@@ -650,7 +666,7 @@ for (var in pacts_vars_to_check) {
 ```
 
 
-```{r}
+```{r vismiss}
 # --- 11. Visualize missing hormone data ---
 # Visualize missingness in key columns using visdat::vis_miss
 miss_plot <- visdat::vis_miss(df %>% select(id, daterated, E2, BDEFS_1, score_pinball))
@@ -751,7 +767,7 @@ write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", S
 ```
 
 # Print histogram of all E2 variables to visually inspect for outliers
-```{r}
+```{r histograms}
 
 # Visualize distributions of E2, E2.zd, E2.szd, and log(E2 + 1)
 # Histogram of raw E2 values
@@ -812,7 +828,7 @@ ggsave(filename = file.path(output_folder, "combined_e2_histograms.png"),
 
 ```
 # Print histogram of all P4 variables to visually inspect for outliers
-```{r}
+```{r histograms2}
 # Visualize distributions of P4, P4.zd, P4.szd, and
 # log(P4 + 1)
 # Histogram of raw P4 values
@@ -875,7 +891,7 @@ ggsave(filename = file.path(output_folder, "combined_p4_histograms.png"),
 
 
 # Plot Descriptives for Hormones
-```{r}
+```{r hormone-desc}
 # --- Reusable Function Version ---
 
 # 1. Define the function
@@ -939,141 +955,137 @@ ggsave(filename = file.path(output_folder, "LH_comparison_distributions.png"),
 
 ```
 
-# Between- and Within- Person Correlation Heatmap with Diagnal ICCs
 
-```{r}
 
-# 1. Load necessary libraries
-library(tidyverse)
-library(rmcorr)
-library(performance)
-library(lme4)
-library(ggcorrplot)
+# Between- and Within- Person Correlation Heatmap with Diagonal ICCs
 
-# 2. Define the corrected function
-generate_correlation_heatmap <- function(data, outcome_vars, id_var) {
+## **Between- and Within-Person Associations of Study Variables**
+
+```{r corrheatmap, echo=TRUE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+# ===================================================================
+# Script: correlation_heatmap_runner.R
+# Purpose: Generate and save a multilevel correlation heatmap 
+#          for selected outcome variables.
+# Author: Tory E-M (CLEAR Lab)
+# ===================================================================
+
+# -------------------------------------------------------------------
+# 1. Source the correlation heatmap function
+# -------------------------------------------------------------------
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/corrplots_fx.R")
+
+# -------------------------------------------------------------------
+# 2. Define output directory for saving figures
+# -------------------------------------------------------------------
+# Make sure this folder exists and is writeable
+output_folder <- "~/CLEAR Lab Repositories/adhd-cycle/outputs/"
+
+# -------------------------------------------------------------------
+# 3. Specify outcome variables for correlation heatmap
+# -------------------------------------------------------------------
+corrplotlist <- c(
+  "CSS_Inatt", "CSS_HypImp", "E2.3roll", "P4.3roll", "LH.3roll",
+  "BDEFS_WM_avg", "BDEFS_RI_avg",
+  "score_pinball", "score_robot",
+  "DRSP_1", "DRSP_4", "DRSP_6", "DRSP_7", "DRSP_21"
+)
+
+# -------------------------------------------------------------------
+# 4. Check that required objects exist and generate heatmap
+# -------------------------------------------------------------------
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
   
-  n_vars <- length(outcome_vars)
-  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
-                           dimnames = list(outcome_vars, outcome_vars))
+  # Generate correlation heatmap from the scaled dataset
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = cycle_df_scaled,
+    outcome_vars = corrplotlist,
+    id_var = "id"
+  )
   
-  # --- Steps 2, 3, 4: Calculate all values ---
+  # Print the heatmap to the RStudio plots pane
+  print(correlation_heatmap)
   
-  # Between-Person (Upper)
-  cat("Calculating between-person correlations...\n")
-  person_means <- data %>%
-    group_by(!!sym(id_var)) %>%
-    summarise(across(all_of(outcome_vars), ~mean(., na.rm = TRUE)))
-  between_corr <- cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
-  results_matrix[upper.tri(results_matrix)] <- between_corr[upper.tri(between_corr)]
+  # Save the heatmap to a high-resolution PNG file
+  ggsave(
+    filename = file.path(output_folder, "multilevel_correlation_heatmap.png"),
+    plot = correlation_heatmap,
+    width = 12, height = 11, dpi = 300
+  )
   
-  # ICC (Diagonal)
-  cat("Calculating Intra-Class Correlations...\n")
-  for (i in 1:n_vars) {
-    var <- outcome_vars[i]; formula <- as.formula(paste0(var, " ~ 1 + (1|", id_var, ")"))
-    if (sum(!is.na(data[[var]])) > 1) {
-      model_fit <- try(lmer(formula, data = data), silent = TRUE)
-      if (!inherits(model_fit, "try-error")) {
-        results_matrix[i, i] <- icc(model_fit)$ICC_adjusted
-      }
-    }
-  }
+} else {
+  # Warn if required objects are missing
+  warning("Data 'cycle_df_scaled' or 'corrplotlist' not found. Cannot generate heatmap.")
+}
+```
+
+
+```{r correlation_heatmap}
+# ===================================================================
+# Script: correlation_heatmap_runner.R
+# Purpose: Generate and save a multilevel correlation heatmap 
+#          for selected outcome variables.
+# Author: Tory E-M (CLEAR Lab)
+# ===================================================================
+
+# -------------------------------------------------------------------
+# 1. Source the correlation heatmap function
+# -------------------------------------------------------------------
+source("~/CLEAR Lab Repositories/adhd-cycle/scripts/corrplots_fx.R")
+
+# -------------------------------------------------------------------
+# 2. Define output directory for saving figures
+# -------------------------------------------------------------------
+# Make sure this folder exists and is writeable
+output_folder <- "~/CLEAR Lab Repositories/adhd-cycle/outputs/"
+
+# -------------------------------------------------------------------
+# 3. Specify outcome variables for correlation heatmap
+# -------------------------------------------------------------------
+corrplotlist <- c("E2.3roll.zd", "P4.3roll.zd",
+  "CSS_Inatt", "CSS_HypImp",
+  "BDEFS_WM_avg", "BDEFS_RI_avg",
+  "score_pinball", "score_robot",
+  "DRSP_1", "DRSP_4", "DRSP_6", "DRSP_7", "DRSP_21"
+)
+
+# -------------------------------------------------------------------
+# 4. Check that required objects exist and generate heatmap
+# -------------------------------------------------------------------
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
   
-  # Within-Person (Lower)
-  cat("Calculating within-person correlations...\n")
-  within_corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars,
-                               dimnames = list(outcome_vars, outcome_vars))
+  # Generate correlation heatmap from the scaled dataset
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = cycle_df_scaled,
+    outcome_vars = corrplotlist,
+    id_var = "id"
+  )
   
-  for (i in 1:n_vars) {
-    for (j in 1:n_vars) {
-      if (i > j) {
-        var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
-        rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
-        if (nrow(rmcorr_data) > 2) {
-            rmcorr_result <- rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
-            results_matrix[i, j] <- rmcorr_result$r
-            within_corr_matrix[i, j] <- within_corr_matrix[j, i] <- rmcorr_result$r
-        }
-      }
-    }
-  }
+  # Print the heatmap to the RStudio plots pane
+  print(correlation_heatmap)
   
-  # --- Step 5: Determine Clustering Order and Reorder the Matrix ---
-  cat("Reordering matrix by clustering...\n")
+  # Save the heatmap to a high-resolution PNG file
+  ggsave(
+    filename = file.path(output_folder, "multilevel_correlation_heatmap.png"),
+    plot = correlation_heatmap,
+    width = 12, height = 11, dpi = 300
+  )
   
-  # --- THIS IS THE CORRECTED PART ---
-  # Perform hierarchical clustering manually to get the correct order
-  # 1. Calculate a distance matrix (1 - correlation)
-  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
-  # 2. Perform clustering
-  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
-  # 3. Get the reordered variable names
-  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
-  # --- END OF CORRECTION ---
-  
-  # Apply this order to your final composite matrix
-  results_matrix_ordered <- results_matrix[corr_order, corr_order]
-  
-  # --- Step 6: Generate the Plot ---
-  cat("Generating plot...\n")
-  
-  plot <- ggcorrplot(
-    corr = results_matrix_ordered,
-    method = "square",
-    type = "full",
-    lab = TRUE,
-    lab_size = 3.5,
-    outline.color = "white",
-    ggtheme = ggplot2::theme_minimal(base_size = 14),
-    colors = c("#6D9EC1", "white", "#E46726"),
-    title = "Multilevel Correlation Matrix of Daily Outcomes",
-    legend.title = "Correlation"
-  ) +
-    labs(
-      caption = "Upper Triangle: Between-person Spearman ρ (on person-means)\nDiagonal: Intra-Class Correlation (ICC)\nLower Triangle: Within-person repeated measures r"
-    ) +
-    theme(
-      plot.title = element_text(hjust = 0.5, face = "bold", size = 20),
-      plot.caption = element_text(hjust = 0, size = 12),
-      axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
-      axis.text.y = element_text(face="bold"),
-      legend.position = "right",
-      panel.grid.major = element_blank()
-    )
-  
-  return(plot)
+} else {
+  # Warn if required objects are missing
+  warning("Data 'cycle_df_scaled' or 'corrplotlist' not found. Cannot generate heatmap.")
 }
 
-# --- Example Usage ---
-
-# Define your list of daily outcome variables
-#my_dv_list <- c("CSS_Inatt", "CSS_HypImp", "BDEFS_Total", "UPPS_PU_avg", "DEBQ_Total")
-#corrplotlist
-
-# Generate the plot (assuming your data is in '' and ID is 'id')
-correlation_heatmap <- generate_correlation_heatmap(data = df_scaled, 
-                                                   outcome_vars = corrplotlist, 
-                                                   id_var = "id")
-
-# Print the plot to the screen
-print(correlation_heatmap)
-
-# Save the plot to your output folder
-ggsave(filename = file.path(output_folder, "multilevel_correlation_heatmap.png"), 
-       plot = correlation_heatmap, 
-       width = 12, height = 10, dpi = 300)
-
 ```
-# Make sure the final df_scaled dataset is also available via alias cycle_df_scaled
-```{r}
-cycle_df_scaled <- df_scaled
-```
+
+
+
+
 
 
 
 # 8\. EXPORT FINAL DATASETS
 
-```{r export-data}
+```{r}
 # --- Define File Names ---
 file_base_main <- paste0("adhd_daily_scaled_", format(Sys.Date(), "%Y%m%d"))
 

@@ -38,6 +38,7 @@ file_path <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 
 # Load the .RData file. This will restore the object with its original name, 'df_scaled'.
 load(file_path)
 
+cycle_df_scaled <- df_scaled
 ```
 
 
@@ -51,13 +52,14 @@ load(file_path)
 # Assume 'cycle_df_scaled' is your pre-existing dataframe
 
 # --- Output Folder ---
-
-# Define a base output location and create a unique, timestamped subfolder for this specific run.
 output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+
 smm_output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_SMMs/"))
-if (!dir.exists(output_folder)) {
-  dir.create(output_folder, recursive = TRUE)
+
+if (!dir.exists(smm_output_folder)) {
+  dir.create(smm_output_folder, recursive = TRUE)
 }
+
 
 current_date <- format(Sys.Date(), "%Y%m%d")
 
@@ -75,14 +77,7 @@ if (!dir.exists(smm_output_folder)) {
 ```
 
 # --- 2. Define Outcomes and Their Plot Labels ---
-
-```{r}
-
-# This named vector uses your short variable names.
-# NAMES = the column names in your dataframe (e.g., dep)
-# VALUES = the pretty labels for your plots (e.g., "Depressed Mood")
-outcomes <- c(
-  "CSS_Inatt" = "CSS Inattention Sx Severity",
+ "CSS_Inatt" = "CSS Inattention Sx Severity",
   "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
   "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
@@ -116,11 +111,28 @@ outcomes <- c(
   "DRSP_23" = "Relationship Impairment", # Note that hobbies/social was removed
   "E2" = "Estradiol",
   "P4" = "Progesterone",
-  "LH" = "Luteinizing Hormone")
+  "LH" = "Luteinizing Hormone", 
+  "UPPS_NU_avg" = "UPPS Negative Urgency",
+  "UPPS_PU_avg" = "UPPS Positive Urgency",
+  "UPPS_Premed_avg" = "UPPS (Lack of) Premeditation",
+  "UPPS_Persev_avg" = "UPPS (Lack of) Perseverance",
+  "UPPS_Sens_avg" = "UPPS Sensation Seeking",
+  "DEBQ_Total = "DEBQ Total Score")
 
-# You can easily switch the time variable for your models if needed
-time_var <- "cyclic_time_impute"
 
+```{r}
+
+# This named vector uses your short variable names.
+# NAMES = the column names in your dataframe (e.g., dep)
+# VALUES = the pretty labels for your plots (e.g., "Depressed Mood")
+outcomes <- c(  "UPPS_NU_avg" = "UPPS Negative Urgency",
+  "UPPS_PU_avg" = "UPPS Positive Urgency",
+  "UPPS_Premed_avg" = "UPPS (Lack of) Premeditation",
+  "UPPS_Persev_avg" = "UPPS (Lack of) Perseverance",
+  "UPPS_Sens_avg" = "UPPS Sensation Seeking",
+  "DEBQ_Total" = "DEBQ Total Score")
+
+ View(cycle_df_scaled)             
 # --- 3. Verify that Outcome Variables Exist in the Dataframe ---
 # This loop checks that all the columns defined above are actually in your dataframe.
 
@@ -148,10 +160,10 @@ for (outcome_variable in names(outcomes)) {
 
 # --- ‼️ CHOOSE YOUR TIME VARIABLES HERE ‼️ ---
 # Set the exact variable name for menses-centered analysis
-menses_time_variable <- "cyclic_time"  # Or "cyclic_time"
+menses_time_variable <- "cyclic_time_impute"  # Or "cyclic_time"
 
 # Set the exact variable name for ovulation-centered analysis
-ovulation_time_variable <- "cyclic_time_ov"  # Or "cyclic_time_ov"
+ovulation_time_variable <- "cyclic_time_imp_ov"  # Or "cyclic_time_ov"
 
 cycle_df_scaled$cyclic_time_imp_ov
 centering_methods <- c("menses", "ovulation")
