@@ -128,11 +128,8 @@ print(basename(png_files))
 # List the base filenames (e.g., "my_plot.png") in the exact order
 # you want them to appear in the grid (top-left, top-right, middle-left, etc.).
 plot_order <- c(
-  "gamplot_CSS_Inatt_Log_cyclic_time_impute_20250927.png", "gamplot_CSS_HypImp_Log_cyclic_time_impute_20250927.png", "gamplot_DRSP_21_Log_cyclic_time_impute_20250927.png",
-  "gamplot_DRSP_1_Log_cyclic_time_impute_20250927.png",  "gamplot_DRSP_4_Log_cyclic_time_impute_20250927.png", 
-  "gamplot_DRSP_7_Log_cyclic_time_impute_20250927.png",
-  "gamplot_score_pinball_Log_cyclic_time_impute_20250927.png", "gamplot_score_robot_Log_cyclic_time_impute_20250927.png",
-  "gamplot_BDEFS_RI_avg_Log_cyclic_time_impute_20250927.png"
+  "gamplot_CSS_Inatt_Log_cyclic_time_impute_20250927.png", "gamplot_CSS_HypImp_Log_cyclic_time_impute_20250927.png", 
+  "gamplot_score_pinball_Log_cyclic_time_impute_20250927.png", "gamplot_score_robot_Log_cyclic_time_impute_20250927.png"
  ) 
 
 # Create the full file paths based on your specified order
@@ -151,7 +148,7 @@ plots <- lapply(png_files, function(file) {
 
 # Arrange plots into a grid layout
 # With ncol=2, the plots will fill the grid according to your specified order
-plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 3)
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 2)
 
 # Display the combined plot
 print(plot_grid)
@@ -159,6 +156,8 @@ print(plot_grid)
 # Save the combined plot to a file
 output_file <- file.path(figure_directory, "FIGURE2_DRAFT.png")
 ggsave(output_file, plot_grid, width = 11, height = 8.5)
+
+
 ```
 
 # Make Supplemental Figure 1 - Gather .png figures from a specific folder location and compile them into a publication-ready graph with specified order
@@ -209,5 +208,58 @@ output_file <- file.path(figure_directory, "SuppFig1_DRAFT.png")
 ggsave(output_file, plot_grid, width = 4, height = 9)
 ```
 
+# Make Figure 3 SMMs - Gather .png figures from a specific folder location and compile them into a publication-ready graph with specified order
+```{r}
+# Define the directory containing the figures
+figure_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-28_SMMs/for_ms_SMM_figure"
+
+# List all PNG files in the directory
+png_files <- list.files(figure_directory, pattern = "\\.png$", full.names = TRUE)
+
+# Print just the text filenames without the full path
+print(basename(png_files))
+
+```
+
+ # "DRSP_1_log_g4_GAM_plot.png"  "DRSP_21_log_g3_GAM_plot.png",   "DRSP_4_log_g2_GAM_plot.png"        "DRSP_7_log_g3_GAM_plot.png"    
+ 
+```{r}
+# --------------------------------------------------------------------------
+# NEW: Define the desired order of your plot filenames
+# --------------------------------------------------------------------------
+# List the base filenames (e.g., "my_plot.png") in the exact order
+# you want them to appear in the grid (top-left, top-right, middle-left, etc.).
+plot_order <- c(
+     
+  "CSS_Inatt_log_g2_GAM_plot.png",  
+  "CSS_HypImp_log_g3_GAM_plot.png",
+  "score_pinball_log_g2_GAM_plot.png", 
+  "score_robot_log_g3_GAM_plot.png")
+
+# Create the full file paths based on your specified order
+png_files <- file.path(figure_directory, plot_order)
+# --------------------------------------------------------------------------
+
+
+# Load each PNG file as a ggplot object
+# This now loads the files in the order you defined above
+plots <- lapply(png_files, function(file) {
+  img <- png::readPNG(file)
+  ggplot() +
+    annotation_custom(rasterGrob(img, width = unit(1, "npc"), height = unit(1, "npc"))) +
+    theme_void()
+})
+
+# Arrange plots into a grid layout
+# With ncol=2, the plots will fill the grid according to your specified order
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 2)
+
+# Display the combined plot
+print(plot_grid)
+
+# Save the combined plot to a file
+output_file <- file.path(figure_directory, "SuppFig3_DRAFT.png")
+ggsave(output_file, plot_grid, width = 14, height = 10)
+```
 
 
