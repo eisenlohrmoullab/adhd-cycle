@@ -1,0 +1,612 @@
+---
+title: "CYCLE ADHD R01 - Figure Compilation"
+author: "Tory Eisenlohr-Moul"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# --- 1. SETUP: LOAD LIBRARIES AND FUNCTIONS ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyverse)
+library(mgcv)
+library(gamm4)
+library(ggplot2)
+library(zoo)
+library(glue)
+library(slider)
+library(cowplot)
+library(ggplot2)
+library(stringr)
+library(tools)
+library(ggplot2)
+library(png)
+library(grid)
+library(cowplot)
+library(gridExtra)
+library(ggpubr)
+
+# Evaluate other libraries needed in this document
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+#library(here)
+library(knitr)
+library(kableExtra) # for formatting tables
+library(psych)
+library(GGally) # for correlation matrix
+library(ggrepel)
+
+
+```
+
+
+```{r}
+#Load final copy of cleaned dataset cycle_df_scaled rdata from the folder here to /data:  /Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata
+
+#load("/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata")
+
+# Save a copy of cycle_df_scaled as an rdata file to /data in the repo
+#save(cycle_df_scaled, file = "~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+
+# set wd to repo
+setwd("~/CLEAR Lab Repositories/adhd-cycle")
+
+# load a copy of cycle_df_scaled from /data in the repo
+load("~/CLEAR Lab Repositories/adhd-cycle/data/adhd_daily_scaled_20250929.rdata")
+
+```
+
+# Make Figure 1. ICCs, Between- and Within-Person Associations of Study Variables
+
+```{r corrheatmap, echo=TRUE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Define the Heatmap Generation Function (Final Version)
+# ===================================================================
+generate_correlation_heatmap <- function(
+    data, outcome_vars, id_var, final_labels = NULL, # <-- New argument
+    sig.level = 0.05,
+    highlight_diag = TRUE,
+    show_legend = TRUE,
+    label_size = 4.6,
+    diag_label_size = 6,
+    subtitle_text = "Upper: Between-person (Spearman); Lower: Within-person (rmcorr); Diagonal: ICC"
+) {
+  # (The first part of the function is the same as the last version)
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                        dimnames = list(outcome_vars, outcome_vars))
+  
+  summary_expressions <- purrr::map(outcome_vars, ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))) %>%
+    rlang::set_names(outcome_vars)
+    
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!summary_expressions, .groups = "drop")
+
+  between_corr <- suppressWarnings(
+    cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  )
+
+  for (i in 1:(n_vars - 1)) for (j in (i + 1):n_vars) {
+    x <- person_means[[outcome_vars[i]]]
+    y <- person_means[[outcome_vars[j]]]
+    if (sum(!is.na(x) & !is.na(y)) > 2) {
+      test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+      results_matrix[i, j] <- between_corr[i, j]
+      pval_matrix[i, j] <- test$p.value
+    }
+  }
+
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(fml, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- performance::icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+        pval_matrix[i, i] <- 0
+      }
+    }
+  }
+
+  for (i in 2:n_vars) for (j in 1:(i - 1)) {
+    var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+    rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+    if (nrow(rmcorr_data) > 2) {
+      rmcorr_result <- rmcorr::rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+      results_matrix[i, j] <- rmcorr_result$r
+      pval_matrix[i, j] <- rmcorr_result$p
+    }
+  }
+
+  within_corr_matrix <- results_matrix
+  within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered    <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  no_leading_zero <- function(x) {
+    ifelse(is.na(x), NA_character_, sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      is_diag = as.character(Var1) == as.character(Var2),
+      is_sig  = p.value < sig.level,
+      label   = no_leading_zero(value)
+    )
+
+  diag_df    <- plot_df %>% filter(is_diag)
+  sig_df     <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df  <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(data = plot_df %>% filter(!is_diag),
+              aes(x = Var2, y = Var1, fill = value), color = "gray70", linewidth = 0.5) +
+    geom_tile(data = diag_df, aes(x = Var2, y = Var1),
+              fill = "gray92", color = "gray70", linewidth = 0.5) +
+    scale_fill_gradient2(low = "#6D9EC1", mid = "white", high = "#E46726",
+                       midpoint = 0, limits = c(-1, 1), name = "Correlation") +
+    labs(title = "Multilevel Correlation Matrix of Daily Outcomes", subtitle = subtitle_text) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title    = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 12, margin = margin(b = 6)),
+      axis.text.x   = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y   = element_text(face = "bold"),
+      axis.title    = element_blank(),
+      legend.position = if (show_legend) "right" else "none",
+      panel.grid.major = element_blank()
+    )
+
+  p <- p +
+    geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
+              fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +
+    geom_text(data = nonsig_df, aes(x = Var2, y = Var1, label = label),
+              color = "gray40", size = label_size, na.rm = TRUE)
+
+  if (highlight_diag && nrow(diag_df) > 0) {
+    p <- p +
+      geom_text(data = diag_df, aes(x = Var2, y = Var1, label = label),
+                fontface = "bold", color = "#4B0082", size = diag_label_size, na.rm = TRUE)
+  }
+  
+  # === NEW CODE TO RELABEL AXES AT THE END ===
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+  # ===========================================
+
+  return(p)
+}
+
+# ===================================================================
+# 3. Define Parameters and Run the Plot
+# ===================================================================
+# Technical names mapped to the desired "pretty" labels
+corrplotlist <- c(
+  "CSS_Inatt" = "Inattentive Sx",
+  "CSS_HypImp" = "Hyperactive/Impulsive Sx",
+  "E2.3roll" = "E2",
+  "P4.3roll" = "P4",
+  "score_pinball_rev" = "Working Memory Deficits (Pinball Task)",
+  "score_robot_rev" = "Response Disinhibition (Robot Task)",
+  "DRSP_1" = "Depression",
+  "DRSP_4" = "Anxiety",
+  "DRSP_7" = "Irritability",
+  "DRSP_21" = "Physical Pain"
+)
+
+# This assumes `cycle_df_scaled` exists in your environment
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
+
+  # === NEW: Create safe labels for calculation and a lookup table for plotting ===
+  # 1. Create safe labels (e.g., "Hyperactive.Impulsive.Sx") for calculations
+  safe_labels <- make.names(corrplotlist)
+  
+  # 2. Create a lookup table to map safe labels back to pretty labels
+  label_lookup <- setNames(corrplotlist, safe_labels)
+  # ===============================================================================
+
+  # Prepare the data by renaming columns to the SAFE labels
+  original_vars <- names(corrplotlist)
+  plot_data <- cycle_df_scaled[, c("id", original_vars)]
+  names(plot_data)[match(original_vars, names(plot_data))] <- safe_labels # Use safe_labels here
+
+  # Call the function with the safe labels for calculation AND the lookup table for the final plot
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = plot_data,
+    outcome_vars = safe_labels, # Use safe_labels here
+    id_var = "id",
+    final_labels = label_lookup # Pass the lookup table for final relabeling
+  )
+
+  print(correlation_heatmap)
+  
+  ggsave("figure1_correlation_heatmap.png", plot = correlation_heatmap, width = 9, height = 6)
+
+} else {
+  warning("Data 'cycle_df_scaled' or 'corrplotlist' not found.")
+}
+```
+
+
+print(head(person_means))
+print(str(person_means))
+all(outcome_vars %in% names(person_means))
+
+
+```{r corrheatmap, echo=TRUE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Define the Heatmap Generation Function
+# ===================================================================
+generate_correlation_heatmap <- function(
+    data, outcome_vars, id_var,
+    sig.level = 0.05,
+    highlight_diag = TRUE,
+    show_legend = TRUE,
+    label_size = 4.6,
+    diag_label_size = 6,
+    subtitle_text = "Upper: Between-person (Spearman); Lower: Within-person (rmcorr); Diagonal: ICC"
+) {
+  # This line MUST be first to define the number of variables.
+  n_vars <- length(outcome_vars)
+
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                        dimnames = list(outcome_vars, outcome_vars))
+
+  # --- Between-person (upper triangle) ---
+  person_means <- data %>%
+    group_by(!!sym(id_var)) %>%
+    summarise(across(all_of(outcome_vars), ~ mean(., na.rm = TRUE)), .groups = "drop")
+
+  between_corr <- suppressWarnings(
+    cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  )
+
+  for (i in 1:(n_vars - 1)) for (j in (i + 1):n_vars) {
+    x <- person_means[[outcome_vars[i]]]
+    y <- person_means[[outcome_vars[j]]]
+    if (sum(!is.na(x) & !is.na(y)) > 2) {
+      test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+      results_matrix[i, j] <- between_corr[i, j]
+      pval_matrix[i, j] <- test$p.value
+    }
+  }
+
+  # --- ICC (diagonal) ---
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    # Backticks handle variable names with spaces
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(fml, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- performance::icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+        pval_matrix[i, i] <- 0
+      }
+    }
+  }
+
+  # --- Within-person (lower triangle) ---
+  for (i in 2:n_vars) for (j in 1:(i - 1)) {
+    var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+    rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+    if (nrow(rmcorr_data) > 2) {
+      rmcorr_result <- rmcorr::rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+      results_matrix[i, j] <- rmcorr_result$r
+      pval_matrix[i, j] <- rmcorr_result$p
+    }
+  }
+
+  # --- Reorder by clustering ---
+  within_corr_matrix <- results_matrix
+  within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered    <- pval_matrix[corr_order, corr_order]
+
+  # --- Long form for plotting ---
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  no_leading_zero <- function(x) {
+    ifelse(is.na(x), NA_character_,
+           sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      is_diag = as.character(Var1) == as.character(Var2),
+      is_sig  = p.value < sig.level,
+      label   = no_leading_zero(value)
+    )
+
+  diag_df    <- plot_df %>% filter(is_diag)
+  sig_df     <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df  <- plot_df %>% filter(!is_diag & !is_sig)
+
+  # --- Plot ---
+  p <- ggplot() +
+    geom_tile(data = plot_df %>% filter(!is_diag),
+              aes(x = Var2, y = Var1, fill = value), color = "gray70", linewidth = 0.5) +
+    geom_tile(data = diag_df, aes(x = Var2, y = Var1),
+              fill = "gray92", color = "gray70", linewidth = 0.5) +
+    scale_fill_gradient2(
+      low = "#6D9EC1", mid = "white", high = "#E46726",
+      midpoint = 0, limits = c(-1, 1), name = "Correlation"
+    ) +
+    labs(
+      title = "Multilevel Correlation Matrix of Daily Outcomes",
+      subtitle = subtitle_text
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title    = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 12, margin = margin(b = 6)),
+      axis.text.x   = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y   = element_text(face = "bold"),
+      axis.title    = element_blank(),
+      legend.position = if (show_legend) "right" else "none",
+      panel.grid.major = element_blank()
+    )
+
+  p <- p +
+    geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
+              fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +
+    geom_text(data = nonsig_df, aes(x = Var2, y = Var1, label = label),
+              color = "gray40", size = label_size, na.rm = TRUE)
+
+  if (highlight_diag && nrow(diag_df) > 0) {
+    p <- p +
+      geom_text(data = diag_df, aes(x = Var2, y = Var1, label = label),
+                fontface = "bold", color = "#4B0082", size = diag_label_size, na.rm = TRUE)
+  }
+
+  return(p)
+}
+
+# ===================================================================
+# 3. Define Parameters and Run the Plot
+# ===================================================================
+
+# This is the cleaned list of variables.
+corrplotlist <- c(
+  "CSS_Inatt" = "Inattentive Sx",
+  "CSS_HypImp" = "Hyperactive/Impulsive Sx",
+  "E2.3roll" = "E2",
+  "P4.3roll" = "P4",
+  "score_pinball_rev" = "Working Memory Deficits (Pinball Task)",
+  "score_robot_rev" = "Response Disinhibition (Robot Task)",
+  "DRSP_1" = "Depression",
+  "DRSP_4" = "Anxiety",
+  "DRSP_7" = "Irritability",
+  "DRSP_21" = "Physical Pain"
+)
+
+# This assumes `cycle_df_scaled` exists in your environment
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
+
+  # Prepare the data by selecting and renaming columns
+  original_vars <- names(corrplotlist)
+  plot_data <- cycle_df_scaled[, c("id", original_vars)]
+  names(plot_data)[match(original_vars, names(plot_data))] <- corrplotlist
+
+  # Call the function with the prepared `plot_data`
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = plot_data,
+    outcome_vars = corrplotlist,
+    id_var = "id"
+  )
+
+  print(correlation_heatmap)
+
+} else {
+  warning("Data 'cycle_df_scaled' or 'corrplotlist' not found.")
+}
+```
+
+
+# Make Figure 2 - Gather .png figures from a specific folder location and compile them into a publication-ready graph with specified order
+```{r}
+# Define the directory containing the figures
+figure_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-27_GAMMs/cyclic_time_impute/plots/sxgammfig"
+
+# List all PNG files in the directory
+png_files <- list.files(figure_directory, pattern = "\\.png$", full.names = TRUE)
+
+# Print just the text filenames without the full path
+print(basename(png_files))
+
+```
+
+```{r}
+# --------------------------------------------------------------------------
+# NEW: Define the desired order of your plot filenames
+# --------------------------------------------------------------------------
+# List the base filenames (e.g., "my_plot.png") in the exact order
+# you want them to appear in the grid (top-left, top-right, middle-left, etc.).
+plot_order <- c(
+  "gamplot_CSS_Inatt_Log_cyclic_time_impute_20250927.png", "gamplot_CSS_HypImp_Log_cyclic_time_impute_20250927.png", 
+  "gamplot_score_pinball_Log_cyclic_time_impute_20250927.png", "gamplot_score_robot_Log_cyclic_time_impute_20250927.png"
+ ) 
+
+# Create the full file paths based on your specified order
+png_files <- file.path(figure_directory, plot_order)
+# --------------------------------------------------------------------------
+
+
+# Load each PNG file as a ggplot object
+# This now loads the files in the order you defined above
+plots <- lapply(png_files, function(file) {
+  img <- png::readPNG(file)
+  ggplot() +
+    annotation_custom(rasterGrob(img, width = unit(1, "npc"), height = unit(1, "npc"))) +
+    theme_void()
+})
+
+# Arrange plots into a grid layout
+# With ncol=2, the plots will fill the grid according to your specified order
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 2)
+
+# Display the combined plot
+print(plot_grid)
+
+# Save the combined plot to a file
+output_file <- file.path(figure_directory, "FIGURE2_DRAFT.png")
+ggsave(output_file, plot_grid, width = 11, height = 8.5)
+
+
+```
+
+# Make Supplemental Figure 1 - Gather .png figures from a specific folder location and compile them into a publication-ready graph with specified order
+```{r}
+# Define the directory containing the figures
+figure_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-27_GAMMs/cyclic_time_impute/plots/hormgammfig/ov_cent"
+
+# List all PNG files in the directory
+png_files <- list.files(figure_directory, pattern = "\\.png$", full.names = TRUE)
+
+# Print just the text filenames without the full path
+print(basename(png_files))
+
+```
+
+```{r}
+# --------------------------------------------------------------------------
+# NEW: Define the desired order of your plot filenames
+# --------------------------------------------------------------------------
+# List the base filenames (e.g., "my_plot.png") in the exact order
+# you want them to appear in the grid (top-left, top-right, middle-left, etc.).
+plot_order <- c(
+  "gamplot_E2_Log_cyclic_time_imp_ov_20250927.png", "gamplot_LH_Log_cyclic_time_imp_ov_20250927.png", "gamplot_P4_Log_cyclic_time_imp_ov_20250927.png") 
+
+# Create the full file paths based on your specified order
+png_files <- file.path(figure_directory, plot_order)
+# --------------------------------------------------------------------------
+
+
+# Load each PNG file as a ggplot object
+# This now loads the files in the order you defined above
+plots <- lapply(png_files, function(file) {
+  img <- png::readPNG(file)
+  ggplot() +
+    annotation_custom(rasterGrob(img, width = unit(1, "npc"), height = unit(1, "npc"))) +
+    theme_void()
+})
+
+# Arrange plots into a grid layout
+# With ncol=2, the plots will fill the grid according to your specified order
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 1)
+
+# Display the combined plot
+print(plot_grid)
+
+# Save the combined plot to a file
+output_file <- file.path(figure_directory, "SuppFig1_DRAFT.png")
+ggsave(output_file, plot_grid, width = 4, height = 9)
+```
+
+# Make Figure 3 SMMs - Gather .png figures from a specific folder location and compile them into a publication-ready graph with specified order
+```{r}
+# Define the directory containing the figures
+figure_directory <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2025-09-28_SMMs/for_ms_SMM_figure"
+
+# List all PNG files in the directory
+png_files <- list.files(figure_directory, pattern = "\\.png$", full.names = TRUE)
+
+# Print just the text filenames without the full path
+print(basename(png_files))
+
+```
+
+ # "DRSP_1_log_g4_GAM_plot.png"  "DRSP_21_log_g3_GAM_plot.png",   "DRSP_4_log_g2_GAM_plot.png"        "DRSP_7_log_g3_GAM_plot.png"    
+ 
+```{r}
+# --------------------------------------------------------------------------
+# NEW: Define the desired order of your plot filenames
+# --------------------------------------------------------------------------
+# List the base filenames (e.g., "my_plot.png") in the exact order
+# you want them to appear in the grid (top-left, top-right, middle-left, etc.).
+plot_order <- c(
+     
+  "CSS_Inatt_log_g2_GAM_plot.png",  
+  "CSS_HypImp_log_g3_GAM_plot.png",
+  "score_pinball_log_g2_GAM_plot.png", 
+  "score_robot_log_g3_GAM_plot.png")
+
+# Create the full file paths based on your specified order
+png_files <- file.path(figure_directory, plot_order)
+# --------------------------------------------------------------------------
+
+
+# Load each PNG file as a ggplot object
+# This now loads the files in the order you defined above
+plots <- lapply(png_files, function(file) {
+  img <- png::readPNG(file)
+  ggplot() +
+    annotation_custom(rasterGrob(img, width = unit(1, "npc"), height = unit(1, "npc"))) +
+    theme_void()
+})
+
+# Arrange plots into a grid layout
+# With ncol=2, the plots will fill the grid according to your specified order
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 2)
+
+# Display the combined plot
+print(plot_grid)
+
+# Save the combined plot to a file
+output_file <- file.path(figure_directory, "SuppFig3_DRAFT.png")
+ggsave(output_file, plot_grid, width = 14, height = 10)
+```
+
+```{r}
+
+```
+

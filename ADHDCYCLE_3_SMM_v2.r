@@ -1,70 +1,37 @@
 # --- 1. SETUP & PARAMETERS ---
 
-```{r}
-# Load required libraries
-library(dplyr)
-library(mgcv)
-library(gamm4)
-library(ggplot2)
-library(glue)
-library(tidyr)
-library(purrr)
-library(lubridate)
-library(zoo)
-library(marginaleffects)
-  
-# Set random seed for reproducibility
-set.seed(
- 123
-)
-
-```
-
-
 # Load the data file
-```{r}
-load("~/CLEAR Lab Repositories/adhd-cycle/data/adhd_daily_scaled_20250929.rdata") # Enter the file path for your data file; note that it must include pacts_scaling() output and there must be 5 observations per phase per person to include.
-
-```
+load("~/CLEAR Lab Repositories/adhd-cycle/data/adhd_daily_scaled_20250929.RData")
 
 # Define the base folder for all outputs
-```{r}
 output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
 smm_output_folder <- file.path(output_folder_base, "SMM_outputs") # Simplified folder name
-if (!dir.exists(smm_output_folder)) {
-  dir.create(smm_output_folder, recursive = TRUE)
-}
-```
 
 # Choose your time variables
-```{r}
 menses_time_variable <- "cyclic_time_impute"
 ovulation_time_variable <- "cyclic_time_imp_ov"
-```
-
 
 # <-- 1. Your complete list of outcomes is defined here.
 # Names = technical variable names in the dataframe
 # Values = pretty labels for plots
-```{r}
 outcomes <- c(
   "CSS_Inatt" = "CSS Inattention Sx Severity",
   "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
   "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
   "CSS_Imp_Count" = "CSS Impulsivity Sx Count",
-  "score_pinball_rev" = "Working Memory (Reversed Pinball Performance)",
-  "score_robot_rev" = "Response Disinhibition (Reversed Robot Performance)",
+  "score_pinball" = "Working Memory Score (Pinball)",
+  "score_robot" = "Response Inhibition (Robot Factory)",
   "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
   "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)",
   "DRSP_1" = "Depressed Mood",
   "DRSP_2" = "Hopelessness",
   "DRSP_3" = "Worthlessness/Guilt",
-  "DRSP_4" = "Anxiety/Nervousness",
+  "DRSP_4" = "Anxiety",
   "DRSP_5" = "Mood Swings",
   "DRSP_6" = "Rejection Sensitivity",
-  "DRSP_7" = "Anger/Irritability",
-  "DRSP_8" = "Interpersonal Conflict",
+  "DRSP_7" = "Irritability",
+  "DRSP_8" = "Interpersonal Conflicts",
   "DRSP_9" = "Less Interest in Activities",
   "DRSP_10" = "Difficulty Concentrating",
   "DRSP_11" = "Lethargy/Fatigue",
@@ -90,24 +57,9 @@ outcomes <- c(
   "UPPS_Sens_avg" = "UPPS Sensation Seeking",
   "DEBQ_Total" = "DEBQ Total Score"
 )
-```
-
 
 
 # --- 2. AUTOMATED ANALYSIS LOOP ---
-
-```{r}
-# Source function files
-source("~/CLEAR Lab Repositories/code_templates/3_model/smm/preprocess_outcome.R")
-source("~/CLEAR Lab Repositories/code_templates/3_model/smm/subset_by_phase_cyclic.R")
-source("~/CLEAR Lab Repositories/code_templates/3_model/smm/run_smm_cyclic.R")
-source("~/CLEAR Lab Repositories/code_templates/3_model/smm/model_plot_gam_cyclic.R")
-source("~/CLEAR Lab Repositories/code_templates/3_model/smm/compare_bic_cyclic.R")
-
-```
-
-```{r}
-# --- AUTOMATED ANALYSIS LOOP ---
 analysis_combinations <- expand.grid(
   outcome = names(outcomes),
   centering = c("menses", "ovulation"),
@@ -115,38 +67,42 @@ analysis_combinations <- expand.grid(
 )
 
 all_smm_results <- list()
-all_bic_results <- list()
 all_gam_results <- list()
 
 for (i in 1:nrow(analysis_combinations)) {
   current_outcome <- analysis_combinations$outcome[i]
   current_centering <- analysis_combinations$centering[i]
+
+  # <-- 3. The loop now gets the pretty label for the current variable.
   current_plot_label <- outcomes[current_outcome]
+
+  # Determine the time variable name
   current_time_var <- ifelse(current_centering == "menses", menses_time_variable, ovulation_time_variable)
 
   message(paste0("\n🚀 Starting analysis for: '", current_plot_label, "' (", current_centering, "-centered)"))
 
-  preprocessed_data <- preprocess_outcome(data = cycle_df_scaled, outcome = current_outcome)
+  preprocessed_data <- preprocess_outcome(data = df_scaled, outcome = current_outcome)
 
   subset_result <- subset_by_phase_cyclic(
     data = preprocessed_data,
     outcome = current_outcome,
     time_var = current_time_var,
-    min_obs = 4
+    min_obs = 5 # Using 5 as per your last example
   )
   data_for_analysis <- subset_result$data_subset
 
-  if (nrow(data_for_analysis) < 15) {
-      message(paste0("⚠️ Skipping '", current_plot_label, "' due to insufficient data after subsetting."))
-      next
+  # Skip if there's not enough data after subsetting
+  if (nrow(data_for_analysis) < 20) {
+    message(paste0("⚠️ Skipping '", current_plot_label, "' due to insufficient data after subsetting."))
+    next
   }
 
   smm_results <- run_smm_cyclic(
     data = data_for_analysis,
     outcome = current_outcome,
     time_var = current_time_var,
-    plot_label = current_plot_label,
-    g = 2:4,
+    plot_label = current_plot_label, # <-- ...and passes it to the functions.
+    g = 2:5, # Using 2:5 as per your last example
     centering = current_centering,
     save_dir = smm_output_folder
   )
@@ -154,25 +110,14 @@ for (i in 1:nrow(analysis_combinations)) {
   list_name <- paste0(current_outcome, "_", current_centering)
   all_smm_results[[list_name]] <- smm_results
 
-  # --- ‼️ ADDED THIS BLOCK BACK IN TO GENERATE THE BIC PLOT ‼️ ---
-  if (!is.null(smm_results) && length(smm_results$all_results) > 0) {
-    bic_result <- compare_bic_cyclic(
-      data = data_for_analysis,
-      outcome = current_outcome,
-      time_var = current_time_var,
-      centering = current_centering,
-      smm_results = smm_results,
-      save_dir = smm_output_folder
-    )
-    all_bic_results[[list_name]] <- bic_result
-  # --- END OF FIX ---
-
+  # Only run GAMs if SMM was successful
+  if (!is.null(smm_results)) {
     gams <- model_plot_modx_gam_cyclic(
       data = data_for_analysis,
       outcome = current_outcome,
       time_var = current_time_var,
       smm_result = smm_results,
-      plot_label = current_plot_label,
+      plot_label = current_plot_label, # <-- ...and passes it to the functions.
       centering = current_centering,
       save_dir = smm_output_folder
     )
@@ -183,5 +128,3 @@ for (i in 1:nrow(analysis_combinations)) {
 }
 
 message("\n🏁 ALL OUTCOMES PROCESSED! 🏁")
-```
-

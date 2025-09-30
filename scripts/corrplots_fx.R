@@ -1,19 +1,27 @@
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
 library(tidyverse)
 library(rmcorr)
 library(performance)
 library(lme4)
 library(ggplot2)
 
+# ===================================================================
+# 2. Define the Heatmap Generation Function (with improvement)
+# ===================================================================
 generate_correlation_heatmap <- function(
     data, outcome_vars, id_var,
     sig.level = 0.05,
     highlight_diag = TRUE,
     show_legend = TRUE,
-    label_size = 4.6,        # size for non-diagonal labels
-    diag_label_size = 6,     # size for diagonal ICC labels
+    label_size = 4.6,
+    diag_label_size = 6,
     subtitle_text = "Upper: Between-person (Spearman); Lower: Within-person (rmcorr); Diagonal: ICC"
 ) {
+  # This line MUST be first to define the number of variables.
   n_vars <- length(outcome_vars)
+
   results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
                            dimnames = list(outcome_vars, outcome_vars))
   pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
@@ -41,7 +49,8 @@ generate_correlation_heatmap <- function(
   # --- ICC (diagonal) ---
   for (i in 1:n_vars) {
     var <- outcome_vars[i]
-    fml <- as.formula(paste0(var, " ~ 1 + (1|", id_var, ")"))
+    # Backticks handle variable names with spaces
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
     if (sum(!is.na(data[[var]])) > 1) {
       model_fit <- try(lmer(fml, data = data), silent = TRUE)
       if (!inherits(model_fit, "try-error")) {
@@ -63,7 +72,7 @@ generate_correlation_heatmap <- function(
     }
   }
 
-  # --- Reorder by clustering on within-person structure ---
+  # --- Reorder by clustering ---
   within_corr_matrix <- results_matrix
   within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
   dist_matrix <- as.dist(1 - abs(within_corr_matrix))
@@ -80,7 +89,6 @@ generate_correlation_heatmap <- function(
   plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
   plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
 
-  # Formatting helper: remove leading 0
   no_leading_zero <- function(x) {
     ifelse(is.na(x), NA_character_,
            sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
@@ -122,7 +130,6 @@ generate_correlation_heatmap <- function(
       panel.grid.major = element_blank()
     )
 
-  # Cell labels: bold for significant, gray for non-significant; diagonal bold purple
   p <- p +
     geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
               fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +

@@ -1,0 +1,234 @@
+---
+title: "ADHDCYCLE_1_Descriptives"
+output: html_document
+---
+
+
+```{r}
+#Load final copy of cleaned dataset cycle_df_scaled rdata from the folder here to /data:  /Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata
+
+#load("/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata")
+
+# Save a copy of cycle_df_scaled as an rdata file to /data in the repo
+#save(cycle_df_scaled, file = "~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+
+# set wd to repo
+setwd("~/CLEAR Lab Repositories/adhd-cycle")
+
+# load a copy of cycle_df_scaled from /data in the repo
+load("~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+
+```
+
+
+# Print histogram of all E2 variables to visually inspect for outliers
+```{r histograms}
+
+# Visualize distributions of E2, E2.zd, E2.szd, and log(E2 + 1)
+# Histogram of raw E2 values
+
+e2_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2)) +
+  geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Histogram of E2 Values", x = "E2", y = "Count") +
+  theme_light()
+print(e2_histogram)
+
+ggsave(filename = file.path(output_folder, "e2_histogram.png"), plot = e2_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for person-standardized values
+e2_person_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2.zd)) +
+  geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
+  labs(title = "Histogram of Person-Standardized E2 Values", x = "E2 Person-Standardized (d)", y = "Count") +
+  theme_light() 
+print(e2_person_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_person_standardized_histogram.png"), plot = e2_person_std_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for sample-standardized values
+e2_sample_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2.szd)) +
+  geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
+  labs(title = "Histogram of Sample-Standardized E2 Values", x = "E2 Sample-Standardized (szd)", y = "Count") +
+  theme_light()
+print(e2_sample_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_sample_standardized_histogram.png"), plot = e2_sample_std_histogram, width = 8, height = 5, dpi = 300)
+
+# Test whether a log transform improves the distribution
+e2_log_histogram <- cycle_df_scaled %>%
+  mutate(E2_log = log(E2 + 1)) %>% # Add 1
+  ggplot(aes(x = E2_log)) +
+  geom_histogram(bins = 100, fill = "orange", alpha = 0.7)+
+  labs(title
+       = "Histogram of Log-Transformed E2 Values", x = "Log(E2 + 1)", y = "Count") +
+  theme_light()
+print(e2_log_histogram)
+ggsave(filename = file.path(output_folder, "e2_log_transformed_histogram.png"),
+       plot = e2_log_histogram, width = 8, height = 5, dpi = 300)
+
+# Stack the four histograms together for comparison
+combined_e2_histograms <- ggarrange(
+  e2_histogram + rremove("x.text") + rremove("x.title"),
+  e2_person_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_sample_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_log_histogram,
+  ncol = 1, nrow = 4,
+  labels = c("A", "B", "C", "D"),
+  common.legend = TRUE, legend = "right"
+)
+print(combined_e2_histograms)
+ggsave(filename = file.path(output_folder, "combined_e2_histograms.png"),
+       plot = combined_e2_histograms, width = 8, height = 16,
+       dpi = 300)
+
+```
+# Print histogram of all P4 variables to visually inspect for outliers
+```{r histograms2}
+# Visualize distributions of P4, P4.zd, P4.szd, and
+# log(P4 + 1)
+# Histogram of raw P4 values
+p4_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4)) +
+  geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Histogram of P4 Values", x = "P4", y = "Count") +
+  theme_light()
+print(p4_histogram)
+ggsave(filename = file.path(output_folder, "p4_histogram.png"), plot = p4_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for person-standardized values
+p4_person_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4.zd)) +
+  geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
+  labs(title = "Histogram of Person-Standardized P4 Values", x = "P4 Person-Standardized (d)", y = "Count") +
+  theme_light()
+print(p4_person_std_histogram)
+ggsave(filename = file.path(output_folder, "p4_person_standardized_histogram.png"),
+       plot = p4_person_std_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for sample-standardized values
+p4_sample_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4.szd)) +
+  geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
+  labs(title = "Histogram of Sample-Standardized P4 Values", x = "P4 Sample-Standardized (szd)", y = "Count") +
+  theme_light()
+print(p4_sample_std_histogram)
+ggsave(filename = file.path(output_folder, "p4_sample_standardized_histogram.png"),
+       plot = p4_sample_std_histogram, width = 8, height = 5
+       , dpi = 300)
+
+# Test whether a log transform improves the distribution
+p4_log_histogram <- cycle_df_scaled %>%
+  mutate(P4_log = log(P4 + 1)) %>% # Add 1
+  ggplot(aes(x = P4_log)) +
+  geom_histogram(bins = 100, fill = "orange", alpha = 0.7) +
+  labs(title  = "Histogram of Log-Transformed P4 Values", x = "Log(P4 + 1)", y = "Count") +
+  theme_light()
+print(p4_log_histogram)
+ggsave(filename = file.path(output_folder, "p4_log_transformed_histogram.png"),
+       plot = p4_log_histogram, width = 8, height = 5,
+       dpi = 300)
+
+# Stack the four histograms together for comparison
+combined_p4_histograms <- ggarrange(
+  p4_histogram + rremove("x.text") + rremove("x.title"),
+  p4_person_std_histogram + rremove("x.text") + rremove("x.title"),
+  p4_sample_std_histogram + rremove("x.text") + rremove("x.title"),
+  p4_log_histogram,
+  ncol = 1, nrow = 4,
+  labels = c("A", "B", "C", "D"),
+  common.legend = TRUE, legend = "right")
+print(combined_p4_histograms)
+ggsave(filename = file.path(output_folder, "combined_p4_histograms.png"),
+       plot = combined_p4_histograms, width = 8, height = 16,
+       dpi = 300)
+
+```
+
+
+# Plot Descriptives for Hormones
+```{r hormone-desc}
+# --- Reusable Function Version ---
+
+# 1. Define the function
+plot_distributions <- function(data, var_name) {
+  # Define the column names based on the input variable
+  raw_col <- rlang::sym(var_name)
+  zd_col <- rlang::sym(paste0(var_name, ".zd"))
+  szd_col <- rlang::sym(paste0(var_name, ".szd"))
+  log_col <- rlang::sym(paste0(var_name, "_log"))
+
+  # The same data wrangling logic as before
+  data_long <- data %>%
+    mutate(!!log_col := log1p(!!raw_col)) %>%
+    select(!!raw_col, !!zd_col, !!szd_col, !!log_col) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "Transformation",
+      values_to = "Value"
+    ) %>%
+    mutate(Transformation = factor(Transformation,
+      levels = c(rlang::as_string(raw_col), rlang::as_string(zd_col), rlang::as_string(szd_col), rlang::as_string(log_col)),
+      labels = c("Raw", "Person-Standardized", "Sample-Standardized", "Log-Transformed")
+    ))
+
+  # The same plotting logic
+  p <- ggplot(data_long, aes(x = Value)) +
+    geom_histogram(bins = 50, fill = "#D55E00", alpha = 0.8) +
+    facet_wrap(~Transformation, ncol = 2, scales = "free_x") +
+    labs(
+      title = paste("Distributions of", var_name, "Under Different Transformations"),
+      x = paste(var_name, "Value"),
+      y = "Count"
+    ) +
+    theme_light()
+
+  return(p)
+}
+
+# 2. Use the function to create, print, and save plots for E2
+e2_comparison_plot <- plot_distributions(cycle_df_scaled, "E2")
+print(e2_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "E2_comparison_distributions.png"),
+  plot = e2_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for P4
+p4_comparison_plot <- plot_distributions(cycle_df_scaled, "P4")
+print(p4_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "P4_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for LH
+LH_comparison_plot <- plot_distributions(cycle_df_scaled, "LH")
+print(LH_comparison_plot)
+ggsave(filename = file.path(output_folder, "LH_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+```
+
+
+```{r}
+hist(cycle_df_scaled$score_pinball_rev)
+hist(cycle_df_scaled$score_robot_rev)
+
+# violin plot of score_pinball_rev
+ggplot(cycle_df_scaled, aes(x = "", y = score_pinball_rev)) +
+  geom_violin(fill = "lightblue", color = "black", alpha = 0.7) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.color = "red", outlier.size = 2) +
+  labs(title = "Violin Plot of Working Memory Deficits (Pinball Task)",
+       y = "Working Memory Deficits (Pinball Task)") +
+  theme_minimal()
+
+# violin plot of score_robot_rev
+ggplot(cycle_df_scaled, aes(x = "", y = score_robot_rev)) +
+  geom_violin(fill = "lightgreen", color = "black", alpha = 0.7) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.color = "red", outlier.size = 2) +
+  labs(title = "Violin Plot of Response Disinhibition (Robot Factory Task)",
+       y = "Response Disinhibition (Robot Factory Task)") +
+  theme_minimal()
+
+```
