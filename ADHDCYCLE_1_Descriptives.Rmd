@@ -232,3 +232,213 @@ ggplot(cycle_df_scaled, aes(x = "", y = score_robot_rev)) +
   theme_minimal()
 
 ```
+
+
+
+
+# ICCs, Between- and Within-Person Associations of Study Variables
+```{r f1_corr, echo=TRUE, message=FALSE, warning=FALSE}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Define the Heatmap Generation Function (Final Version)
+# ===================================================================
+generate_correlation_heatmap <- function(
+    data, outcome_vars, id_var, final_labels = NULL, # <-- New argument
+    sig.level = 0.05,
+    highlight_diag = TRUE,
+    show_legend = TRUE,
+    label_size = 4.6,
+    diag_label_size = 6,
+    subtitle_text = "Upper: Between-person (Spearman); Lower: Within-person (rmcorr); Diagonal: ICC"
+) {
+  # (The first part of the function is the same as the last version)
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                        dimnames = list(outcome_vars, outcome_vars))
+  
+  summary_expressions <- purrr::map(outcome_vars, ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))) %>%
+    rlang::set_names(outcome_vars)
+    
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!summary_expressions, .groups = "drop")
+
+  between_corr <- suppressWarnings(
+    cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  )
+
+  for (i in 1:(n_vars - 1)) for (j in (i + 1):n_vars) {
+    x <- person_means[[outcome_vars[i]]]
+    y <- person_means[[outcome_vars[j]]]
+    if (sum(!is.na(x) & !is.na(y)) > 2) {
+      test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+      results_matrix[i, j] <- between_corr[i, j]
+      pval_matrix[i, j] <- test$p.value
+    }
+  }
+
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(fml, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- performance::icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+        pval_matrix[i, i] <- 0
+      }
+    }
+  }
+
+  for (i in 2:n_vars) for (j in 1:(i - 1)) {
+    var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+    rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+    if (nrow(rmcorr_data) > 2) {
+      rmcorr_result <- rmcorr::rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+      results_matrix[i, j] <- rmcorr_result$r
+      pval_matrix[i, j] <- rmcorr_result$p
+    }
+  }
+
+  within_corr_matrix <- results_matrix
+  within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered    <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  no_leading_zero <- function(x) {
+    ifelse(is.na(x), NA_character_, sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      is_diag = as.character(Var1) == as.character(Var2),
+      is_sig  = p.value < sig.level,
+      label   = no_leading_zero(value)
+    )
+
+  diag_df    <- plot_df %>% filter(is_diag)
+  sig_df     <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df  <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(data = plot_df %>% filter(!is_diag),
+              aes(x = Var2, y = Var1, fill = value), color = "gray70", linewidth = 0.5) +
+    geom_tile(data = diag_df, aes(x = Var2, y = Var1),
+              fill = "gray92", color = "gray70", linewidth = 0.5) +
+    scale_fill_gradient2(low = "#6D9EC1", mid = "white", high = "#E46726",
+                       midpoint = 0, limits = c(-1, 1), name = "Correlation") +
+    labs(title = "Multilevel Correlation Matrix of Daily Outcomes", subtitle = subtitle_text) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title    = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 12, margin = margin(b = 6)),
+      axis.text.x   = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y   = element_text(face = "bold"),
+      axis.title    = element_blank(),
+      legend.position = if (show_legend) "right" else "none",
+      panel.grid.major = element_blank()
+    )
+
+  p <- p +
+    geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
+              fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +
+    geom_text(data = nonsig_df, aes(x = Var2, y = Var1, label = label),
+              color = "gray40", size = label_size, na.rm = TRUE)
+
+  if (highlight_diag && nrow(diag_df) > 0) {
+    p <- p +
+      geom_text(data = diag_df, aes(x = Var2, y = Var1, label = label),
+                fontface = "bold", color = "#4B0082", size = diag_label_size, na.rm = TRUE)
+  }
+  
+  # === NEW CODE TO RELABEL AXES AT THE END ===
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+  # ===========================================
+
+  return(p)
+}
+
+# ===================================================================
+# 3. Define Parameters and Run the Plot
+# ===================================================================
+# Technical names mapped to the desired "pretty" labels
+corrplotlist <- c(
+  "CSS_Inatt" = "Inattentive Sx",
+  "CSS_HypImp" = "Hyperactive/Impulsive Sx",
+  "E2.3roll" = "E2",
+  "P4.3roll" = "P4",
+  "score_pinball_rev" = "Working Memory Deficits (Pinball Task)",
+  "score_robot_rev" = "Response Disinhibition (Robot Task)",
+  "DRSP_1" = "Depression",
+  "DRSP_4" = "Anxiety",
+  "DRSP_7" = "Irritability",
+  "DRSP_21" = "Physical Pain"
+)
+
+# This assumes `cycle_df_scaled` exists in your environment
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
+
+  # === NEW: Create safe labels for calculation and a lookup table for plotting ===
+  # 1. Create safe labels (e.g., "Hyperactive.Impulsive.Sx") for calculations
+  safe_labels <- make.names(corrplotlist)
+  
+  # 2. Create a lookup table to map safe labels back to pretty labels
+  label_lookup <- setNames(corrplotlist, safe_labels)
+  # ===============================================================================
+
+  # Prepare the data by renaming columns to the SAFE labels
+  original_vars <- names(corrplotlist)
+  plot_data <- cycle_df_scaled[, c("id", original_vars)]
+  names(plot_data)[match(original_vars, names(plot_data))] <- safe_labels # Use safe_labels here
+
+  # Call the function with the safe labels for calculation AND the lookup table for the final plot
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = plot_data,
+    outcome_vars = safe_labels, # Use safe_labels here
+    id_var = "id",
+    final_labels = label_lookup # Pass the lookup table for final relabeling
+  )
+
+  print(correlation_heatmap)
+
+  # Define the final filename, including today's date
+dated_output_file <- file.path(figure_directory, 
+                               paste0("Fig1_corr_", 
+                                      format(Sys.Date(), "%Y%m%d"), 
+                                      ".png"))
+
+# Save the plot directly to the final, dated file
+ggsave(filename = dated_output_file, 
+       plot = correlation_heatmap,
+       width = 11,
+       height = 8.5)
+
+} else {
+  
+  stop("Error: 'cycle_df_scaled' or 'corrplotlist' not found in the environment.")
+}
+```

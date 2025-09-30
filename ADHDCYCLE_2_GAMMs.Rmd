@@ -58,21 +58,18 @@ conflict_prefer("summarize", "dplyr")
 
 # --- Output Folder ---
 
-# Define a base output location and create a unique, timestamped subfolder for this specific run.
-output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
-gamm_output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_GAMMs/"))
-if (!dir.exists(output_folder)) {
-  dir.create(output_folder, recursive = TRUE)
+# Define a base output location
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/2_gamm_output"
+
+# Create a unique, timestamped subfolder path for this run's figures
+gamm_directory <- file.path(output_folder_base,format(Sys.Date(), "%Y-%m-%d/"))
+
+# Create the directory if it doesn't already exist
+# The `recursive = TRUE` argument ensures all parent folders are also created if needed.
+if (!dir.exists(gamm_directory)) {
+  dir.create(gamm_directory, recursive = TRUE)
 }
 
-current_date <- format(Sys.Date(), "%Y%m%d")
-
-# Create the full output file name with the date
-file_name <- paste0("GAMM_model_", current_date, ".rds")
-full_path <- paste0(gamm_output_folder, file_name)
-
-# Example of how you would save your data using the full path
-# saveRDS(cycle_df_scaled, file = full_path)
 ```
 
 
@@ -80,45 +77,10 @@ full_path <- paste0(gamm_output_folder, file_name)
 # --- 2. Define Outcomes and Labels ---
 # Create a named vector. The 'names' are the column names in your dataframe.
 # The 'values' are the pretty labels you want on your plots.
-outcomes <- c(
-  "CSS_Inatt" = "CSS Inattention Sx Severity",
-  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity",
-   "CSS_Inatt_Count" = "CSS Inattention Sx Count",
-  "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count", 
-  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", 
-    "score_pinball" = "Working Memory Score (Pinball)", 
-    "score_robot" = "Reponse Inhibition (Robot Factory)", 
-    "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)", 
-    "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", 
-    "DRSP_1" = "Depressed Mood", 
-  "DRSP_2" = "Hopelessness",
-    "DRSP_3" = "Worthlessness/Guilt",
-    "DRSP_4" = "Anxiety", 
-  "DRSP_5" = "Mood Swings",
-  "DRSP_6" = "Rejection Sensitivity",
-    "DRSP_7" = "Irritability",
-  "DRSP_8" = "Interpersonal Conflicts",
-  "DRSP_9" = "Less Interest in Activities",
-  "DRSP_10" = "Difficulty Concentrating",
-  "DRSP_11" = "Lethargy/Fatigue",
-  "DRSP_12" = "Increased Appetite/Overate",
-  "DRSP_13" = "Food Cravings",
-  "DRSP_14" = "Hypersomnia",
-  "DRSP_15" = "Insomnia",
-  "DRSP_16" = "Overwhelmed/Couldn't Cope",
-  "DRSP_17" = "Felt Out of Control",
-    "DRSP_18" = "Breast Tenderness",
-    "DRSP_19" = "Swelling/Bloating",
-  "DRSP_20" = "Headache",
-  "DRSP_21" = "Joint/Muscle Pain",
-  "DRSP_22" = "Work Impairment",
-  "DRSP_23" = "Relationship Impairment", # Note that hobbies/social was removed
-  "E2" = "Estradiol",
-  "P4" = "Progesterone",
-  "LH" = "Luteinizing Hormone"
-)
-    
 
+source("~/CLEAR Lab Repositories/adhd-cycle/0_setup_scripts/outcomes_list.R")
+
+# NOW CHECK that all outcome variable names exist in your dataframe
 
 # Get the actual column names from the dataframe
 actual_colnames <- names(cycle_df_scaled)
@@ -138,14 +100,20 @@ for (outcome_to_check in names(outcomes)) {
 # --- 1. Define the time variable you want to use ---
 
 # You can easily switch this back to "cyclic_time" if needed
-time_var <- "cyclic_time_imp_ov"
+time_var <- "cyclic_time_impute"
 
+
+```
+
+```{r}
+
+
+source("~/CLEAR Lab Repositories/adhd-cycle/0_setup_scripts/outcomes_list.R")
 
 ```
 
 
 ```{r}
-
 # --- 3. Loop Through Each Outcome ---
 for (outcome_var in names(outcomes)) {
 
@@ -157,12 +125,12 @@ for (outcome_var in names(outcomes)) {
   # Log-transform the current outcome variable
   cycle_df_scaled[[log_outcome_var]] <- log(cycle_df_scaled[[outcome_var]] + 1)
 
-  # Prepare data for the model using the specified time_var
+  # Prepare data for the model
   selected_vars <- c(time_var, log_outcome_var, "id")
   datSX <- cycle_df_scaled[complete.cases(cycle_df_scaled[selected_vars]), ]
   datSX$id <- as.factor(datSX$id)
 
-  # Dynamically create the formula for the GAM model using time_var
+  # Dynamically create the formula for the GAM model
   gamm_formula <- as.formula(paste(
     log_outcome_var,
     "~ s(id, bs = 're') + s(", time_var, ", bs = 'cc', k = 10) + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
@@ -180,15 +148,49 @@ for (outcome_var in names(outcomes)) {
     method = 'REML'
   )
 
-  # Save the model summary to a dynamically named .txt file
-  summary_filename <- paste0(gamm_output_folder, "gamm_", log_outcome_var, "_", time_var, "_summary_", current_date, ".txt")
+  # Save the model summary to a file
+  summary_filename <- paste0(gamm_directory, "gamm_", log_outcome_var, "_", time_var, "_summary_", current_date, ".txt")
   sink(summary_filename)
   print(summary(gamm))
   sink()
 
+  # --------------------------------------------------------------------------
+  # NEW: Extract GAM Summary for Both Fixed and Random Effects
+  # --------------------------------------------------------------------------
+  gamm_summary <- summary(gamm)
+  
+  # --- Part A: Average Effect (s(time_var)) ---
+  avg_eff_term <- paste0("s(", time_var, ")")
+  avg_eff_edf <- gamm_summary$s.table[avg_eff_term, "edf"]
+  avg_eff_pval <- gamm_summary$s.table[avg_eff_term, "p-value"]
+  avg_eff_stars <- case_when(
+    avg_eff_pval < 0.001 ~ "***",
+    avg_eff_pval < 0.01  ~ "**",
+    avg_eff_pval < 0.05  ~ "*",
+    TRUE               ~ ""
+  )
+  avg_eff_text <- paste0("Average Cycle Effect: ", round(avg_eff_edf, 2), avg_eff_stars)
+
+  # --- Part B: Individual Differences (s(id,time_var)) ---
+  ind_diff_term <- paste0("s(id,", time_var, ")")
+  ind_diff_edf <- gamm_summary$s.table[ind_diff_term, "edf"]
+  ind_diff_pval <- gamm_summary$s.table[ind_diff_term, "p-value"]
+  ind_diff_stars <- case_when(
+    ind_diff_pval < 0.001 ~ "***",
+    ind_diff_pval < 0.01  ~ "**",
+    ind_diff_pval < 0.05  ~ "*",
+    TRUE                ~ ""
+  )
+  ind_diff_text <- paste0("Individual Differences in Cycle Effect: ", round(ind_diff_edf, 2), ind_diff_stars)
+  
+  # --- Part C: Combine for the final annotation text ---
+  # We use "\n" to create a line break between the two parts
+  annotation_text <- paste(avg_eff_text, ind_diff_text, sep = "\n")
+  # --------------------------------------------------------------------------
+
   # --- Plotting ---
   
-  # Create a named list for expand.grid using the time_var string
+  # Create a named list for expand.grid
   grid_list <- list(seq(-1, 1, by = 0.05), id = 0)
   names(grid_list)[1] <- time_var
   plotdat <- do.call(expand.grid, grid_list)
@@ -205,29 +207,220 @@ for (outcome_var in names(outcomes)) {
   plotdat$conf.low <- pred$conf.low
   plotdat$conf.high <- pred$conf.high
 
-  # Generate the plot with the dynamic y-axis label
+  # Generate the plot
   gamplot <- ggplot(plotdat, aes(x = .data[[time_var]], y = estimate)) +
     scale_x_continuous(
       limits = c(-1, 1),
       breaks = seq(-1, 1, by = 0.50),
-      # IMPORTANT: You may need to change these labels to match the meaning of cyclic_time_ov
-      labels = c("Menses Onset", "50%F", "Ovulation", "50%L", "Menses Onset")
+      labels = c("Ovulation", "50%L", "Menses Onset", "50%F", "Ovulation")
     ) +
     labs(x = "", y = outcome_label) +
     geom_rect(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf, fill = "grey70", alpha = 0.2, color = "white") +
     geom_rect(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf, fill = "grey87", alpha = 0.2, color = "white") +
     geom_line(linewidth = 1) +
     geom_ribbon(aes(ymin = conf.low, ymax = conf.high), fill = "lightgrey", alpha = 0.3) +
-    theme_minimal()
+    theme_minimal() +
+    
+    # --- UPDATED: Add the new two-line annotation ---
+    annotate(
+      geom = "text",
+      x = -1,          # Position on the far left of the x-axis
+      y = Inf,         # Position at the top of the y-axis
+      label = annotation_text,
+      hjust = 0,       # Left-align the text
+      vjust = 1.5,     # Nudge the text down from the top (increased for two lines)
+      fontface = "italic",
+      size = 4         # Slightly smaller size to fit better
+    )
 
   print(gamplot)
 
-  # Save the plot to a dynamically named .png file
-  plot_filename <- paste0(gamm_output_folder, "gamplot_", log_outcome_var, "_", time_var, "_", current_date, ".png")
-  ggsave(plot_filename, gamplot, width = 8, height = 6, dpi = 300)
-
+  # Save the plot
+  plot_filename <- paste0(gamm_directory, "gamplot_", log_outcome_var, "_", time_var, "_", current_date, ".png")
+  ggsave(plot_filename, gamplot, width = 8, height = 6, dpi = 500)
 }
+
+# print path represented by gamm_directory
+latest_gamm_folder <- print(gamm_directory)
+print(latest_gamm_folder)
 ```
 
 
 
+
+
+# Save GAMM Figure Summary for Paper
+```{r}
+# List all PNG files in the directory
+png_files <- list.files(gamm_directory, pattern = "\\.png$", full.names = TRUE)
+
+# Print just the text filenames without the full path
+print(basename(png_files))
+```
+# --------------------------------------------------------------------------
+# USING THE NAMES ABOVE, Define the desired order of your plot filenames
+# --------------------------------------------------------------------------
+```{r}
+
+# List the base filenames (e.g., "my_plot.png") in the exact order
+# you want them to appear in the grid (top-left, top-right, middle-left, etc.).
+plot_order <- c(
+  "gamplot_CSS_Inatt_Log_cyclic_time_impute_20250930.png", "gamplot_CSS_HypImp_Log_cyclic_time_impute_20250930.png", 
+  "gamplot_score_pinball_rev_Log_cyclic_time_impute_20250930.png", "gamplot_score_robot_rev_Log_cyclic_time_impute_20250930.png"
+ ) 
+
+# Create the full file paths based on your specified order
+png_files <- file.path(gamm_directory, plot_order)
+# --------------------------------------------------------------------------
+
+
+# Load each PNG file as a ggplot object
+# This now loads the files in the order you defined above
+plots <- lapply(png_files, function(file) {
+  img <- png::readPNG(file)
+  ggplot() +
+    annotation_custom(rasterGrob(img, width = unit(1, "npc"), height = unit(1, "npc"))) +
+    theme_void()
+})
+
+# Arrange plots into a grid layout
+# With ncol=2, the plots will fill the grid according to your specified order
+plot_grid <- cowplot::plot_grid(plotlist = plots, ncol = 2)
+
+# Display the combined plot
+print(plot_grid)
+
+# Define the final filename, including today's date
+dated_output_file <- file.path(figure_directory, 
+                               paste0("Fig2_", 
+                                      format(Sys.Date(), "%Y%m%d"), 
+                                      ".png"))
+
+# Save the plot directly to the final, dated file
+ggsave(filename = dated_output_file, 
+       plot = plot_grid, 
+       width = 11, 
+       height = 8.5)
+
+
+```
+
+# --- Combined Hormone Plot for Paper ----
+```{r}
+
+# This script first generates hormone predictions from GAMM models and then
+# creates a single, combined plot showing the profiles of E2, P4, and LH
+# across the menstrual cycle, with specified colors and shaded clinical event windows.
+
+# --- Part 1: Generate and Combine Hormone Model Predictions ---
+# This loop processes each hormone, runs a GAMM model, corrects the scaling,
+# and combines the results into a single data frame for plotting.
+
+time_var <- "cyclic_time_ov"
+
+hormone_vars <- c("E2_Log", "P4_Log", "LH_Log")
+hormone_labels <- c("E2", "P4", "LH")
+all_plotdat <- list() # A list to hold the data frames for each hormone
+
+for (i in seq_along(hormone_vars)) {
+  hormone_var <- hormone_vars[i]
+  hormone_label <- hormone_labels[i]
+
+  # Prepare data for the model
+  selected_vars <- c(time_var, hormone_var, "id")
+  datSX <- cycle_df_scaled[complete.cases(cycle_df_scaled[selected_vars]), ]
+  datSX$id <- as.factor(datSX$id)
+
+  # Create the formula for the GAM model
+  gamm_formula <- as.formula(paste(
+    hormone_var,
+    "~ s(id, bs = 're') + s(", time_var, ", bs = 'cc', k = 10) + s(id,", time_var, ", bs = c('re','cc'), k = c(NA, 10))"
+  ))
+
+  # Create the knots list
+  knots_list <- list(c(-1, 1))
+  names(knots_list) <- time_var
+
+  # Run the GAMM model
+  gamm <- mgcv::gam(
+    formula = gamm_formula,
+    data = datSX,
+    knots = knots_list,
+    method = 'REML'
+  )
+
+  # Create grid for predictions
+  grid_list <- list(seq(-1, 1, by = 0.05), id = 0)
+  names(grid_list)[1] <- time_var
+  plotdat <- do.call(expand.grid, grid_list)
+
+  # Get predictions and back-transform
+  pred <- marginaleffects::predictions(
+    gamm,
+    newdata = plotdat,
+    type = "response",
+    transform = function(x) exp(x) - 1
+  )
+
+  plotdat$estimate <- pred$estimate
+  plotdat$conf.low <- pred$conf.low
+  plotdat$conf.high <- pred$conf.high
+
+  # --- FIX 1: Correctly sample-standardize all values ---
+  # Use the mean and sd from 'estimate' to scale all three columns consistently.
+  mean_est <- mean(plotdat$estimate)
+  sd_est <- sd(plotdat$estimate)
+  plotdat <- plotdat %>%
+    mutate(
+      estimate_ss = (estimate - mean_est) / sd_est,
+      conf.low_ss = (conf.low - mean_est) / sd_est,
+      conf.high_ss = (conf.high - mean_est) / sd_est,
+      hormone = hormone_label # Add a column to identify the hormone
+    )
+
+  all_plotdat[[i]] <- plotdat
+}
+
+# Combine the list of data frames into one
+combined_df <- do.call(rbind, all_plotdat)
+
+# --- Part 2: Create and Save the Final Combined Plot ---
+# This version uses the combined data frame to create the plot with a legend.
+
+# Define the color palette for the hormones
+hormone_colors <- c("E2" = "navy", "P4" = "goldenrod", "LH" = "forestgreen")
+
+# Create the plot
+combined_plot_color <- ggplot(combined_df, aes(x = .data[[time_var]], group = hormone)) +
+
+  # --- FIX 2: Make shaded bars visible & match new labels ---
+  # Menses Onset is now at x = -1 and x = 1. Ovulation is at x = 0.
+  # Alpha is increased and white borders are removed for visibility.
+  geom_rect(aes(xmin = -1, xmax = -0.92, ymin = -Inf, ymax = Inf), fill = "grey70", alpha = 0.5, inherit.aes = FALSE) +
+  geom_rect(aes(xmin = -0.04, xmax = 0.04, ymin = -Inf, ymax = Inf), fill = "grey87", alpha = 0.5, inherit.aes = FALSE) +
+  geom_rect(aes(xmin = 0.92, xmax = 1, ymin = -Inf, ymax = Inf), fill = "grey70", alpha = 0.5, inherit.aes = FALSE) +
+
+  # Add the hormone lines and ribbons
+  geom_line(aes(y = estimate_ss, color = hormone), linewidth = 1.5) +
+  geom_ribbon(aes(ymin = conf.low_ss, ymax = conf.high_ss, fill = hormone), alpha = 0.1) +
+
+  # Define the x-axis to represent the cycle
+  scale_x_continuous(
+    limits = c(-1, 1),
+    breaks = seq(-1, 1, by = 0.50),
+    labels = c("Menses Onset", "50% Fol", "Ovulation", "50% Lut", "Menses Onset")
+  ) +
+
+  # Manually set the colors and fill to create a single, correct legend
+  scale_color_manual(values = hormone_colors, name = "Hormone") +
+  scale_fill_manual(values = hormone_colors, name = "Hormone") +
+
+  # Add labels and apply theme
+  labs(x = "Cycle Phase", y = "Sample-Standardized Hormone Levels") +
+  theme_minimal() +
+  theme(legend.position = "top") # Move legend to the top for better layout
+
+# Save the final plot
+combined_plot_color_filename <- paste0(gamm_directory, "combined_hormone_plots_color_", time_var, "_", current_date, ".png")
+ggsave(combined_plot_color_filename, combined_plot_color, width = 8, height = 6, dpi = 300)
+```
