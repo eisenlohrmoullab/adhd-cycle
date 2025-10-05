@@ -6,7 +6,15 @@ Principal Investigator: Michelle Martel, PhD, Professor of (Clinical) Psychology
 
 Date Initiated: June 20, 2024
 
-Purpose: This repository houses code that processes and analyzes data collected during NIH grant R01-MH-119119, which sought to examine how the menstrual cycle influences daily symptoms in a sample of adult female patients with significant attention deficit/hyperactivity disorder (ADHD) symptoms.  Data were collected between 2019 and 2024.  
+Purpose: This repository houses code that processes and analyzes data collected during NIH grant R01-MH-119119, which sought to examine how the menstrual cycle influences daily symptoms in a sample of adult female patients with significant attention deficit/hyperactivity disorder (ADHD) symptoms.  Data were collected between 2019 and 2024.
+
+## Recent Additions
+
+**October 5, 2025**: Added two new hormone analysis scripts:
+- `ADHDCYCLE_7_GAMM_Hormones.Rmd` - Generalized Additive Mixed Models analysis
+- `ADHDCYCLE_8_MLM_Hormones.Rmd` - Multilevel Linear Models analysis
+
+Both analyze effects of E2 and P4 5-day rolling averages (person-centered) and their interaction on daily ADHD outcomes. See `ANALYSIS_DOCUMENTATION.md` for complete details.
 
 Summary of R01-MH-119119: 
 
