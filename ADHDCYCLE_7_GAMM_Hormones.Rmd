@@ -226,12 +226,12 @@ for (outcome_var in names(gamm_results)) {
                              paste0(current_date, "_", outcome_var, "_GAMM_summary.txt"))
     
     sink(summary_file)
-    cat("="*80, "\n")
+    cat(strrep("=", 80), "\n")
     cat("GAMM Analysis Results\n")
     cat("Outcome:", result$label, "\n")
     cat("Variable:", outcome_var, "\n")
     cat("Date:", Sys.Date(), "\n")
-    cat("="*80, "\n\n")
+    cat(strrep("=", 80), "\n\n")
     
     cat("Model Formula:\n")
     cat(outcome_var, "~ s(E2.5roll.d) + s(P4.5roll.d) + ti(E2.5roll.d, P4.5roll.d)\n")
