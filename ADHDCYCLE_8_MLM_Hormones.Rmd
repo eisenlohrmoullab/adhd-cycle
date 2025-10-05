@@ -1,0 +1,677 @@
+---
+title: "ADHD Cycle - MLM Analysis with Hormone Rolling Averages"
+author: "Tory Eisenlohr-Moul, PhD"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(scipen = 999, digits = 3)
+```
+
+# Overview
+
+This script uses Multilevel Linear Models (MLMs) to test the effects of 5-day rolling averages of estradiol (E2.5roll.d) and progesterone (P4.5roll.d), and their interaction, on daily ADHD and related outcome variables.
+
+# Setup
+
+## Load Libraries
+
+```{r load-libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lme4)           # For mixed-effects models
+library(lmerTest)       # For p-values in lmer models
+library(broom.mixed)    # For tidying model outputs
+library(performance)    # For model performance metrics
+library(emmeans)        # For estimated marginal means
+library(knitr)          # For tables
+library(kableExtra)     # For publication-ready tables
+library(ggplot2)        # For plots
+library(patchwork)      # For combining plots
+library(glue)           # For string formatting
+library(sjPlot)         # For model plots and tables
+
+# Set preferences
+conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("lmer", "lme4")
+```
+
+## Set Output Folder
+
+```{r set-output}
+# Create output folder with date prefix
+current_date <- format(Sys.Date(), "%Y%m%d")
+output_folder <- file.path("output", paste0(current_date, "_MLM_Hormones"))
+dir.create(output_folder, showWarnings = FALSE, recursive = TRUE)
+
+cat("Output folder:", output_folder, "\n")
+```
+
+## Load Data
+
+```{r load-data}
+# Load the cleaned and scaled dataset
+# Note: Update this path if data is stored elsewhere
+data_file <- "data/adhd_daily_scaled_20250929.rdata"
+
+if (file.exists(data_file)) {
+  load(data_file)
+  cat("Loaded data from:", data_file, "\n")
+  cat("Dataset dimensions:", nrow(cycle_df_scaled), "rows x", ncol(cycle_df_scaled), "columns\n")
+} else {
+  stop("Data file not found. Please ensure the cleaned dataset is available in the data/ folder.")
+}
+```
+
+## Define Outcome Variables
+
+```{r define-outcomes}
+# Define outcome variables and their labels
+outcomes <- c(
+  "CSS_Inatt" = "CSS Inattention Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Severity",
+  "CSS_Inatt_Count" = "CSS Inattention Count",
+  "CSS_Hyp_Count" = "CSS Hyperactivity Count",
+  "CSS_Imp_Count" = "CSS Impulsivity Count",
+  "score_pinball" = "Working Memory (Pinball)",
+  "score_robot" = "Response Inhibition (Robot Factory)",
+  "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)",
+  "DRSP_1" = "Depressed Mood",
+  "DRSP_2" = "Hopelessness",
+  "DRSP_3" = "Worthlessness/Guilt",
+  "DRSP_4" = "Anxiety",
+  "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity",
+  "DRSP_7" = "Irritability",
+  "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities",
+  "DRSP_10" = "Difficulty Concentrating",
+  "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite",
+  "DRSP_13" = "Food Cravings",
+  "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia",
+  "DRSP_16" = "Overwhelmed",
+  "DRSP_17" = "Out of Control",
+  "DRSP_18" = "Breast Tenderness",
+  "DRSP_19" = "Swelling/Bloating",
+  "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain",
+  "DRSP_22" = "Work Impairment",
+  "DRSP_23" = "Relationship Impairment"
+)
+
+cat("Total outcomes to analyze:", length(outcomes), "\n")
+```
+
+# MLM Analysis
+
+## Define Model Fitting Function
+
+```{r mlm-function}
+# Function to fit MLM with E2 and P4 rolling averages and their interaction
+fit_mlm_hormone_model <- function(data, outcome_var, outcome_label) {
+  
+  # Check if outcome variable and predictors exist
+  required_vars <- c(outcome_var, "E2.5roll.d", "P4.5roll.d", "id")
+  missing_vars <- setdiff(required_vars, names(data))
+  
+  if (length(missing_vars) > 0) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SKIPPED",
+      reason = paste("Missing variables:", paste(missing_vars, collapse = ", "))
+    ))
+  }
+  
+  # Create complete case dataset for this outcome
+  model_data <- data %>%
+    select(all_of(required_vars)) %>%
+    drop_na()
+  
+  if (nrow(model_data) < 50) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SKIPPED",
+      reason = "Insufficient data (< 50 observations)"
+    ))
+  }
+  
+  # Fit MLM with E2, P4, and their interaction as fixed effects
+  # Random intercept for participant
+  tryCatch({
+    model <- lmer(
+      as.formula(paste0(outcome_var, " ~ E2.5roll.d + P4.5roll.d + E2.5roll.d:P4.5roll.d + (1|id)")),
+      data = model_data,
+      REML = TRUE,
+      control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000))
+    )
+    
+    # Get model summary
+    model_summary <- summary(model)
+    
+    # Get tidy output
+    tidy_output <- tidy(model, effects = "fixed")
+    
+    # Calculate R-squared
+    r2_vals <- r2(model)
+    
+    # Get ICC
+    icc_val <- icc(model)
+    
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SUCCESS",
+      model = model,
+      summary = model_summary,
+      tidy = tidy_output,
+      r2_marginal = r2_vals$R2_marginal,
+      r2_conditional = r2_vals$R2_conditional,
+      icc = icc_val$ICC_adjusted,
+      n_obs = nrow(model_data),
+      n_subjects = n_distinct(model_data$id)
+    ))
+    
+  }, error = function(e) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "ERROR",
+      reason = as.character(e$message)
+    ))
+  })
+}
+```
+
+## Run Models for All Outcomes
+
+```{r run-mlm-models}
+# Initialize results list
+mlm_results <- list()
+
+# Fit models for each outcome
+cat("Fitting MLM models...\n")
+pb <- txtProgressBar(min = 0, max = length(outcomes), style = 3)
+
+for (i in seq_along(outcomes)) {
+  outcome_var <- names(outcomes)[i]
+  outcome_label <- outcomes[i]
+  
+  result <- fit_mlm_hormone_model(cycle_df_scaled, outcome_var, outcome_label)
+  mlm_results[[outcome_var]] <- result
+  
+  setTxtProgressBar(pb, i)
+}
+close(pb)
+
+# Count successful models
+n_success <- sum(sapply(mlm_results, function(x) x$status == "SUCCESS"))
+cat("\nSuccessfully fit", n_success, "out of", length(outcomes), "models\n")
+```
+
+## Save Model Summaries
+
+```{r save-summaries}
+# Save text summaries for successful models
+summary_folder <- file.path(output_folder, "model_summaries")
+dir.create(summary_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(mlm_results)) {
+  result <- mlm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    summary_file <- file.path(summary_folder, 
+                             paste0(current_date, "_", outcome_var, "_MLM_summary.txt"))
+    
+    sink(summary_file)
+    cat(strrep("=", 80), "\n")
+    cat("MLM Analysis Results\n")
+    cat("Outcome:", result$label, "\n")
+    cat("Variable:", outcome_var, "\n")
+    cat("Date:", as.character(Sys.Date()), "\n")
+    cat(strrep("=", 80), "\n\n")
+    
+    cat("Model Formula:\n")
+    cat(outcome_var, "~ E2.5roll.d + P4.5roll.d + E2.5roll.d:P4.5roll.d + (1|id)\n\n")
+    
+    cat("Sample Size:\n")
+    cat("  Observations:", result$n_obs, "\n")
+    cat("  Subjects:", result$n_subjects, "\n\n")
+    
+    cat("Model Fit:\n")
+    cat("  R² Marginal (fixed effects):", round(result$r2_marginal, 3), "\n")
+    cat("  R² Conditional (fixed + random):", round(result$r2_conditional, 3), "\n")
+    cat("  ICC:", round(result$icc, 3), "\n\n")
+    
+    cat("Fixed Effects:\n")
+    print(result$tidy)
+    cat("\n")
+    
+    cat("Full Model Summary:\n")
+    print(result$summary)
+    
+    sink()
+  }
+}
+
+cat("Model summaries saved to:", summary_folder, "\n")
+```
+
+# Results Tables
+
+## Create Summary Results Table
+
+```{r results-table}
+# Extract key results for table
+results_df <- data.frame(
+  Outcome = character(),
+  Label = character(),
+  N_Obs = integer(),
+  N_Subj = integer(),
+  R2_Marg = numeric(),
+  R2_Cond = numeric(),
+  ICC = numeric(),
+  E2_Est = numeric(),
+  E2_SE = numeric(),
+  E2_t = numeric(),
+  E2_p = numeric(),
+  P4_Est = numeric(),
+  P4_SE = numeric(),
+  P4_t = numeric(),
+  P4_p = numeric(),
+  Int_Est = numeric(),
+  Int_SE = numeric(),
+  Int_t = numeric(),
+  Int_p = numeric(),
+  Status = character(),
+  stringsAsFactors = FALSE
+)
+
+for (outcome_var in names(mlm_results)) {
+  result <- mlm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    tidy_df <- result$tidy
+    
+    # Extract fixed effects
+    e2_row <- which(tidy_df$term == "E2.5roll.d")
+    p4_row <- which(tidy_df$term == "P4.5roll.d")
+    int_row <- which(tidy_df$term == "E2.5roll.d:P4.5roll.d")
+    
+    results_df <- rbind(results_df, data.frame(
+      Outcome = outcome_var,
+      Label = result$label,
+      N_Obs = result$n_obs,
+      N_Subj = result$n_subjects,
+      R2_Marg = result$r2_marginal,
+      R2_Cond = result$r2_conditional,
+      ICC = result$icc,
+      E2_Est = tidy_df$estimate[e2_row],
+      E2_SE = tidy_df$std.error[e2_row],
+      E2_t = tidy_df$statistic[e2_row],
+      E2_p = tidy_df$p.value[e2_row],
+      P4_Est = tidy_df$estimate[p4_row],
+      P4_SE = tidy_df$std.error[p4_row],
+      P4_t = tidy_df$statistic[p4_row],
+      P4_p = tidy_df$p.value[p4_row],
+      Int_Est = tidy_df$estimate[int_row],
+      Int_SE = tidy_df$std.error[int_row],
+      Int_t = tidy_df$statistic[int_row],
+      Int_p = tidy_df$p.value[int_row],
+      Status = "SUCCESS"
+    ))
+  } else {
+    results_df <- rbind(results_df, data.frame(
+      Outcome = outcome_var,
+      Label = result$label,
+      N_Obs = NA,
+      N_Subj = NA,
+      R2_Marg = NA,
+      R2_Cond = NA,
+      ICC = NA,
+      E2_Est = NA,
+      E2_SE = NA,
+      E2_t = NA,
+      E2_p = NA,
+      P4_Est = NA,
+      P4_SE = NA,
+      P4_t = NA,
+      P4_p = NA,
+      Int_Est = NA,
+      Int_SE = NA,
+      Int_t = NA,
+      Int_p = NA,
+      Status = result$status
+    ))
+  }
+}
+
+# Save results table
+write.csv(results_df, 
+          file.path(output_folder, paste0(current_date, "_MLM_results_table.csv")),
+          row.names = FALSE)
+
+# Display formatted table
+results_df %>%
+  filter(Status == "SUCCESS") %>%
+  mutate(
+    R2_Marg = sprintf("%.3f", R2_Marg),
+    R2_Cond = sprintf("%.3f", R2_Cond),
+    E2_Result = sprintf("%.3f (%.3f), p%s", E2_Est, E2_SE, 
+                       ifelse(E2_p < 0.001, "<.001", paste0("=", sprintf("%.3f", E2_p)))),
+    P4_Result = sprintf("%.3f (%.3f), p%s", P4_Est, P4_SE,
+                       ifelse(P4_p < 0.001, "<.001", paste0("=", sprintf("%.3f", P4_p)))),
+    Int_Result = sprintf("%.3f (%.3f), p%s", Int_Est, Int_SE,
+                        ifelse(Int_p < 0.001, "<.001", paste0("=", sprintf("%.3f", Int_p))))
+  ) %>%
+  select(Label, N_Obs, N_Subj, R2_Marg, R2_Cond, E2_Result, P4_Result, Int_Result) %>%
+  kable(
+    col.names = c("Outcome", "N Obs", "N Subj", "R² Marg", "R² Cond",
+                  "E2 Effect (SE), p", "P4 Effect (SE), p", "E2×P4 Interaction (SE), p"),
+    caption = "MLM Results: Effects of E2 and P4 Rolling Averages on Daily Outcomes",
+    align = c("l", "r", "r", "r", "r", "l", "l", "l")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE,
+                font_size = 11) %>%
+  save_kable(file.path(output_folder, paste0(current_date, "_MLM_results_table.html")))
+```
+
+## Create Coefficient Plot
+
+```{r coef-plot, fig.width=12, fig.height=10}
+# Create forest plot of coefficients
+coef_data <- results_df %>%
+  filter(Status == "SUCCESS") %>%
+  select(Label, E2_Est, E2_SE, E2_p, P4_Est, P4_SE, P4_p, Int_Est, Int_SE, Int_p) %>%
+  pivot_longer(
+    cols = c(E2_Est, P4_Est, Int_Est),
+    names_to = "Effect",
+    values_to = "Estimate"
+  ) %>%
+  mutate(
+    SE = case_when(
+      Effect == "E2_Est" ~ E2_SE,
+      Effect == "P4_Est" ~ P4_SE,
+      Effect == "Int_Est" ~ Int_SE
+    ),
+    p_value = case_when(
+      Effect == "E2_Est" ~ E2_p,
+      Effect == "P4_Est" ~ P4_p,
+      Effect == "Int_Est" ~ Int_p
+    ),
+    Effect = recode(Effect,
+                   "E2_Est" = "E2 Effect",
+                   "P4_Est" = "P4 Effect",
+                   "Int_Est" = "E2×P4 Interaction"),
+    Significant = ifelse(p_value < 0.05, "p < .05", "p ≥ .05"),
+    CI_lower = Estimate - 1.96 * SE,
+    CI_upper = Estimate + 1.96 * SE
+  )
+
+# Create plot
+coef_plot <- ggplot(coef_data, aes(x = Estimate, y = Label, color = Significant)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.2, alpha = 0.7) +
+  geom_point(size = 3) +
+  facet_wrap(~Effect, ncol = 3, scales = "free_x") +
+  scale_color_manual(values = c("p < .05" = "red", "p ≥ .05" = "gray60")) +
+  labs(
+    title = "MLM Fixed Effects: E2 and P4 Effects on Daily Outcomes",
+    x = "Standardized Coefficient (95% CI)",
+    y = NULL,
+    color = "Significance"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 9)
+  )
+
+ggsave(
+  filename = file.path(output_folder, paste0(current_date, "_MLM_coefficient_plot.png")),
+  plot = coef_plot,
+  width = 14,
+  height = 12,
+  dpi = 300
+)
+
+print(coef_plot)
+```
+
+# Visualization
+
+## Create Predicted Effects Plots
+
+```{r predicted-effects-plots, fig.width=12, fig.height=8}
+# Function to create predicted effects plot for a single outcome
+plot_predicted_effects <- function(result) {
+  if (result$status != "SUCCESS") return(NULL)
+  
+  # Create prediction data for E2 effect (at mean P4 = 0)
+  pred_e2_data <- expand.grid(
+    E2.5roll.d = seq(-2, 2, length.out = 100),
+    P4.5roll.d = 0
+  )
+  
+  # Create prediction data for P4 effect (at mean E2 = 0)
+  pred_p4_data <- expand.grid(
+    E2.5roll.d = 0,
+    P4.5roll.d = seq(-2, 2, length.out = 100)
+  )
+  
+  # Get predictions
+  pred_e2 <- predict(result$model, newdata = pred_e2_data, re.form = NA)
+  pred_p4 <- predict(result$model, newdata = pred_p4_data, re.form = NA)
+  
+  pred_e2_data$predicted <- pred_e2
+  pred_p4_data$predicted <- pred_p4
+  
+  # Calculate standard errors using bootMer (simplified approach - using fixed effects only)
+  fe <- fixef(result$model)
+  vcov_mat <- vcov(result$model)
+  
+  # E2 predictions with SE
+  X_e2 <- model.matrix(~ E2.5roll.d + P4.5roll.d + E2.5roll.d:P4.5roll.d, data = pred_e2_data)
+  pred_e2_data$se <- sqrt(diag(X_e2 %*% vcov_mat %*% t(X_e2)))
+  pred_e2_data$ci_lower <- pred_e2_data$predicted - 1.96 * pred_e2_data$se
+  pred_e2_data$ci_upper <- pred_e2_data$predicted + 1.96 * pred_e2_data$se
+  
+  # P4 predictions with SE
+  X_p4 <- model.matrix(~ E2.5roll.d + P4.5roll.d + E2.5roll.d:P4.5roll.d, data = pred_p4_data)
+  pred_p4_data$se <- sqrt(diag(X_p4 %*% vcov_mat %*% t(X_p4)))
+  pred_p4_data$ci_lower <- pred_p4_data$predicted - 1.96 * pred_p4_data$se
+  pred_p4_data$ci_upper <- pred_p4_data$predicted + 1.96 * pred_p4_data$se
+  
+  # Plot E2 effect
+  p1 <- ggplot(pred_e2_data, aes(x = E2.5roll.d, y = predicted)) +
+    geom_line(color = "blue", size = 1.2) +
+    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), 
+                alpha = 0.2, fill = "blue") +
+    labs(
+      title = paste("E2 Effect on", result$label),
+      x = "E2 5-Day Rolling Average (person-centered)",
+      y = "Predicted Value"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(size = 11, face = "bold"))
+  
+  # Plot P4 effect
+  p2 <- ggplot(pred_p4_data, aes(x = P4.5roll.d, y = predicted)) +
+    geom_line(color = "forestgreen", size = 1.2) +
+    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), 
+                alpha = 0.2, fill = "forestgreen") +
+    labs(
+      title = paste("P4 Effect on", result$label),
+      x = "P4 5-Day Rolling Average (person-centered)",
+      y = "Predicted Value"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(size = 11, face = "bold"))
+  
+  # Combine plots
+  combined_plot <- p1 + p2 + 
+    plot_annotation(
+      title = result$label,
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  
+  return(combined_plot)
+}
+
+# Create and save plots for successful models
+plot_folder <- file.path(output_folder, "predicted_effects_plots")
+dir.create(plot_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(mlm_results)) {
+  result <- mlm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    tryCatch({
+      plot <- plot_predicted_effects(result)
+      
+      if (!is.null(plot)) {
+        ggsave(
+          filename = file.path(plot_folder, 
+                              paste0(current_date, "_", outcome_var, "_predicted_effects.png")),
+          plot = plot,
+          width = 12,
+          height = 6,
+          dpi = 300
+        )
+      }
+    }, error = function(e) {
+      cat("Error creating plot for", outcome_var, ":", e$message, "\n")
+    })
+  }
+}
+
+cat("Predicted effects plots saved to:", plot_folder, "\n")
+```
+
+## Create Interaction Plots
+
+```{r interaction-plots, fig.width=10, fig.height=8}
+# Function to create interaction plot showing E2 effect at different P4 levels
+plot_interaction <- function(result) {
+  if (result$status != "SUCCESS") return(NULL)
+  
+  # Create prediction data for interaction
+  # E2 effect at low (-1 SD), mean (0), and high (+1 SD) P4
+  pred_data <- expand.grid(
+    E2.5roll.d = seq(-2, 2, length.out = 100),
+    P4.5roll.d = c(-1, 0, 1)
+  ) %>%
+    mutate(P4_Level = factor(P4.5roll.d,
+                            levels = c(-1, 0, 1),
+                            labels = c("Low P4 (-1 SD)", "Mean P4", "High P4 (+1 SD)")))
+  
+  # Get predictions
+  pred_data$predicted <- predict(result$model, newdata = pred_data, re.form = NA)
+  
+  # Calculate SE
+  X <- model.matrix(~ E2.5roll.d + P4.5roll.d + E2.5roll.d:P4.5roll.d, data = pred_data)
+  vcov_mat <- vcov(result$model)
+  pred_data$se <- sqrt(diag(X %*% vcov_mat %*% t(X)))
+  pred_data$ci_lower <- pred_data$predicted - 1.96 * pred_data$se
+  pred_data$ci_upper <- pred_data$predicted + 1.96 * pred_data$se
+  
+  # Create plot
+  p <- ggplot(pred_data, aes(x = E2.5roll.d, y = predicted, 
+                             color = P4_Level, fill = P4_Level)) +
+    geom_line(size = 1.2) +
+    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), alpha = 0.2, color = NA) +
+    scale_color_manual(values = c("Low P4 (-1 SD)" = "blue",
+                                  "Mean P4" = "purple",
+                                  "High P4 (+1 SD)" = "forestgreen")) +
+    scale_fill_manual(values = c("Low P4 (-1 SD)" = "blue",
+                                 "Mean P4" = "purple",
+                                 "High P4 (+1 SD)" = "forestgreen")) +
+    labs(
+      title = paste("E2 × P4 Interaction for", result$label),
+      x = "E2 5-Day Rolling Average (person-centered)",
+      y = "Predicted Value",
+      color = "P4 Level",
+      fill = "P4 Level"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+      legend.position = "bottom"
+    )
+  
+  return(p)
+}
+
+# Create and save interaction plots
+interaction_folder <- file.path(output_folder, "interaction_plots")
+dir.create(interaction_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(mlm_results)) {
+  result <- mlm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    tryCatch({
+      plot <- plot_interaction(result)
+      
+      if (!is.null(plot)) {
+        ggsave(
+          filename = file.path(interaction_folder, 
+                              paste0(current_date, "_", outcome_var, "_interaction.png")),
+          plot = plot,
+          width = 10,
+          height = 8,
+          dpi = 300
+        )
+      }
+    }, error = function(e) {
+      cat("Error creating interaction plot for", outcome_var, ":", e$message, "\n")
+    })
+  }
+}
+
+cat("Interaction plots saved to:", interaction_folder, "\n")
+```
+
+# Summary
+
+```{r summary}
+cat("\n", strrep("=", 80), "\n")
+cat("MLM ANALYSIS COMPLETE\n")
+cat(strrep("=", 80), "\n\n")
+
+cat("Output folder:", output_folder, "\n\n")
+
+cat("Models fitted:\n")
+cat("  Total outcomes:", length(outcomes), "\n")
+cat("  Successful models:", sum(sapply(mlm_results, function(x) x$status == "SUCCESS")), "\n")
+cat("  Skipped models:", sum(sapply(mlm_results, function(x) x$status == "SKIPPED")), "\n")
+cat("  Failed models:", sum(sapply(mlm_results, function(x) x$status == "ERROR")), "\n\n")
+
+cat("Outputs created:\n")
+cat("  - Model summaries:", summary_folder, "\n")
+cat("  - Results table:", file.path(output_folder, paste0(current_date, "_MLM_results_table.csv")), "\n")
+cat("  - Coefficient plot:", file.path(output_folder, paste0(current_date, "_MLM_coefficient_plot.png")), "\n")
+cat("  - Predicted effects plots:", plot_folder, "\n")
+cat("  - Interaction plots:", interaction_folder, "\n\n")
+
+cat("Analysis date:", format(Sys.Date(), "%Y-%m-%d"), "\n")
+```
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```

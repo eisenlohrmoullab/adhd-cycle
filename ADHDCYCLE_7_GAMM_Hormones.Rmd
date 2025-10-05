@@ -1,0 +1,546 @@
+---
+title: "ADHD Cycle - GAMM Analysis with Hormone Rolling Averages"
+author: "Tory Eisenlohr-Moul, PhD"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(scipen = 999, digits = 3)
+```
+
+# Overview
+
+This script uses Generalized Additive Mixed Models (GAMMs) to test the effects of 5-day rolling averages of estradiol (E2.5roll.d) and progesterone (P4.5roll.d), and their interaction, on daily ADHD and related outcome variables.
+
+# Setup
+
+## Load Libraries
+
+```{r load-libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(mgcv)           # For GAMMs
+library(gamm4)          # For mixed-effects GAMs
+library(marginaleffects) # For predictions and marginal effects
+library(broom)          # For tidying model outputs
+library(knitr)          # For tables
+library(kableExtra)     # For publication-ready tables
+library(ggplot2)        # For plots
+library(patchwork)      # For combining plots
+library(glue)           # For string formatting
+
+# Set preferences
+conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("select", "dplyr")
+```
+
+## Set Output Folder
+
+```{r set-output}
+# Create output folder with date prefix
+current_date <- format(Sys.Date(), "%Y%m%d")
+output_folder <- file.path("output", paste0(current_date, "_GAMM_Hormones"))
+dir.create(output_folder, showWarnings = FALSE, recursive = TRUE)
+
+cat("Output folder:", output_folder, "\n")
+```
+
+## Load Data
+
+```{r load-data}
+# Load the cleaned and scaled dataset
+# Note: Update this path if data is stored elsewhere
+data_file <- "data/adhd_daily_scaled_20250929.rdata"
+
+if (file.exists(data_file)) {
+  load(data_file)
+  cat("Loaded data from:", data_file, "\n")
+  cat("Dataset dimensions:", nrow(cycle_df_scaled), "rows x", ncol(cycle_df_scaled), "columns\n")
+} else {
+  stop("Data file not found. Please ensure the cleaned dataset is available in the data/ folder.")
+}
+```
+
+## Define Outcome Variables
+
+```{r define-outcomes}
+# Define outcome variables and their labels
+outcomes <- c(
+  "CSS_Inatt" = "CSS Inattention Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Severity",
+  "CSS_Inatt_Count" = "CSS Inattention Count",
+  "CSS_Hyp_Count" = "CSS Hyperactivity Count",
+  "CSS_Imp_Count" = "CSS Impulsivity Count",
+  "score_pinball" = "Working Memory (Pinball)",
+  "score_robot" = "Response Inhibition (Robot Factory)",
+  "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)",
+  "DRSP_1" = "Depressed Mood",
+  "DRSP_2" = "Hopelessness",
+  "DRSP_3" = "Worthlessness/Guilt",
+  "DRSP_4" = "Anxiety",
+  "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity",
+  "DRSP_7" = "Irritability",
+  "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities",
+  "DRSP_10" = "Difficulty Concentrating",
+  "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite",
+  "DRSP_13" = "Food Cravings",
+  "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia",
+  "DRSP_16" = "Overwhelmed",
+  "DRSP_17" = "Out of Control",
+  "DRSP_18" = "Breast Tenderness",
+  "DRSP_19" = "Swelling/Bloating",
+  "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain",
+  "DRSP_22" = "Work Impairment",
+  "DRSP_23" = "Relationship Impairment"
+)
+
+cat("Total outcomes to analyze:", length(outcomes), "\n")
+```
+
+# GAMM Analysis
+
+## Define Model Fitting Function
+
+```{r gamm-function}
+# Function to fit GAMM with E2 and P4 rolling averages and their interaction
+fit_gamm_hormone_model <- function(data, outcome_var, outcome_label) {
+  
+  # Check if outcome variable and predictors exist
+  required_vars <- c(outcome_var, "E2.5roll.d", "P4.5roll.d", "id")
+  missing_vars <- setdiff(required_vars, names(data))
+  
+  if (length(missing_vars) > 0) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SKIPPED",
+      reason = paste("Missing variables:", paste(missing_vars, collapse = ", "))
+    ))
+  }
+  
+  # Create complete case dataset for this outcome
+  model_data <- data %>%
+    select(all_of(required_vars)) %>%
+    drop_na()
+  
+  if (nrow(model_data) < 50) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SKIPPED",
+      reason = "Insufficient data (< 50 observations)"
+    ))
+  }
+  
+  # Fit GAMM with smooths for E2 and P4, plus their interaction
+  # Using tensor product interaction ti() for the interaction term
+  tryCatch({
+    model <- gamm4(
+      as.formula(paste0(outcome_var, " ~ s(E2.5roll.d, bs='tp', k=5) + 
+                                          s(P4.5roll.d, bs='tp', k=5) + 
+                                          ti(E2.5roll.d, P4.5roll.d, bs='tp', k=5)")),
+      random = ~ (1|id),
+      data = model_data,
+      REML = TRUE
+    )
+    
+    # Extract model summary
+    gam_summary <- summary(model$gam)
+    
+    # Calculate variance explained
+    r_squared <- gam_summary$r.sq
+    dev_explained <- gam_summary$dev.expl
+    
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "SUCCESS",
+      model = model,
+      summary = gam_summary,
+      r_squared = r_squared,
+      dev_explained = dev_explained,
+      n_obs = nrow(model_data),
+      n_subjects = n_distinct(model_data$id)
+    ))
+    
+  }, error = function(e) {
+    return(list(
+      outcome = outcome_var,
+      label = outcome_label,
+      status = "ERROR",
+      reason = as.character(e$message)
+    ))
+  })
+}
+```
+
+## Run Models for All Outcomes
+
+```{r run-gamm-models}
+# Initialize results list
+gamm_results <- list()
+
+# Fit models for each outcome
+cat("Fitting GAMM models...\n")
+pb <- txtProgressBar(min = 0, max = length(outcomes), style = 3)
+
+for (i in seq_along(outcomes)) {
+  outcome_var <- names(outcomes)[i]
+  outcome_label <- outcomes[i]
+  
+  result <- fit_gamm_hormone_model(cycle_df_scaled, outcome_var, outcome_label)
+  gamm_results[[outcome_var]] <- result
+  
+  setTxtProgressBar(pb, i)
+}
+close(pb)
+
+# Count successful models
+n_success <- sum(sapply(gamm_results, function(x) x$status == "SUCCESS"))
+cat("\nSuccessfully fit", n_success, "out of", length(outcomes), "models\n")
+```
+
+## Save Model Summaries
+
+```{r save-summaries}
+# Save text summaries for successful models
+summary_folder <- file.path(output_folder, "model_summaries")
+dir.create(summary_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(gamm_results)) {
+  result <- gamm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    summary_file <- file.path(summary_folder, 
+                             paste0(current_date, "_", outcome_var, "_GAMM_summary.txt"))
+    
+    sink(summary_file)
+    cat("="*80, "\n")
+    cat("GAMM Analysis Results\n")
+    cat("Outcome:", result$label, "\n")
+    cat("Variable:", outcome_var, "\n")
+    cat("Date:", Sys.Date(), "\n")
+    cat("="*80, "\n\n")
+    
+    cat("Model Formula:\n")
+    cat(outcome_var, "~ s(E2.5roll.d) + s(P4.5roll.d) + ti(E2.5roll.d, P4.5roll.d)\n")
+    cat("Random Effects: (1|id)\n\n")
+    
+    cat("Sample Size:\n")
+    cat("  Observations:", result$n_obs, "\n")
+    cat("  Subjects:", result$n_subjects, "\n\n")
+    
+    cat("Model Fit:\n")
+    cat("  R-squared:", round(result$r_squared, 3), "\n")
+    cat("  Deviance Explained:", round(result$dev_explained * 100, 2), "%\n\n")
+    
+    cat("GAM Summary:\n")
+    print(result$summary)
+    
+    sink()
+  }
+}
+
+cat("Model summaries saved to:", summary_folder, "\n")
+```
+
+# Results Tables
+
+## Create Summary Results Table
+
+```{r results-table}
+# Extract key results for table
+results_df <- data.frame(
+  Outcome = character(),
+  Label = character(),
+  N_Obs = integer(),
+  N_Subj = integer(),
+  R_Squared = numeric(),
+  Dev_Expl = numeric(),
+  E2_edf = numeric(),
+  E2_p = numeric(),
+  P4_edf = numeric(),
+  P4_p = numeric(),
+  Interaction_edf = numeric(),
+  Interaction_p = numeric(),
+  Status = character(),
+  stringsAsFactors = FALSE
+)
+
+for (outcome_var in names(gamm_results)) {
+  result <- gamm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    s_table <- result$summary$s.table
+    
+    # Extract smooth term results
+    e2_row <- grep("E2.5roll.d", rownames(s_table), value = FALSE)[1]
+    p4_row <- grep("P4.5roll.d", rownames(s_table), value = FALSE)
+    p4_row <- p4_row[!grepl("ti\\(", rownames(s_table)[p4_row])][1]
+    int_row <- grep("ti\\(E2.5roll.d,P4.5roll.d\\)", rownames(s_table), value = FALSE)[1]
+    
+    results_df <- rbind(results_df, data.frame(
+      Outcome = outcome_var,
+      Label = result$label,
+      N_Obs = result$n_obs,
+      N_Subj = result$n_subjects,
+      R_Squared = result$r_squared,
+      Dev_Expl = result$dev_explained,
+      E2_edf = s_table[e2_row, "edf"],
+      E2_p = s_table[e2_row, "p-value"],
+      P4_edf = s_table[p4_row, "edf"],
+      P4_p = s_table[p4_row, "p-value"],
+      Interaction_edf = s_table[int_row, "edf"],
+      Interaction_p = s_table[int_row, "p-value"],
+      Status = "SUCCESS"
+    ))
+  } else {
+    results_df <- rbind(results_df, data.frame(
+      Outcome = outcome_var,
+      Label = result$label,
+      N_Obs = NA,
+      N_Subj = NA,
+      R_Squared = NA,
+      Dev_Expl = NA,
+      E2_edf = NA,
+      E2_p = NA,
+      P4_edf = NA,
+      P4_p = NA,
+      Interaction_edf = NA,
+      Interaction_p = NA,
+      Status = result$status
+    ))
+  }
+}
+
+# Save results table
+write.csv(results_df, 
+          file.path(output_folder, paste0(current_date, "_GAMM_results_table.csv")),
+          row.names = FALSE)
+
+# Display formatted table
+results_df %>%
+  filter(Status == "SUCCESS") %>%
+  mutate(
+    R_Squared = sprintf("%.3f", R_Squared),
+    Dev_Expl = sprintf("%.1f%%", Dev_Expl * 100),
+    E2_p = ifelse(E2_p < 0.001, "<.001", sprintf("%.3f", E2_p)),
+    P4_p = ifelse(P4_p < 0.001, "<.001", sprintf("%.3f", P4_p)),
+    Interaction_p = ifelse(Interaction_p < 0.001, "<.001", sprintf("%.3f", Interaction_p))
+  ) %>%
+  select(Label, N_Obs, N_Subj, R_Squared, Dev_Expl, 
+         E2_edf, E2_p, P4_edf, P4_p, Interaction_edf, Interaction_p) %>%
+  kable(
+    col.names = c("Outcome", "N Obs", "N Subj", "R²", "Dev. Expl.",
+                  "E2 edf", "E2 p", "P4 edf", "P4 p", "Int. edf", "Int. p"),
+    caption = "GAMM Results: Effects of E2 and P4 Rolling Averages on Daily Outcomes",
+    align = c("l", "r", "r", "r", "r", "r", "r", "r", "r", "r", "r")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE,
+                font_size = 12) %>%
+  save_kable(file.path(output_folder, paste0(current_date, "_GAMM_results_table.html")))
+```
+
+# Visualization
+
+## Create Marginal Effects Plots
+
+```{r marginal-effects-plots, fig.width=12, fig.height=8}
+# Function to create marginal effects plot for a single outcome
+plot_marginal_effects <- function(result) {
+  if (result$status != "SUCCESS") return(NULL)
+  
+  # Generate predictions for E2 effect (at mean P4)
+  pred_e2 <- predictions(
+    result$model$gam,
+    newdata = datagrid(
+      E2.5roll.d = seq(-2, 2, length.out = 100),
+      P4.5roll.d = 0
+    )
+  )
+  
+  # Generate predictions for P4 effect (at mean E2)
+  pred_p4 <- predictions(
+    result$model$gam,
+    newdata = datagrid(
+      E2.5roll.d = 0,
+      P4.5roll.d = seq(-2, 2, length.out = 100)
+    )
+  )
+  
+  # Plot E2 effect
+  p1 <- ggplot(pred_e2, aes(x = E2.5roll.d, y = estimate)) +
+    geom_line(color = "blue", size = 1.2) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), 
+                alpha = 0.2, fill = "blue") +
+    labs(
+      title = paste("E2 Effect on", result$label),
+      x = "E2 5-Day Rolling Average (person-centered)",
+      y = "Predicted Value"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(size = 11, face = "bold"))
+  
+  # Plot P4 effect
+  p2 <- ggplot(pred_p4, aes(x = P4.5roll.d, y = estimate)) +
+    geom_line(color = "forestgreen", size = 1.2) +
+    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), 
+                alpha = 0.2, fill = "forestgreen") +
+    labs(
+      title = paste("P4 Effect on", result$label),
+      x = "P4 5-Day Rolling Average (person-centered)",
+      y = "Predicted Value"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(size = 11, face = "bold"))
+  
+  # Combine plots
+  combined_plot <- p1 + p2 + 
+    plot_annotation(
+      title = result$label,
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  
+  return(combined_plot)
+}
+
+# Create and save plots for successful models
+plot_folder <- file.path(output_folder, "marginal_effects_plots")
+dir.create(plot_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(gamm_results)) {
+  result <- gamm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    tryCatch({
+      plot <- plot_marginal_effects(result)
+      
+      if (!is.null(plot)) {
+        ggsave(
+          filename = file.path(plot_folder, 
+                              paste0(current_date, "_", outcome_var, "_marginal_effects.png")),
+          plot = plot,
+          width = 12,
+          height = 6,
+          dpi = 300
+        )
+      }
+    }, error = function(e) {
+      cat("Error creating plot for", outcome_var, ":", e$message, "\n")
+    })
+  }
+}
+
+cat("Marginal effects plots saved to:", plot_folder, "\n")
+```
+
+## Create Interaction Surface Plots
+
+```{r interaction-plots, fig.width=10, fig.height=8}
+# Function to create interaction surface plot
+plot_interaction_surface <- function(result) {
+  if (result$status != "SUCCESS") return(NULL)
+  
+  # Generate prediction grid
+  pred_grid <- predictions(
+    result$model$gam,
+    newdata = datagrid(
+      E2.5roll.d = seq(-2, 2, length.out = 50),
+      P4.5roll.d = seq(-2, 2, length.out = 50)
+    )
+  )
+  
+  # Create surface plot
+  p <- ggplot(pred_grid, aes(x = E2.5roll.d, y = P4.5roll.d, fill = estimate)) +
+    geom_tile() +
+    scale_fill_gradient2(
+      low = "blue", mid = "white", high = "red",
+      midpoint = median(pred_grid$estimate, na.rm = TRUE),
+      name = "Predicted\nValue"
+    ) +
+    geom_contour(aes(z = estimate), color = "black", alpha = 0.3) +
+    labs(
+      title = paste("E2 × P4 Interaction for", result$label),
+      x = "E2 5-Day Rolling Average (person-centered)",
+      y = "P4 5-Day Rolling Average (person-centered)"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+      legend.position = "right"
+    )
+  
+  return(p)
+}
+
+# Create and save interaction plots for models with significant interactions
+interaction_folder <- file.path(output_folder, "interaction_plots")
+dir.create(interaction_folder, showWarnings = FALSE, recursive = TRUE)
+
+for (outcome_var in names(gamm_results)) {
+  result <- gamm_results[[outcome_var]]
+  
+  if (result$status == "SUCCESS") {
+    tryCatch({
+      plot <- plot_interaction_surface(result)
+      
+      if (!is.null(plot)) {
+        ggsave(
+          filename = file.path(interaction_folder, 
+                              paste0(current_date, "_", outcome_var, "_interaction.png")),
+          plot = plot,
+          width = 10,
+          height = 8,
+          dpi = 300
+        )
+      }
+    }, error = function(e) {
+      cat("Error creating interaction plot for", outcome_var, ":", e$message, "\n")
+    })
+  }
+}
+
+cat("Interaction plots saved to:", interaction_folder, "\n")
+```
+
+# Summary
+
+```{r summary}
+cat("\n" , "="*80, "\n")
+cat("GAMM ANALYSIS COMPLETE\n")
+cat("="*80, "\n\n")
+
+cat("Output folder:", output_folder, "\n\n")
+
+cat("Models fitted:\n")
+cat("  Total outcomes:", length(outcomes), "\n")
+cat("  Successful models:", sum(sapply(gamm_results, function(x) x$status == "SUCCESS")), "\n")
+cat("  Skipped models:", sum(sapply(gamm_results, function(x) x$status == "SKIPPED")), "\n")
+cat("  Failed models:", sum(sapply(gamm_results, function(x) x$status == "ERROR")), "\n\n")
+
+cat("Outputs created:\n")
+cat("  - Model summaries:", summary_folder, "\n")
+cat("  - Results table:", file.path(output_folder, paste0(current_date, "_GAMM_results_table.csv")), "\n")
+cat("  - Marginal effects plots:", plot_folder, "\n")
+cat("  - Interaction plots:", interaction_folder, "\n\n")
+
+cat("Analysis date:", format(Sys.Date(), "%Y-%m-%d"), "\n")
+```
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```
