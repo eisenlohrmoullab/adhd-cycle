@@ -518,9 +518,9 @@ cat("Interaction plots saved to:", interaction_folder, "\n")
 # Summary
 
 ```{r summary}
-cat("\n" , "="*80, "\n")
+cat("\n", strrep("=", 80), "\n")
 cat("GAMM ANALYSIS COMPLETE\n")
-cat("="*80, "\n\n")
+cat(strrep("=", 80), "\n\n")
 
 cat("Output folder:", output_folder, "\n\n")
 
