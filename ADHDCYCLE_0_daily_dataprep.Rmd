@@ -90,6 +90,7 @@ corrplotlist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BD
 # --- Plotting Configuration ---
 
 ```{r plot-config}
+
 # This table controls which plots are generated in the final plotting loop.
 metrics_to_plot <- tibble::tribble(
   # ~metric_filter: Which calculated metric to plot.
@@ -252,10 +253,13 @@ for (v in final_vars) {
 
 # --- 8. Select only the manually specified variables in the final output (including provenance flags) ---
 ```{r}
+
 # Subset merged data to just those columns, and filter out any rows missing 'id' or 'daterated'
+
 final_df <- merged_df %>%
   select(all_of(final_vars)) %>%
   filter(!is.na(id) & !is.na(daterated))
+
 ```
 
 # --- 9. Restore id/daterated types for analysis
@@ -298,18 +302,13 @@ cat("Filtered out known bad data points.\n")
 # Inspect specific participants
 #df %>% filter(id == 292) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
 
-
 ```
 
+# 5. PROCESS & CALCULATE METRICS
 
-
-
-# 5\. PROCESS & CALCULATE METRICS
-
-# --- 1. Merge Final Manually-Confirmed Cycle Dates ---
+## --- 1. Merge Final Manually-Confirmed Cycle Dates ---
 
 ```{r}
-# 5. PROCESS & CALCULATE METRICS
 
 final_dates <- read_xls(path_final_dates) %>%
   select(id, date, menses = menses_final, ovtoday = ovtoday_final) %>%
@@ -409,8 +408,6 @@ df <- df %>%
     score_robot_rev = max(score_robot_winsor, na.rm = TRUE) - score_robot)
 ```
 
-
-
 # --- 3. Calculate All Derived Metrics ---
 ```{r}
 df <- df %>%
@@ -462,18 +459,17 @@ df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars), m
 cycle_df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
 
 cat("All processing and metric calculation complete.\n")
-
 ```
 
-# 7\. GENERATE RAW HORMONE PLOTS
+# 7. GENERATE PER-SUBJECT HORMONE PLOTS
 
 ```{r hormone-plots, include = FALSE}
 
 # --- Prepare Data for Plotting ---
+
 hormones_long_all <- cycle_df_scaled %>%
   select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
   pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
-  # --- FIX: Use a more robust separator logic for names like "3roll.zd" ---
   separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
   mutate(
     metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
@@ -481,6 +477,7 @@ hormones_long_all <- cycle_df_scaled %>%
   )
 
 # --- Dynamic Plotting Loop ---
+
 ids_list <- unique(cycle_df_scaled$id)
 for (row in 1:nrow(metrics_to_plot)) {
   metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
@@ -900,7 +897,7 @@ write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", S
 
 
 
-# 8\. EXPORT FINAL DATASETS
+# 8. EXPORT FINAL DATASETS
 
 ```{r}
 # --- Define File Names ---

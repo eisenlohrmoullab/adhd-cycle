@@ -257,7 +257,7 @@ generate_correlation_heatmap <- function(
     show_legend = TRUE,
     label_size = 4.6,
     diag_label_size = 6,
-    subtitle_text = "Upper: Between-person (Spearman); Lower: Within-person (rmcorr); Diagonal: ICC"
+    subtitle_text = "Upper: Within-person (rmcorr); Lower: Between-person (Spearman); Diagonal: ICC"
 ) {
   # (The first part of the function is the same as the last version)
   n_vars <- length(outcome_vars)

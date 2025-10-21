@@ -245,10 +245,6 @@ latest_gamm_folder <- print(gamm_directory)
 print(latest_gamm_folder)
 ```
 
-
-
-
-
 # Save GAMM Figure Summary for Paper
 ```{r}
 # List all PNG files in the directory

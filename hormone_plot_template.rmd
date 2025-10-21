@@ -1,0 +1,79 @@
+---
+title: "hormone_plot_template"
+output: html_document
+date: "2025-10-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# GENERATE PER-SUBJECT HORMONE PLOTS
+
+```{r hormone-plots, include = FALSE}
+
+# --- Prepare Data for Plotting ---
+
+hormones_long_all <- cycle_df_scaled %>%
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
+  mutate(
+    metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
+    hormone = factor(hormone, levels = c("E2", "LH", "P4"))
+  )
+
+# --- Dynamic Plotting Loop ---
+
+ids_list <- unique(cycle_df_scaled$id)
+for (row in 1:nrow(metrics_to_plot)) {
+  metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
+  plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
+  y_label <- metrics_to_plot$y_axis_label[row]
+  
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  
+  for (person_id in ids_list) {
+    plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    
+    vline_data <- cycle_df_scaled %>% filter(id == person_id)
+    
+    # --- FIX: Explicitly define the full date range for the participant ---
+    date_range <- range(vline_data$date, na.rm = TRUE)
+    
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
+      # --- FIX: Apply the date range limit to the x-axis scale ---
+      scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
+      scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
+      labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
+      theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+      
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) +
+               theme(legend.position = "none")
+      if (metric_name %in% c("raw", "3roll", "5roll")) {
+        hline_data <- tibble(hormone = "P4", y = 82)
+        p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
+      }
+    } else {
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    
+    plot_height <- if (should_facet) 8 else 7
+    ggsave(filename = file.path(current_output_dir, paste0("raw_plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
+  }
+}
+cat("--- All pre-cleaning hormone plots generated successfully! ---\n")
+```
+
+
+
+
