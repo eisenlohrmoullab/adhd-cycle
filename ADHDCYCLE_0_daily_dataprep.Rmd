@@ -102,7 +102,8 @@ metrics_to_plot <- tibble::tribble(
   "3roll", "02_raw_3roll_faceted", "3-Day Rolling Average", TRUE, "Hormone Value",
   "5roll", "03_raw_5roll_faceted", "5-Day Rolling Average", TRUE, "Hormone Value",
   "3roll.zd", "04_person_standardized_3roll", "Person-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)",
-  "3roll.szd", "05_sample_standardized_3roll", "Sample-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)")
+  "3roll.szd", "05_sample_standardized_3roll", "Sample-Standardized 3-Day Rolling Average", FALSE, "Standardized Value (Z-Score)",
+  "szd", "06_sample_standardized_raw", "Sample-Standardized Raw Values", FALSE, "Standardized Value (Z-Score)")
 ```
 
 # --- 1. Load All Data Sources ---
