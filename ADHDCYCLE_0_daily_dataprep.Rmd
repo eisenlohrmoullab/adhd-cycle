@@ -416,46 +416,30 @@ df <- df %>%
 ```
 
 
-```{r}
-...
 # --- 3. Calculate All Derived Metrics ---
 ```{r}
-df <- df %>%
-  group_by(id) %>%
-  # Rolling averages (.3roll, .5roll):
-  mutate(across(.cols = all_of(alldailyvars),
-                .fns = list(
-                  `3roll` = ~zoo::rollapply(., 3, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE),
-                  `5roll` = ~zoo::rollapply(., 5, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE)
-                ),
-                .names = "{.col}.{.fn}"
-          )) %>%
-  # Person-standardized metrics (.d, .zd):
-  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
-                .fns = list(
-                  d = ~. - mean(., na.rm=TRUE),
-                  zd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
-                ),
-                .names = "{.col}.{.fn}"
-          )) %>%
-  ungroup() %>%
-  # Sample-standardized metrics (.szd):
-  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
-                .fns = list(
-                  szd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
-                ),
-                .names = "{.col}.{.fn}"
-          ))
-
-# --- NEW: Sample-standardized AFTER 3roll (per hormone/per person then sample-wide) ---
-for (hormone in c("E2", "LH", "P4")) {
-  raw_col <- paste0(hormone)
-  roll_col <- paste0(hormone, ".3roll")
-  std_col <- paste0(hormone, ".3roll.szd")
-  # first, get 3roll (already calculated above), then sample-standardize
-  df[[std_col]] <- (df[[roll_col]] - mean(df[[roll_col]], na.rm=TRUE)) / sd(df[[roll_col]], na.rm=TRUE)
+#identify duplicates of id and date
+duplicates <- df %>%
+  group_by(id, date) %>%
+  filter(n() > 1) %>%
+  arrange(id, date)
+if (nrow(duplicates) > 0) {
+  cat("Warning: Duplicate id-date pairs found:\n")
+  print(duplicates)
+  
+} else {
+  cat("No duplicate id-date pairs found.\n")
 }
 
+# address duplicates
+df <- df %>%
+  group_by(id, date) %>%
+  summarize(across(everything(), ~ if(is.numeric(.)) mean(., na.rm = TRUE) else first(.)), .groups = 'drop')
+
+```
+
+
+```{r}
 # --- SCREEN OUT WITHIN-PERSON NON-PLAUSIBLE P4 OUTLIERS ---
 # A spike is defined as a value much higher than both surrounding days (e.g., >5x the local mean and >300 units higher)
 p4_spike_factor <- 5
@@ -485,11 +469,15 @@ df <- df %>% mutate(P4 = P4_clean) %>% select(-P4_clean)
 
 # Sort df by id and date
 df <- df %>% arrange(id, date)
+
+# Check that spikes were removed correctly
+# View a few participants to verify
+df %>% filter(id %in% c("292")) %>% select(id, date, P4)
+
 ```
 
 # --- 3. Calculate All Derived Metrics ---
 ```{r}
-
 
 df <- df %>%
   group_by(id) %>%
