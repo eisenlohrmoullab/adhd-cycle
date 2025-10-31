@@ -27,6 +27,7 @@ library(readxl)          # For reading data from Excel files (.xls, .xlsx).
 library(zoo)             # For calculating rolling averages.
 library(lubridate)       # For making it easier to work with dates and times.
 library(conflicted)      # Helps manage function name conflicts between packages.
+#remotes::install_github("eisenlohrmoullab/menstrualcycleR")
 library(menstrualcycleR) # For cycle-specific analyses like PACTS scaling.
 library(gridExtra)       # For arranging multiple plots on one page.
 library(ggvenn)          # For creating Venn diagrams.
@@ -58,11 +59,15 @@ conflict_prefer("summarize", "dplyr")
 ```{r filepaths}
 # Define the full path to each raw data file needed for the analysis.
 
-path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
-path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/01_raw_data/2024.04.24.Daily Master.xls"
-path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
-path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
-path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/CYCADHD_DAILY/02_data_prep_workspace/2025-09-27/ADHDCYCLE_menses_ov_dates_FINAL.xls"
+path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
+
+path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/DailySurveysTasks/dailymaster_20240424.sav"
+
+path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
+
+path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
+
+path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-10-30/ADHDCYCLE_menses_ov_dates_20251030.xls"
 ```
 
 # --- Output Folder ---
@@ -111,7 +116,7 @@ metrics_to_plot <- tibble::tribble(
 ```{r}
 # Read each raw data source from its respective file path
 raw_daily <- read_sav(path_raw_daily)
-raw_daily_2 <- read_xls(path_raw_daily_2)
+raw_daily_2 <- read_sav(path_raw_daily_2)
 supp_hormones_all <- read_csv(path_supp_hormones, show_col_types = FALSE)
 final_hormone_batch <- read_csv(path_final_hormone_batch, show_col_types = FALSE)
 ```
@@ -126,11 +131,13 @@ standardize_index_names <- function(df) {
       str_detect(.x, regex("^(date.?rated|date_rated|dateRated|rated_date|date)$", ignore_case=TRUE)) ~ "daterated",
       str_detect(.x, regex("^(estradiol|estrogen|e2|E2)$", ignore_case=TRUE)) ~ "E2",
       str_detect(.x, regex("^(progesterone|p4|prog|P4)$", ignore_case=TRUE)) ~ "P4",
-      str_detect(.x, regex("^(lh|LH|LH_level)$", ignore_case=TRUE)) ~ "LH",
-      str_detect(.x, regex("^(LH_sterr)$", ignore_case=TRUE)) ~ "LH_sterr",
-      TRUE ~ .x
-    ))
+      TRUE ~ .x, 
+      ))
 }
+```
+
+
+```{r}
 # Apply renaming function to all data frames
 raw_daily <- standardize_index_names(raw_daily)
 raw_daily_2 <- standardize_index_names(raw_daily_2)
@@ -284,7 +291,7 @@ cat("Final maximally-filled merged dataset ready.\n")
 # Arrange rows for analysis, convert id to factor, and create a 'date' column for downstream usage
 df <- final_df %>%
   arrange(id, daterated) %>%
-  mutate(date = daterated) %>% # Create 'date' column first
+  mutate(date = as.Date(daterated)) %>% # Create 'date' column first
   # Filter as character (assuming id is character or can be forced)
   filter(!(id == 270 & date > as.Date("2022-12-03"))) %>%
   filter(!(id == 279 & date > as.Date("2022-12-29"))) %>%
@@ -463,20 +470,34 @@ cat("All processing and metric calculation complete.\n")
 
 # 7. GENERATE PER-SUBJECT HORMONE PLOTS
 
-```{r hormone-plots, include = FALSE}
-
+```{r hormone-plots}
 # --- Prepare Data for Plotting ---
 
 hormones_long_all <- cycle_df_scaled %>%
+  # first, it selects relevant columns from cycle_df_scaled
   select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  # then, it pivots the data longer so that each row corresponds to a single hormone measurement
   pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  # finally, it separates the hormone name and metric type into separate columns
   separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
-  mutate(
-    metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
-    hormone = factor(hormone, levels = c("E2", "LH", "P4"))
-  )
+  # below, we clean up the metric column and set hormone as a factor with specific levels
+    mutate(
+      hormone = str_trim(hormone), # Keep the whitespace trim
+      metric = str_trim(metric),   # Keep the whitespace trim
+      metric = if_else(is.na(metric) | metric == "", "raw", metric),  
+      hormone = factor(hormone, levels = c("E2", "LH", "P4")),
+            # Explicitly ensure the 'date' column is a Date object
+      date = as.Date(date)
+    )
+```
 
+
+```{r hormone-plots}
 # --- Dynamic Plotting Loop ---
+
+# sort hormones_long_all by id, date
+hormones_long_all <- hormones_long_all %>%
+  arrange(id, date)
 
 ids_list <- unique(cycle_df_scaled$id)
 for (row in 1:nrow(metrics_to_plot)) {
@@ -491,6 +512,13 @@ for (row in 1:nrow(metrics_to_plot)) {
   
   for (person_id in ids_list) {
     plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    
+    # This is the new, more robust fix. It ensures 'date' is a Date
+    # and filters out any rows that failed conversion.
+    plot_data <- plot_data %>%
+      mutate(date = as.Date(date)) %>%
+      filter(!is.na(date))
+
     if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
     
     vline_data <- cycle_df_scaled %>% filter(id == person_id)
@@ -502,7 +530,6 @@ for (row in 1:nrow(metrics_to_plot)) {
       geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
       geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
       geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
-      # --- FIX: Apply the date range limit to the x-axis scale ---
       scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
       scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
       labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
@@ -524,6 +551,7 @@ for (row in 1:nrow(metrics_to_plot)) {
   }
 }
 cat("--- All pre-cleaning hormone plots generated successfully! ---\n")
+
 ```
 
 # --- 3. Final Removals Based on Hormone Plots ---
