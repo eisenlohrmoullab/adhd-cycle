@@ -53,20 +53,21 @@ conflict_prefer("select", "dplyr")
 conflict_prefer("summarize", "dplyr")
 ```
 
+
 # --- Input File Paths (Using Your Direct, Hardcoded Paths) ---
 
 ```{r filepaths}
 # Define the full path to each raw data file needed for the analysis.
 
-path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-20/20[...]"
+path_raw_daily <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-20/2025.06.02 Daily Master.sav"
 
-path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/DailySurveysTasks/dail[...]"
+path_raw_daily_2 <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/DailySurveysTasks/dailymaster_20240424.sav"
 
-path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/03_cleaned_data/adhdcyc_daily_20[...]"
+path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/03_cleaned_data/adhdcyc_daily_2024_07_09_horm.csv"
 
-path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/202[...]"
+path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
 
-path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-10-30/[...]"
+path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-10-30/ADHDCYCLE_menses_ov_dates_20251030.xls"
 ```
 
 # --- Output Folder ---
@@ -74,7 +75,7 @@ path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folde
 ```{r define_box_output}
 
 # Define a base output location and create a unique, timestamped subfolder for this specific run.
-output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code[...]"
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
 output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
 if (!dir.exists(output_folder)) {
   dir.create(output_folder, recursive = TRUE)
@@ -85,7 +86,7 @@ if (!dir.exists(output_folder)) {
 
 ```{r varlists}
 # Define the final variable names that will be processed and analyzed.
-dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball_rev", "score_robot_rev", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS[...]"
+dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball_rev", "score_robot_rev", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
 hormlist <- c("E2", "P4", "LH")
 alldailyvars <- c(dv_list, hormlist)
 corrplotlist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_16",  "E2", "P4", "LH")
@@ -133,4 +134,810 @@ standardize_index_names <- function(df) {
       TRUE ~ .x, 
       ))
 }
+```
+
+
+```{r}
+# Apply renaming function to all data frames
+raw_daily <- standardize_index_names(raw_daily)
+raw_daily_2 <- standardize_index_names(raw_daily_2)
+supp_hormones_all <- standardize_index_names(supp_hormones_all)
+final_hormone_batch <- standardize_index_names(final_hormone_batch)
+```
+
+# --- 3. Create provenance flags for Venn diagram ---
+```{r}
+# Add indicator columns to track which source each row came from
+raw_daily <- raw_daily %>% mutate(source_raw_daily = TRUE)
+raw_daily_2 <- raw_daily_2 %>% mutate(source_raw_daily_2 = TRUE)
+supp_hormones_all <- supp_hormones_all %>% mutate(source_supp_hormones = TRUE)
+final_hormone_batch <- final_hormone_batch %>% mutate(source_final_batch = TRUE)
+```
+
+# --- 4. Force all daterated columns to "YYYY-MM-DD" string and remove missing keys ---
+```{r}
+# Function to parse dates, coercing to "YYYY-MM-DD" format or fallback to "MM/DD/YYYY"
+force_ymd <- function(x) {
+  x <- as.character(x)
+  ymd_x <- suppressWarnings(ymd(x))
+  ifelse(!is.na(ymd_x), as.character(ymd_x), suppressWarnings(as.character(mdy(x))))
+}
+# Apply date coercion to each data frame's 'daterated' column
+raw_daily$daterated <- force_ymd(raw_daily$daterated)
+raw_daily_2$daterated <- force_ymd(raw_daily_2$daterated)
+supp_hormones_all$daterated <- force_ymd(supp_hormones_all$daterated)
+final_hormone_batch$daterated <- force_ymd(final_hormone_batch$daterated)
+
+# Remove rows where 'id' or 'daterated' is missing in any data frame
+for (df_name in c("raw_daily", "raw_daily_2", "supp_hormones_all", "final_hormone_batch")) {
+  df <- get(df_name)
+  df <- df %>% filter(!is.na(id) & !is.na(daterated))
+  assign(df_name, df)
+}
+```
+
+# --- 5. Harmonize column types across all files ---
+```{r}
+# Function to make sure columns with the same name have the same type (convert to character if types mismatch)
+harmonize_types <- function(dfs) {
+  all_names <- unique(unlist(lapply(dfs, names)))
+  get_type <- function(x) if (is.null(x)) NA else class(x)[1]
+  types <- lapply(dfs, function(df) sapply(all_names, function(nm) get_type(df[[nm]])))
+  type_matrix <- do.call(rbind, types)
+  mismatches <- sapply(seq_along(all_names), function(j) length(unique(na.omit(type_matrix[,j]))) > 1)
+  for (nm in all_names[mismatches]) {
+    for (i in seq_along(dfs)) {
+      if (!is.null(dfs[[i]][[nm]])) {
+        dfs[[i]][[nm]] <- as.character(dfs[[i]][[nm]])
+      }
+    }
+  }
+  dfs
+}
+# Harmonize types across all four sources
+data_sources <- harmonize_types(list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch))
+raw_daily      <- data_sources[[1]]
+raw_daily_2    <- data_sources[[2]]
+supp_hormones_all <- data_sources[[3]]
+final_hormone_batch <- data_sources[[4]]
+```
+
+# --- 6. Full outer join all data sources by id/daterated ---
+
+```{r}
+# Merge all four data frames fully by 'id' and 'daterated'
+all_dfs <- list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch)
+merged_df <- Reduce(function(x, y) full_join(x, y, by = c("id", "daterated")), all_dfs)
+```
+
+# --- 7. Maximally fill each key variable from your explicit list ---
+```{r}
+# List of all output variables to fill
+final_vars <- c(
+  "id", "daterated", "TubeNumber", "E2", "P4", "LH", "E2_stderr", "P4_stderr", "LH_sterr",
+  "VisitNumbers", "DEBQ_avg", "BDEFS_1", "BDEFS_2", "BDEFS_3", "BDEFS_4", "BDEFS_5", "BDEFS_6",
+  "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7",
+  "DRSP_8", "DRSP_9", "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14",
+  "DRSP_15", "DRSP_16", "DRSP_17", "DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21",
+  "DRSP_22", "DRSP_23", "CSS_B_1", "CSS_B_2", "CSS_B_3", "CSS_B_4",
+  "CSS_B_5", "CSS_B_6", "CSS_B_7", "CSS_B_8", "CSS_B_9", "CSS_B_10",
+  "CSS_B_11", "CSS_B_12", "CSS_B_13", "CSS_B_14", "CSS_B_15", "CSS_B_16",
+  "CSS_B_17", "CSS_B_18", "CSS_Function_1", "CSS_Function_2", "CSS_Function_3",
+  "CSS_Function_4", "CSS_Function_5", "CSS_Function_6", "CSS_Function_7",
+  "CSS_Function_8", "CSS_Function_9", "CSS_Function_10", "CSS_B2_1",
+  "CSS_B2_2", "CSS_B2_3", "CSS_B2_4", "CSS_B2_5", "CSS_B2_6", "CSS_B2_7",
+  "CSS_B2_8", "UPPS_1", "UPPS_2", "UPPS_3", "UPPS_4", "UPPS_5", "UPPS_6",
+  "UPPS_7", "UPPS_8", "UPPS_9", "UPPS_10", "UPPS_11", "UPPS_12", "UPPS_13",
+  "UPPS_14", "UPPS_15", "DEBQ_1", "DEBQ_2", "DEBQ_3", "DEBQ_4", "DEBQ_5",
+  "DEBQ_6", "DEBQ_7", "DEBQ_8", "DEBQ_9", "DEBQ_10", "DEBQ_11", "DEBQ_12",
+  "DEBQ_13", "CSS_1_Count", "CSS_2_Count", "CSS_3_Count", "CSS_4_Count",
+  "CSS_5_Count", "CSS_6_Count", "CSS_7_Count", "CSS_8_Count", "CSS_9_Count",
+  "CSS_10_Count", "CSS_11_Count", "CSS_12_Count", "CSS_13_Count", "CSS_14_Count",
+  "CSS_15_Count", "CSS_16_Count", "CSS_17_Count", "CSS_18_Count", "UPPS_NU_avg",
+  "UPPS_Persev_avg", "UPPS_Premed_avg", "UPPS_Sens_avg", "UPPS_PU_avg",
+  "score_pinball", "score_robot", "hormone_assay_note",
+  "source_raw_daily", "source_raw_daily_2", "source_supp_hormones", "source_final_batch"
+)
+# Helper functions for maximal filling via coalescing values across columns that share a base name
+get_base_names <- function(nms) {
+  gsub("\\..*$", "", nms)
+}
+maxfill_coalesce <- function(df, base) {
+  cols <- names(df)[get_base_names(names(df)) == base]
+  if (length(cols) == 0) {
+    return(rep(NA, nrow(df)))
+  } else if (length(cols) == 1) {
+    return(df[[cols]])
+  } else {
+    return(coalesce(!!!df[cols]))
+  }
+}
+# Apply maximal fill for each variable in the output list
+for (v in final_vars) {
+  merged_df[[v]] <- maxfill_coalesce(merged_df, v)
+}
+```
+
+# --- 8. Select only the manually specified variables in the final output (including provenance flags) ---
+```{r}
+
+# Subset merged data to just those columns, and filter out any rows missing 'id' or 'daterated'
+
+final_df <- merged_df %>%
+  select(all_of(final_vars)) %>%
+  filter(!is.na(id) & !is.na(daterated))
+
+```
+
+# --- 9. Restore id/daterated types for analysis
+```{r}
+# Convert 'id' to numeric, 'daterated' to Date, and set NA provenance flags to FALSE (logical)
+final_df <- final_df %>%
+  mutate(
+    id = as.numeric(id),
+    daterated = as.Date(daterated),
+    source_raw_daily = ifelse(is.na(source_raw_daily), FALSE, source_raw_daily),
+    source_raw_daily_2 = ifelse(is.na(source_raw_daily_2), FALSE, source_raw_daily_2),
+    source_supp_hormones = ifelse(is.na(source_supp_hormones), FALSE, source_supp_hormones),
+    source_final_batch = ifelse(is.na(source_final_batch), FALSE, source_final_batch)
+  )
+
+cat("Final maximally-filled merged dataset ready.\n")
+```
+
+# --- 10. Sort by id and daterated AND remove known bad data points - SAVE AS df---
+```{r}
+
+# Arrange rows for analysis, convert id to factor, and create a 'date' column for downstream usage
+df <- final_df %>%
+  arrange(id, daterated) %>%
+  mutate(date = as.Date(daterated)) %>% # Create 'date' column first
+  # Filter as character (assuming id is character or can be forced)
+  filter(!(id == 270 & date > as.Date("2022-12-03"))) %>%
+  filter(!(id == 279 & date > as.Date("2022-12-29"))) %>%
+  filter(!(id == 323 & date > as.Date("2024-01-14"))) %>%
+  filter(!(id == 327 & date > as.Date("2024-12-31"))) %>%
+  filter(!(id == 347 & date < as.Date("2024-12-10"))) %>%
+  filter(!(id == 210 & date > as.Date("2020-12-31"))) %>%
+  filter(!(id == 288 & date == as.Date("2021-12-14"))) %>% # Known bad data point
+  filter(!(id == 238 & date < as.Date("2021-04-21"))) %>% # Known bad data point
+    
+
+   mutate(id = as.factor(id)) # Convert to factor at the END
+cat("Filtered out known bad data points.\n")
+
+# Inspect specific participants
+#df %>% filter(id == 292) %>% select(id, date, E2, P4, LH, BDEFS_1, score_pinball)
+
+```
+
+# 5. PROCESS & CALCULATE METRICS
+
+## --- 1. Merge Final Manually-Confirmed Cycle Dates ---
+
+```{r}
+
+final_dates <- read_xls(path_final_dates) %>%
+  select(id, date, menses = menses_final, ovtoday = ovtoday_final) %>%
+  mutate(
+    id = as.character(id),
+    date = as.Date(date),
+    menses = as.integer(menses),
+    ovtoday = as.integer(ovtoday)) %>%
+  filter(menses == 1 | ovtoday == 1)
+
+#View variable type for date in df
+#str(df$date)
+```
+
+
+```{r}
+df <- df %>%
+  mutate(id = as.character(id)) %>%
+  left_join(final_dates, by = c("id", "date")) %>%
+  mutate(
+    menses = coalesce(menses, 0L),
+    ovtoday = coalesce(ovtoday, 0L),
+    id = as.factor(id)
+  )
+```
+
+
+# Winsorize within-person outliers for score_pinball_rev and score_robot_rev
+```{r}
+df <- df %>%
+  group_by(id) %>%
+  mutate(
+    score_pinball_winsor = ifelse(score_pinball < quantile(score_pinball, 0.05, na.rm = TRUE),
+                              quantile(score_pinball, 0.05, na.rm = TRUE),
+                              ifelse(score_pinball > quantile(score_pinball, 0.95, na.rm = TRUE),
+                                     quantile(score_pinball, 0.95, na.rm = TRUE),
+                                     score_pinball)),
+    score_robot_winsor = ifelse(score_robot < quantile(score_robot, 0.05, na.rm = TRUE),
+                             quantile(score_robot, 0.05, na.rm = TRUE),
+                             ifelse(score_robot > quantile(score_robot, 0.95, na.rm = TRUE),
+                                    quantile(score_robot, 0.95, na.rm = TRUE),
+                                    score_robot))
+  ) %>%
+  ungroup()
+
+# Visualize winsorized pinball against original 
+
+ggplot(df, aes(x = score_pinball, y = score_pinball_winsor)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  labs(title = "Winsorized vs Original score_pinball",
+       x = "Original score_pinball",
+       y = "Winsorized score_pinball") +
+  theme_minimal()
+ggplot(df, aes(x = score_robot, y = score_robot_winsor)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "blue", linetype = "dashed") +
+  labs(title = "Winsorized vs Original score_robot",
+       x = "Original score_robot",
+       y = "Winsorized score_robot") +
+  theme_minimal()
+
+# Visualize histograms of winsorized variables
+ggplot(df, aes(x = score_pinball_winsor)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  labs(title = "Histogram of Winsorized score_pinball",
+       x = "Winsorized score_pinball",
+       y = "Frequency") +
+  theme_minimal()
+ggplot(df, aes(x = score_robot_winsor)) +
+  geom_histogram(bins = 30, fill = "lightgreen", color = "black") +
+  labs(title = "Histogram of Winsorized score_robot",
+       x = "Winsorized score_robot",
+       y = "Frequency") +
+  theme_minimal()
+
+```
+
+# --- 2. Score Things ---
+```{r}
+df <- df %>%
+  mutate(
+    across(starts_with(c("CSS_B_", "DEBQ_", "BDEFS_")), ~as.numeric(as.character(.))),
+    CSS_Inatt = rowMeans(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17)), na.rm = TRUE),
+    CSS_HypImp = rowMeans(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8, CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18)), na.rm = TRUE),
+    CSS_Inatt_Count = rowSums(across(c(CSS_B_1, CSS_B_3, CSS_B_5, CSS_B_7, CSS_B_9, CSS_B_11, CSS_B_13, CSS_B_15, CSS_B_17), ~ .x >= 2), na.rm = TRUE),
+    CSS_Hyp_Count   = rowSums(across(c(CSS_B_10, CSS_B_12, CSS_B_14, CSS_B_16, CSS_B_18), ~ .x >= 2), na.rm = TRUE),
+    CSS_Imp_Count   = rowSums(across(c(CSS_B_2, CSS_B_4, CSS_B_6, CSS_B_8), ~ .x >= 2), na.rm = TRUE),
+    CSS_HypImp_Count = CSS_Hyp_Count + CSS_Imp_Count,
+    BDEFS_Total = rowMeans(across(starts_with("BDEFS_")), na.rm = TRUE),
+    BDEFS_WM_avg = rowMeans(across(c(BDEFS_5)), na.rm = TRUE),
+    BDEFS_RI_avg = rowMeans(across(c(BDEFS_6)), na.rm = TRUE),
+    DEBQ_Total = rowMeans(across(starts_with("DEBQ_")), na.rm = TRUE),
+    score_pinball = as.numeric(score_pinball),
+    score_robot = as.numeric(score_robot),
+    score_pinball_rev = max(score_pinball_winsor, na.rm = TRUE) - score_pinball, 
+    score_robot_rev = max(score_robot_winsor, na.rm = TRUE) - score_robot)
+```
+
+# --- 3. Calculate All Derived Metrics ---
+```{r}
+df <- df %>%
+  group_by(id) %>%
+  # Rolling averages (.3roll, .5roll):
+  mutate(across(.cols = all_of(alldailyvars),
+                .fns = list(
+                  `3roll` = ~zoo::rollapply(., 3, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE),
+                  `5roll` = ~zoo::rollapply(., 5, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  # Person-standardized metrics (.d, .zd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  d = ~. - mean(., na.rm=TRUE),
+                  zd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  ungroup() %>%
+  # Sample-standardized metrics (.szd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  szd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          ))
+
+# --- NEW: Sample-standardized AFTER 3roll (per hormone/per person then sample-wide) ---
+for (hormone in c("E2", "LH", "P4")) {
+  raw_col <- paste0(hormone)
+  roll_col <- paste0(hormone, ".3roll")
+  std_col <- paste0(hormone, ".3roll.szd")
+  # first, get 3roll (already calculated above), then sample-standardize
+  df[[std_col]] <- (df[[roll_col]] - mean(df[[roll_col]], na.rm=TRUE)) / sd(df[[roll_col]], na.rm=TRUE)
+}
+
+# Sort df by id and date
+df <- df %>% arrange(id, date)
+```
+
+# ---  Run menstrualcycleR PACTS Scaling ---
+```{r}
+
+# Subset to only necessary columns for PACTS scaling and all rolling and deviation and standardized variables
+df_for_pacts <- df %>% select(id, date, menses, ovtoday, any_of(alldailyvars), matches("\\.(3roll|5roll|d|zd|szd)$"))
+
+cycle_df_scaled <- pacts_scaling(df_for_pacts, id=id, date=date, menses=menses, ovtoday=ovtoday, lower_cyclength_bound = 21, upper_cyclength_bound = 35)
+
+cat("All processing and metric calculation complete.\n")
+```
+
+# 7. GENERATE PER-SUBJECT HORMONE PLOTS
+
+```{r hormone-plots}
+# --- Prepare Data for Plotting ---
+
+hormones_long_all <- cycle_df_scaled %>%
+  # first, it selects relevant columns from cycle_df_scaled
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  # then, it pivots the data longer so that each row corresponds to a single hormone measurement
+  pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  # finally, it separates the hormone name and metric type into separate columns
+  separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
+  # below, we clean up the metric column and set hormone as a factor with specific levels
+    mutate(
+      hormone = str_trim(hormone), # Keep the whitespace trim
+      metric = str_trim(metric),   # Keep the whitespace trim
+      metric = if_else(is.na(metric) | metric == "", "raw", metric),  
+      hormone = factor(hormone, levels = c("E2", "LH", "P4")),
+            # Explicitly ensure the 'date' column is a Date object
+      date = as.Date(date)
+    )
+```
+
+
+```{r hormone-plots}
+# --- Dynamic Plotting Loop ---
+
+# sort hormones_long_all by id, date
+hormones_long_all <- hormones_long_all %>%
+  arrange(id, date)
+
+ids_list <- unique(cycle_df_scaled$id)
+for (row in 1:nrow(metrics_to_plot)) {
+  metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
+  plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
+  y_label <- metrics_to_plot$y_axis_label[row]
+  
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  
+  for (person_id in ids_list) {
+    plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    
+    # This is the new, more robust fix. It ensures 'date' is a Date
+    # and filters out any rows that failed conversion.
+    plot_data <- plot_data %>%
+      mutate(date = as.Date(date)) %>%
+      filter(!is.na(date))
+
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    
+    vline_data <- cycle_df_scaled %>% filter(id == person_id)
+    
+    # --- FIX: Explicitly define the full date range for the participant ---
+    date_range <- range(vline_data$date, na.rm = TRUE)
+    
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
+      scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
+      scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
+      labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
+      theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+      
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) +
+               theme(legend.position = "none")
+      if (metric_name %in% c("raw", "3roll", "5roll")) {
+        hline_data <- tibble(hormone = "P4", y = 82)
+        p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
+      }
+    } else {
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    
+    plot_height <- if (should_facet) 8 else 7
+    ggsave(filename = file.path(current_output_dir, paste0("raw_plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
+  }
+}
+cat("--- All pre-cleaning hormone plots generated successfully! ---\n")
+
+```
+
+# --- 3. Final Removals Based on Hormone Plots ---
+```{r}
+
+# Discussions and details are documented in greatest detail in the CLEAR Lab slack channel for the primary ADHD R01 Primary ms.
+
+# --- Omit Hormone Data ---
+# Set hormone values to missing for a list of ids
+
+#View(cycle_df_scaled)
+
+ids_to_na <- c(214, 221, 228, 250, 259, 277, 289, 297, 322) 
+cycle_df_scaled <- cycle_df_scaled %>%
+  mutate(
+    id = as.character(id),
+    E2 = if_else(id %in% as.character(ids_to_na), NA_real_, E2),
+    P4 = if_else(id %in% as.character(ids_to_na), NA_real_, P4),
+    LH = if_else(id %in% as.character(ids_to_na), NA_real_, LH),
+  id = as.factor(id)
+)
+cat("Final hormone missingness based on hormone plots complete.\n")
+# Output specific deletions using cat
+cat("Hormone data set to missing for IDs:", paste(ids_to_na, collapse = ", "), "\n")
+
+# --- Omit Cycle Data ---
+# set cycle variables (cyclic_time, cyclic_time_impute, cyclic_time_ov, cyclic_time_imp_ov) to missing for a list of ids
+
+ids_to_na_cycles <- c(214, 221, 228, 277, 289, 322)
+cycle_df_scaled <- cycle_df_scaled %>%
+  mutate(
+    id = as.character(id),
+    cyclic_time = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, cyclic_time),
+    cyclic_time_impute = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, cyclic_time_impute),
+    cyclic_time_ov = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, cyclic_time_ov),
+    cyclic_time_imp_ov = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, cyclic_time_imp_ov),
+    scaled_cycleday = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, scaled_cycleday),
+    scaled_cycleday_impute = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, scaled_cycleday_impute),
+    scaled_cycleday_ov = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, scaled_cycleday_ov),
+    scaled_cycleday_imp_ov = if_else(id %in% as.character(ids_to_na_cycles), NA_real_, scaled_cycleday_imp_ov),
+    ovtoday = if_else(id %in% as.character(ids_to_na_cycles), 0L, ovtoday), # Set ovtoday to 0 if cycle data is removed
+    ovtoday_impute = if_else(id %in% as.character(ids_to_na_cycles), 0L, ovtoday_impute), # Set ovtoday_impute to 0 if cycle data is removed
+    menses = if_else(id %in% as.character(ids_to_na_cycles), 0L, menses), # Set menses to 0 if cycle data is removed
+    id = as.factor(id)
+  )
+
+cat("Final cycletime missingness based on hormone plots complete.\n")
+#output specific deletions using cat
+cat("Cycle data set to missing for IDs:", paste(ids_to_na_cycles, collapse = ", "), "\n")
+
+
+# Omit Cycle Data in Specific Date Ranges for Certain ids
+# set cycle variables (cyclic_time, cyclic_time_impute, cyclic_time_ov, cyclic_time_imp_ov) to missing for specific id/date ranges
+
+# Ensure id is character first, then operate
+cycle_df_scaled <- cycle_df_scaled %>%
+  mutate(id = as.character(id)) %>%
+  mutate(across(
+    c(cyclic_time, cyclic_time_impute, cyclic_time_ov, cyclic_time_imp_ov),
+    ~ if_else(id == "248" & date >= as.Date("2022-06-11"), NA_real_, .)
+  )) %>%
+  mutate(across(
+    c(P4),
+    ~ if_else(id == "292" & date >= as.Date("2023-05-03"), NA_real_, .)
+  )) %>%
+  mutate(id = as.factor(id))
+
+cat("Final Hormone/Cycle missingness based on hormone plots complete.\n")
+# Output specific deletions using cat
+cat("Cycle variables set to missing for ID 248 from 2022-06-11 onwards.\n")
+cat("P4 variables set to missing for ID 292 from 2023-05-03 onwards.\n")
+
+```
+
+
+
+# 7\. GENERATE CLEAN HORMONE PLOTS
+
+```{r generate-clean-plots, include = FALSE}
+# 7. GENERATE HORMONE PLOTS
+
+# --- Prepare Data for Plotting ---
+hormones_long_all <- cycle_df_scaled %>%
+  select(id, date, menses, ovtoday, matches("^(E2|P4|LH)(\\.|$)")) %>%
+  pivot_longer(cols = -c(id, date, menses, ovtoday), names_to = "name", values_to = "value") %>%
+  # --- FIX: Use a more robust separator logic for names like "3roll.zd" ---
+  separate(name, into = c("hormone", "metric"), sep = "\\.", extra = "merge", fill = "right") %>%
+  mutate(
+    metric = if_else(is.na(metric), "raw", metric), # Coalesce NA to "raw"
+    hormone = factor(hormone, levels = c("E2", "LH", "P4"))
+  )
+
+# --- Dynamic Plotting Loop ---
+ids_list <- unique(cycle_df_scaled$id)
+for (row in 1:nrow(metrics_to_plot)) {
+  metric_name <- metrics_to_plot$metric_filter[row]; folder_name <- metrics_to_plot$folder_name[row]
+  plot_subtitle <- metrics_to_plot$plot_subtitle[row]; should_facet <- metrics_to_plot$needs_facet[row]
+  y_label <- metrics_to_plot$y_axis_label[row]
+  
+  current_output_dir <- file.path(output_folder, folder_name)
+  if (!dir.exists(current_output_dir)) dir.create(current_output_dir, recursive = TRUE)
+  
+  cat("--- Generating plots for metric:", metric_name, "---\n")
+  
+  for (person_id in ids_list) {
+    plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
+    if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
+    
+    vline_data <- cycle_df_scaled %>% filter(id == person_id)
+    
+    # --- FIX: Explicitly define the full date range for the participant ---
+    date_range <- range(vline_data$date, na.rm = TRUE)
+    
+    p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
+      geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
+      geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
+      # --- FIX: Apply the date range limit to the x-axis scale ---
+      scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
+      scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
+      labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
+      theme_light() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+      
+    if (should_facet) {
+      p <- p + facet_wrap(~ hormone, ncol = 1, scales = "free_y", labeller = as_labeller(toupper)) +
+               theme(legend.position = "none")
+      if (metric_name %in% c("raw", "3roll", "5roll")) {
+        hline_data <- tibble(hormone = "P4", y = 82)
+        p <- p + geom_hline(data = hline_data, aes(yintercept = y), linetype = "dashed", color = "#7570b3")
+      }
+    } else {
+      p <- p + geom_hline(yintercept = 0, linetype = "dotted", color = "grey40")
+    }
+    
+    plot_height <- if (should_facet) 8 else 7
+    ggsave(filename = file.path(current_output_dir, paste0("cleaned_final_plot_", person_id, ".png")), plot = p, width = 11, height = plot_height, dpi = 300)
+  }
+}
+cat("--- All cleaned FINAL hormone plots generated successfully! ---\n")
+```
+
+
+
+# 6\. DATA EXPLORATION & ANALYSIS
+
+# --- 1. Visualize Data Availability ---
+```{r adhd1-data-availability}
+data_counts <- cycle_df_scaled %>%
+  group_by(id) %>%
+  summarize(
+    days_in_study = n(),
+    survey_days = sum(!is.na(DRSP_1)),
+    hormone_days = sum(!is.na(E2))
+  ) %>%
+  pivot_longer(cols = -id, names_to = "data_type", values_to = "count")
+
+availability_plot <- ggplot(data_counts, aes(x = data_type, y = count)) +
+  geom_violin(aes(fill = data_type), alpha = 0.5, trim = FALSE) +
+  geom_boxplot(width = 0.1, outlier.shape = NA) +
+  geom_jitter(width = 0.1, alpha = 0.6) +
+  facet_wrap(~ data_type, scales = "free_x") +
+  labs(title = "Data Availability per Participant", y = "Number of Days", x = "") +
+  theme_light() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
+
+print(availability_plot)
+
+#ggsave(filename = file.path(output_folder, "data_availability_distributions.png"), plot = availability_plot, width = 8, height = 6, dpi = 300)
+
+# --- 2. Venn Diagram of Data Overlap ---
+venn_list <- list(
+  Survey_Data = data_counts %>% filter(data_type == "survey_days" & count > 0) %>% pull(id) %>% as.character(),
+  Hormone_Data = data_counts %>% filter(data_type == "hormone_days" & count > 0) %>% pull(id) %>% as.character()
+)
+venn_plot <- ggvenn(venn_list, fill_color = c("#0073C2FF", "#EFC000FF"), stroke_size = 0.5, set_name_size = 4) +
+  labs(title = "Overlap of Participants with Survey and Hormone Data")
+
+print(venn_plot)
+#ggsave(filename = file.path(output_folder, "data_overlap_venn_diagram.png"), plot = venn_plot, width = 6, height = 6, dpi = 300)
+
+
+
+```
+
+# --- 4. Create PACTS Check Plots ---
+
+```{r adhd1-pacts-check}
+# Set your variables to check
+pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "score_pinball_rev")
+
+# Run the check function ONCE for all variables
+results <- menstrualcycleR::cycledata_check(cycle_df_scaled, symptom_columns = pacts_vars_to_check)
+
+# sort dataset by id and date
+cycle_df_scaled <- cycle_df_scaled %>% arrange(id, date)
+
+# Print each plot to the active R device (e.g., RStudio Plots pane)
+for (var in pacts_vars_to_check) {
+  print(results$data_symptom_plots[[var]])
+}
+
+# Save each plot to PNG
+pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
+if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder, recursive = TRUE)
+
+for (var in pacts_vars_to_check) {
+  ggsave(
+    filename = file.path(pacts_plot_folder, paste0("pacts_check_", var, ".png")),
+    plot = results$data_symptom_plots[[var]],
+    width = 8, height = 10, dpi = 300
+  )
+}
+```
+
+# --- 4. REDO PACTS Check Plots with ids removed as above so I can see if the missing bits are due to intentional removals ---
+Final hormone missingness based on hormone plots complete.
+Hormone data set to missing for IDs: 214, 221, 228, 250, 259, 277, 289, 297, 322 
+Final cycletime missingness based on hormone plots complete.
+Cycle data set to missing for IDs: 214, 221, 228, 277, 289, 322 
+Final Hormone/Cycle missingness based on hormone plots complete.
+Cycle variables set to missing for ID 248 from 2022-06-11 onwards.
+P4 variables set to missing for ID 292 from 2023-05-03 onwards.
+
+```{r adhd1-pacts-check}
+# Set your variables to check
+pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DRSP_1", "score_pinball_rev")
+
+tempdata <- cycle_df_scaled %>%
+  filter(!(id %in% as.character(c(ids_to_na, ids_to_na_cycles)))) # Remove ids with intentional missingness
+
+# Run the check function ONCE for all variables
+results <- menstrualcycleR::cycledata_check(tempdata, symptom_columns = pacts_vars_to_check)
+
+# sort dataset by id and date
+tempdata <- tempdata %>% arrange(id, date)
+
+# Print each plot to the active R device (e.g., RStudio Plots pane)
+for (var in pacts_vars_to_check) {
+  print(results$data_symptom_plots[[var]])
+}
+
+# Save each plot to PNG
+pacts_plot_folder <- file.path(output_folder, "PACTS_Check_Plots")
+if (!dir.exists(pacts_plot_folder)) dir.create(pacts_plot_folder, recursive = TRUE)
+
+for (var in pacts_vars_to_check) {
+  ggsave(
+    filename = file.path(pacts_plot_folder, paste0("pacts_check_intentionalremoved", var, ".png")),
+    plot = results$data_symptom_plots[[var]],
+    width = 8, height = 10, dpi = 300
+  )
+}
+```
+
+
+
+
+# 10\. CHECK MISSINGNESS & DATA AVAILABILITY
+```{r vismiss}
+# --- 11. Visualize missing hormone data ---
+# Visualize missingness in key columns using visdat::vis_miss
+
+miss_plot <- visdat::vis_miss(cycle_df_scaled %>% select(id, date, E2, DRSP_1, score_pinball_rev))
+print(miss_plot)
+
+# Save plot to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("missingness_", Sys.Date(), ".png")),
+  plot = miss_plot, width = 8, height = 5
+)
+
+
+# --- 12. Check which ids have the most missing hormone data ---
+
+# Summarize missing values by id for hormones
+missing_summary <- cycle_df_scaled %>%
+  group_by(id) %>%
+  summarise(
+    total_days = n(),
+    missing_E2 = sum(is.na(E2)),
+    missing_P4 = sum(is.na(P4)),
+    missing_LH = sum(is.na(LH))
+  ) %>%
+  arrange(desc(missing_E2), desc(missing_P4), desc(missing_LH))
+
+#View(missing_summary) # View summary interactively
+
+# Save summary table to a CSV file
+write_csv(missing_summary, file.path(output_folder, paste0("missing_hormones_by_id_", Sys.Date(), ".csv")))
+```
+
+
+```{r vismiss}
+# --- Venn diagram for IDs with E2 and/or DRSP data ---
+# Make sets for Venn diagram
+ids_e2 <- cycle_df_scaled %>%
+  filter(!is.na(E2)) %>%
+  distinct(id) %>%
+  pull(id)
+
+ids_drsp <- cycle_df_scaled %>%
+  filter(!is.na(DRSP_1)) %>%
+  distinct(id) %>%
+  pull(id)
+
+venn_data_e2_drsp <- list(
+  Has_E2 = ids_e2,
+  Has_BDEFS = ids_drsp
+)
+
+venn_plot <- ggvenn(venn_data_e2_drsp, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(
+  filename = file.path(output_folder, paste0("e2_drsp_venn_", Sys.Date(), ".png")),
+  plot = venn_plot, width = 6, height = 4
+)
+
+# Now do this at the observation level
+venn_data_obs <- list(
+  Has_E2 = which(!is.na(cycle_df_scaled$E2)),
+  Has_DRSP = which(!is.na(cycle_df_scaled$DRSP_1)))
+venn_plot_obs <- ggvenn(venn_data_obs, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(filename = file.path(output_folder, paste0("e2_drsp_venn_obs_", Sys.Date(), ".png")),
+  plot = venn_plot_obs, width = 6, height = 4)
+
+# Now do this at the person level for any participant with more than 10 days of both E2 and BDEFS
+ids_e2_10days <- cycle_df_scaled %>%
+  group_by(id) %>%
+  summarise(n_e2 = sum(!is.na(E2))) %>%
+  filter(n_e2 >= 10) %>%
+  pull(id)
+
+ids_drsp_10days <- cycle_df_scaled %>%
+  group_by(id) %>%
+  summarise(n_drsp = sum(!is.na(DRSP_1))) %>%
+  filter(n_drsp >= 10) %>%
+  pull(id)
+venn_data_10days <- list(
+  Has_E2_10days = ids_e2_10days,
+  Has_DRSP_10days = ids_drsp_10days)
+venn_plot_10days <- ggvenn(venn_data_10days, fill_color = c("#E69F00", "#56B4E9"))
+# Save Venn diagram to output folder with a dated descriptive name
+ggsave(filename = file.path(output_folder, paste0("e2_bdefs_venn_10days_", Sys.Date(), ".png")),
+  plot = venn_plot_10days, width = 6, height = 4)
+
+print(venn_plot_10days)
+
+# --- List IDs with NO E2 and NO BDEFS ---
+# Find IDs lacking both key variables
+ids_all <- unique(cycle_df_scaled$id)
+ids_neither <- setdiff(ids_all, union(ids_e2, ids_drsp))
+print(ids_neither)
+# Save to text file
+write_lines(ids_neither, file.path(output_folder, paste0("ids_neither_e2_bdefs_", Sys.Date(), ".txt")))
+
+# --- Table of which IDs have E2 and/or BDEFS ---
+summary_df <- tibble(
+  id = ids_all,
+  has_e2 = id %in% ids_e2,
+  has_bdefs = id %in% ids_drsp
+)
+#View(summary_df)
+# Save table to CSV
+write_csv(summary_df, file.path(output_folder, paste0("ids_e2_bdefs_summary_", Sys.Date(), ".csv")))
+
+```
+
+
+
+
+
+
+
+# 8. EXPORT FINAL DATASETS
+
+```{r}
+# --- Define File Names ---
+file_base_main <- paste0("adhd_daily_scaled_", format(Sys.Date(), "%Y%m%d"))
+
+# --- Save Main Scaled Dataset ---
+write.csv(cycle_df_scaled, file.path(output_folder, paste0(file_base_main, ".csv")), row.names = FALSE)
+
+save(cycle_df_scaled, file = file.path(output_folder, paste0(file_base_main, ".RData")))
+
+unique_ids <- unique(cycle_df_scaled$id)
+
+cat("Final datasets exported successfully with", length(unique_ids), "unique participants.\n")
+
 ```
