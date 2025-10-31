@@ -415,8 +415,82 @@ df <- df %>%
     score_robot_rev = max(score_robot_winsor, na.rm = TRUE) - score_robot)
 ```
 
+
+```{r}
+...
 # --- 3. Calculate All Derived Metrics ---
 ```{r}
+df <- df %>%
+  group_by(id) %>%
+  # Rolling averages (.3roll, .5roll):
+  mutate(across(.cols = all_of(alldailyvars),
+                .fns = list(
+                  `3roll` = ~zoo::rollapply(., 3, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE),
+                  `5roll` = ~zoo::rollapply(., 5, mean, na.rm=TRUE, align="center", fill=NA, partial=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  # Person-standardized metrics (.d, .zd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  d = ~. - mean(., na.rm=TRUE),
+                  zd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          )) %>%
+  ungroup() %>%
+  # Sample-standardized metrics (.szd):
+  mutate(across(.cols = c(all_of(alldailyvars), ends_with(".3roll"), ends_with(".5roll")),
+                .fns = list(
+                  szd = ~(. - mean(., na.rm=TRUE)) / sd(., na.rm=TRUE)
+                ),
+                .names = "{.col}.{.fn}"
+          ))
+
+# --- NEW: Sample-standardized AFTER 3roll (per hormone/per person then sample-wide) ---
+for (hormone in c("E2", "LH", "P4")) {
+  raw_col <- paste0(hormone)
+  roll_col <- paste0(hormone, ".3roll")
+  std_col <- paste0(hormone, ".3roll.szd")
+  # first, get 3roll (already calculated above), then sample-standardize
+  df[[std_col]] <- (df[[roll_col]] - mean(df[[roll_col]], na.rm=TRUE)) / sd(df[[roll_col]], na.rm=TRUE)
+}
+
+# --- SCREEN OUT WITHIN-PERSON NON-PLAUSIBLE P4 OUTLIERS ---
+# A spike is defined as a value much higher than both surrounding days (e.g., >5x the local mean and >300 units higher)
+p4_spike_factor <- 5
+p4_spike_delta <- 300
+
+df <- df %>%
+  group_by(id) %>%
+  arrange(date) %>%
+  mutate(
+    P4_prev = lag(P4),
+    P4_next = lead(P4),
+    P4_local_mean = rowMeans(cbind(P4_prev, P4_next), na.rm = TRUE),
+    P4_is_spike = ifelse(
+      !is.na(P4) & !is.na(P4_prev) & !is.na(P4_next) &
+      (
+        (P4 > p4_spike_factor * P4_local_mean & abs(P4 - P4_prev) > p4_spike_delta & abs(P4 - P4_next) > p4_spike_delta)
+      ),
+      TRUE, FALSE
+    ),
+    P4_clean = ifelse(P4_is_spike, NA, P4)
+  ) %>%
+  ungroup() %>%
+  select(-P4_prev, -P4_next, -P4_local_mean, -P4_is_spike)
+
+# Replace your P4 variable with the cleaned one:
+df <- df %>% mutate(P4 = P4_clean) %>% select(-P4_clean)
+
+# Sort df by id and date
+df <- df %>% arrange(id, date)
+```
+
+# --- 3. Calculate All Derived Metrics ---
+```{r}
+
+
 df <- df %>%
   group_by(id) %>%
   # Rolling averages (.3roll, .5roll):
@@ -513,12 +587,12 @@ for (row in 1:nrow(metrics_to_plot)) {
   for (person_id in ids_list) {
     plot_data <- hormones_long_all %>% filter(id == person_id, metric == metric_name)
     
-    # This is the new, more robust fix. It ensures 'date' is a Date
-    # and filters out any rows that failed conversion.
+    # Ensure date is Date and sorted
     plot_data <- plot_data %>%
       mutate(date = as.Date(date)) %>%
-      filter(!is.na(date))
-
+      filter(!is.na(date)) %>%
+      arrange(hormone, date)
+    
     if (nrow(plot_data) == 0 || all(is.na(plot_data$value))) next
     
     vline_data <- cycle_df_scaled %>% filter(id == person_id)
@@ -526,10 +600,14 @@ for (row in 1:nrow(metrics_to_plot)) {
     # --- FIX: Explicitly define the full date range for the participant ---
     date_range <- range(vline_data$date, na.rm = TRUE)
     
+    # Only keep rows with non-missing value for geom_line but keep all for geom_point
+    non_na_data <- plot_data %>% filter(!is.na(value))
+    
     p <- ggplot(plot_data, aes(x = date, y = value, color = hormone, group = hormone)) +
       geom_vline(data = filter(vline_data, menses == 1), aes(xintercept = date), color = "red", linewidth = 1) +
       geom_vline(data = filter(vline_data, ovtoday == 1), aes(xintercept = date), color = "forestgreen", linewidth = 1) +
-      geom_line(linewidth = 0.9) + geom_point(size = 1.5) +
+      geom_line(data = non_na_data, linewidth = 0.9) +          # This JUMPS over missing days
+      geom_point(size = 1.5, na.rm = TRUE) +
       scale_x_date(breaks = "1 day", date_labels = "%b %d", limits = date_range) +
       scale_color_manual(values = c("E2" = "blue", "LH" = "#1b9e77", "P4" = "red")) +
       labs(title = paste("Participant:", person_id), subtitle = plot_subtitle, x = "Date", y = y_label, color = "Hormone") +
