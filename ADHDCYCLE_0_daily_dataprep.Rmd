@@ -45,6 +45,10 @@ library(knitr)
 library(lme4)
 library(gratia)
 library(patchwork)
+library(careless)     # Careless responding indices (Longstring, IRV)
+library(MASS)         # Mahalanobis distance
+library(psych)        # Correlation functions (for person-total correlation)
+library(lmtest)       # Regression diagnostics
 # Explicitly state our function preferences to avoid ambiguity when multiple
 # packages have a function with the same name.
 conflict_prefer("filter", "dplyr")
@@ -391,6 +395,169 @@ ggplot(df, aes(x = score_robot_winsor)) +
        x = "Winsorized score_robot",
        y = "Frequency") +
   theme_minimal()
+
+```
+
+# --- Careless Responding Filtering ---
+
+```{r careless-filtering}
+
+# ---- SCREENING FOR CARELESS RESPONDING ----
+
+# Ensure no missing data in the key response variable CSS_B_1
+df <- df %>%
+  filter(!is.na(CSS_B_1))
+
+# 1. Longstring Index:
+# The Longstring index measures the longest sequence of identical responses
+# a participant gives in a survey (e.g., answering "3" repeatedly across items).
+# Strengths: Helps detect inattentiveness, especially if participants are responding lazily.
+# Weaknesses: May flag participants who are consistent but attentive in their responses.
+df <- df %>%
+  mutate(
+    longstring = longstring(dplyr::select(df, CSS_B_1:CSS_B_18)),  # Longest streak of identical responses
+    avgstring = longstring(dplyr::select(df, CSS_B_1:CSS_B_18), avg = TRUE)  # Average length of identical responses
+  )
+
+# 2. Intra-Individual Response Variability (IRV):
+# IRV calculates how variable a participant's responses are across items.
+# High IRV indicates fluctuating responses, while low IRV suggests consistency.
+# Strengths: Useful for detecting erratic or inconsistent behavior within a single survey.
+# Weaknesses: Participants with genuinely varied opinions may be falsely flagged.
+df <- df %>%
+  mutate(irv = irv(dplyr::select(df, CSS_B_1:CSS_B_18)))  # Measures variability across responses
+
+# 3. Mahalanobis Distance:
+# Mahalanobis distance measures the distance of a participant's response profile 
+# from the overall sample's response mean, considering multiple variables.
+# Strengths: Detects multivariate outliers who deviate significantly from the group.
+# Weaknesses: May flag legitimate responses if the participant is genuinely different from the sample.
+response_items <- dplyr::select(df, CSS_B_1:CSS_B_18)
+df <- df %>%
+  mutate(mahalanobis_distance = mahalanobis(response_items, 
+                                            colMeans(response_items, na.rm = TRUE), 
+                                            cov(response_items, use = "complete.obs")))
+
+# 4. Person-Total Correlation (PTC):
+# The Person-Total Correlation measures how closely each item in a survey 
+# correlates with the participant's total score across all items, excluding that item.
+# Strengths: Identifies responses that are inconsistent with the participant's overall pattern.
+# Weaknesses: Can flag low variability respondents, even if they are consistent and attentive.
+df <- df %>%
+  mutate(
+    total_score = rowSums(across(starts_with("CSS_B_")), na.rm = TRUE)  # Total score across all CSS_B_ items
+  )
+
+df <- df %>%
+  rowwise() %>%
+  mutate(
+    person_total_corr = {
+      # Extract the current row's response vector for CSS_B_ items
+      response_vector <- c_across(starts_with("CSS_B_"))
+      
+      # Calculate the leave-one-out total score (excluding each item from the total)
+      leave_one_out_total <- total_score - response_vector
+      
+      # Only calculate correlation if there's variability in both vectors
+      if (length(unique(response_vector[!is.na(response_vector)])) > 1 &&
+          length(unique(leave_one_out_total[!is.na(leave_one_out_total)])) > 1) {
+        cor(response_vector, leave_one_out_total, use = "complete.obs")
+      } else {
+        NA
+      }
+    }
+  ) %>%
+  ungroup()
+
+# ---- FLAGGING CARELESS RESPONSES ----
+
+# Now that the indices are calculated, we flag responses that are suspicious.
+df <- df %>%
+  mutate(
+    # Flag based on Longstring
+    flag_longstring = ifelse(scale(longstring) > 2, TRUE, FALSE),
+    
+    # Flag based on IRV
+    flag_irv = ifelse(scale(irv) < -2, TRUE, FALSE),
+    
+    # Flag based on Mahalanobis Distance
+    flag_mahalanobis = ifelse(scale(mahalanobis_distance) > 2, TRUE, FALSE),
+    
+    # Flag based on Person-Total Correlation
+    flag_ptc = ifelse(person_total_corr < 0.2, TRUE, FALSE),
+    
+    # Create a combined careless flag
+    flag_any_careless = ifelse(flag_longstring | flag_irv | flag_mahalanobis | flag_ptc, TRUE, FALSE),
+    
+    # Count how many flags were triggered for each row
+    flag_caresum = rowSums(across(c(flag_longstring, flag_irv, flag_mahalanobis, flag_ptc)), na.rm = TRUE),
+    
+    # Flag rows where 2 or more indices are flagged
+    flag_three = ifelse(flag_caresum > 2, TRUE, FALSE)
+  )
+
+# ---- VISUALIZATIONS ----
+
+# Summarize the number of surveys flagged for three or more indices per participant
+df_summary <- df %>%
+  group_by(id) %>%
+  summarise(
+    total_surveys = n(),
+    flagged_surveys = sum(flag_three, na.rm = TRUE),
+    flag_percentage = (flagged_surveys / total_surveys) * 100
+  )
+
+# Plot: Percentage of flagged responses by participant
+ggplot(df_summary, aes(x = reorder(factor(id), -flag_percentage), y = flag_percentage)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Percentage of Flagged Responses by Participant",
+       x = "Participant ID",
+       y = "Percentage of Flagged Responses (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, size = 10, hjust = 2))
+
+# ---- PRINT ID AND NUMBER OF ELIMINATED RESPONSES ----
+
+# Extract IDs and dates of responses flagged for two or more indices
+eliminated_responses <- df %>%
+  filter(flag_three == TRUE) %>%
+  arrange(id, date)  # Arrange by id and date
+
+# Summarize number of responses removed per participant
+elimination_summary <- eliminated_responses %>%
+  group_by(id) %>%
+  summarise(num_removed = n())
+
+# Print a message for each participant with eliminated responses
+cat("The following participants had responses removed based on flagged indices:\n")
+elimination_summary %>%
+  rowwise() %>%
+  mutate(message = paste0("Participant ", id, " had ", num_removed, " response(s) removed.")) %>%
+  pull(message) %>%
+  cat(sep = "\n")
+
+# Display number of rows before and after cleaning
+cat("Number of rows BEFORE removal of careless responses: ", nrow(df), "\n")
+
+# ---- FILTERING OUT CARELESS RESPONSES (TWO OR MORE FLAGS) ----
+
+# Remove the flagged rows where two or more indices were triggered
+df <- df %>%
+  filter(flag_three == FALSE)
+
+# Display number of rows after removing careless responses
+cat("Number of rows AFTER removal of flagged responses: ", nrow(df), "\n")
+
+# ---- RE-ADDING PLACEHOLDER FOR MISSING DATES ----
+
+# Re-add placeholders for missing dates after cleaning
+df <- df %>%
+  group_by(id) %>%
+  complete(date = seq.Date(min(date), max(date), by = "day")) %>%
+  ungroup()
+
+# Display number of rows after re-adding missing date placeholders
+cat("Number of rows after re-adding missing date placeholders: ", nrow(df), "\n")
 
 ```
 
