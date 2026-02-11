@@ -101,7 +101,11 @@ run_smm_cyclic <- function(
       preds[, k] <- predict(models[[k]]$gam, newdata = df)
     }
     resids <- (df[[full_outcome]] - preds)^2
-    resid_sums <- lapply(1:g, function(k) stats::aggregate(resids[, k], by = list(id = df$id), FUN = sum, na.rm = TRUE))
+    resid_sums <- lapply(1:g, function(k) {
+      result <- stats::aggregate(resids[, k], by = list(id = df$id), FUN = sum, na.rm = TRUE)
+      colnames(result)[2] <- paste0("RSS_group", k)  # Name it immediately
+      return(result)
+    })
     resid_df <- Reduce(function(x, y) merge(x, y, by = "id"), resid_sums)
     colnames(resid_df)[-1] <- paste0("RSS_group", 1:g)
     group_map <- data.frame(id = resid_df$id, group = as.character(apply(resid_df[, -1], 1, which.min)))
