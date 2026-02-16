@@ -1,0 +1,284 @@
+---
+title: "ADHDCYCLE_clean_AMsurveys"
+author: "Tory Eisenlohr-Moul"
+date: "2026-02-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# import '/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/DailySurveysTasks/AM Survey Data Clean 05.27.25.csv' as am_survey
+
+am_survey <- read.csv('/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/DailySurveysTasks/AM Survey Data Clean 05.27.25.csv')
+
+View(am_survey)
+
+# keep id, date, alc_yesterday, and yest_alcohol_yn_1_TEXT
+am_survey <- am_survey %>%
+  select(id, date, alc_yesterday, yest_alcohol_yn_1_TEXT)
+
+
+
+```
+
+
+
+```{r}
+library(dplyr)
+library(stringr)
+library(purrr)
+
+word_to_number <- function(x) {
+  number_words <- c(
+    "zero" = 0, "one" = 1, "two" = 2, "three" = 3,
+    "four" = 4, "five" = 5, "six" = 6,
+    "seven" = 7, "eight" = 8, "nine" = 9,
+    "ten" = 10, "eleven" = 11, "twelve" = 12
+  )
+  x_lower <- str_to_lower(x)
+  for (word in names(number_words)) {
+    x_lower <- str_replace_all(
+      x_lower,
+      paste0("\\b", word, "\\b"),
+      as.character(number_words[[word]])
+    )
+  }
+  x_lower
+}
+
+parse_standard_drinks <- function(text_var,
+                                 sip_drinks = 0.1,
+                                 mixed_drink_unit = 1.5,
+                                 margarita_unit = 2,
+                                 mule_unit = 1.5,
+                                 long_island_unit = 2.5,
+                                 canned_cocktail_unit = 1.5,
+                                 shot_unit = 1,
+                                 half_pint_spirits_unit = 4.7) {
+
+  extract_qty <- function(x) {
+    x <- str_squish(x)
+
+    # Range like 6-8 → take max
+    range_match <- str_match(x, "(\\d+)\\s*[-–]\\s*(\\d+)")
+    if (!all(is.na(range_match))) return(as.numeric(range_match[, 3]))
+
+    # fraction 1/2, 1/3, etc.
+    frac <- str_match(x, "(\\d+)\\s*/\\s*(\\d+)")
+    if (!all(is.na(frac))) {
+      num <- as.numeric(frac[, 2]); den <- as.numeric(frac[, 3])
+      if (!is.na(num) && !is.na(den) && den != 0) return(num / den)
+    }
+
+    if (str_detect(x, "\\bhalf\\b")) return(0.5)
+    if (str_detect(x, "\\b(a|an)\\b") && !str_detect(x, "\\d")) return(1)
+
+    # decimal or integer (including .5)
+    m <- str_match(x, "(?<!\\d)(\\d*\\.\\d+|\\d+)(?!\\d)")
+    if (!all(is.na(m))) {
+      val <- as.numeric(m[, 2])
+      if (!is.na(val)) return(val)
+    }
+
+    1
+  }
+
+  parse_chunk <- function(chunk) {
+
+    chunk <- chunk %>%
+      str_to_lower() %>%
+      word_to_number() %>%
+      str_replace_all("\\([^\\)]*\\)", " ") %>%  # drop parentheticals
+      str_squish()
+
+    if (is.na(chunk) || chunk == "") return(0)
+
+    # Explicit "X drinks" inside chunk
+    explicit_drinks <- str_match_all(chunk, "(\\d+)\\s*drinks?")[[1]]
+    if (nrow(explicit_drinks) > 0) {
+      return(max(as.numeric(explicit_drinks[, 2]), na.rm = TRUE))
+    }
+
+    # SIP RULE FIRST
+    if (str_detect(chunk, "\\bsips?\\b")) {
+      qty <- extract_qty(chunk)          # handles 5-6 -> 6, 1/3 -> 0.333
+      return(qty * sip_drinks)
+    }
+
+    # Bare number
+    if (str_detect(chunk, "^\\d*\\.\\d+\\s*$|^\\d+\\s*$")) {
+      return(as.numeric(str_squish(chunk)))
+    }
+
+    qty <- extract_qty(chunk)
+
+    # Smirnoff Ice
+    if (str_detect(chunk, "smirnoff\\s*ice")) return(qty * 1)
+
+    # Half pint spirits
+    if (str_detect(chunk, "\\bhalf\\b.*\\bpint\\b|\\b1\\s*/\\s*2\\s*pint\\b")) {
+      if (str_detect(chunk, "hennessy|whiskey|vodka|rum|gin|tequila|cognac|brandy")) {
+        return(half_pint_spirits_unit)
+      }
+      return(half_pint_spirits_unit)
+    }
+
+    # ✅ Beer ounces handling:
+    # If chunk has "oz" and "beer", interpret ounces relative to 12 oz standard beer.
+    if (str_detect(chunk, "beer") && str_detect(chunk, "\\boz\\b")) {
+      oz_match <- str_match(chunk, "(\\d*\\.\\d+|\\d+)\\s*oz")
+      if (!all(is.na(oz_match))) {
+        ounces <- as.numeric(oz_match[, 2])
+        if (!is.na(ounces)) {
+          return(qty * (ounces / 12))
+        }
+      }
+    }
+
+    case_when(
+      str_detect(chunk, "long\\s*island|\\blit\\b") ~ qty * long_island_unit,
+      str_detect(chunk, "margarita|\\bmargs\\b|\\bmarg\\b|strawberita") ~ {
+        if (str_detect(chunk, "\\b24\\b")) qty * 3.2 else qty * margarita_unit
+      },
+      str_detect(chunk, "\\bmule\\b") ~ qty * mule_unit,
+      str_detect(chunk, "cocktail.*can|in a can|canned cocktail") ~ qty * canned_cocktail_unit,
+      str_detect(chunk, "mixed\\s*drink|cocktail|screwdriver") ~ qty * mixed_drink_unit,
+      str_detect(chunk, "shot") ~ qty * shot_unit,
+      str_detect(chunk, "seltzer") ~ qty * 1,
+      str_detect(chunk, "beer") ~ qty * 1,
+      str_detect(chunk, "wine") ~ qty * 1,
+      TRUE ~ qty
+    )
+  }
+
+  map_dbl(text_var, function(entry) {
+
+    if (is.na(entry)) return(0)
+
+    entry <- entry %>%
+      str_to_lower() %>%
+      word_to_number() %>%
+      str_replace_all("[\"“”]", "") %>%
+      str_replace_all("\\([^\\)]*\\)", " ") %>%
+      str_squish()
+
+    if (entry == "") return(0)
+
+    # ENTRY-LEVEL OVERRIDE if "X drinks" anywhere
+    entry_drinks <- str_match_all(entry, "(\\d+)\\s*drinks?")[[1]]
+    if (nrow(entry_drinks) > 0) {
+      return(max(as.numeric(entry_drinks[, 2]), na.rm = TRUE))
+    }
+
+    # ✅ safer “missing separator” fix:
+    # only split when a drink-word is followed by a number (e.g., "shots 2 seltzers")
+    drink_word <- "(shots?|beers?|seltzers?|wine|wines|margaritas?|margs|mules?|cocktails?|mixed\\s*drinks?)"
+    entry <- str_replace_all(entry, paste0("(", drink_word, ")\\s+(?=\\d)"), "\\1 | ")
+
+    parts <- entry %>%
+      str_replace_all("\\s*(;|,)\\s*", " | ") %>%
+      str_replace_all("\\s*(\\+|&|\\band\\b)\\s*", " | ") %>%
+      str_split("\\|", simplify = FALSE) %>%
+      .[[1]] %>%
+      str_squish()
+
+    parts <- parts[parts != ""]
+
+    sum(map_dbl(parts, parse_chunk), na.rm = TRUE)
+  })
+}
+
+
+```
+
+
+
+```{r}
+clean_am_survey <- am_survey %>%
+  mutate(
+    num_drinks = parse_standard_drinks(yest_alcohol_yn_1_TEXT)
+  )
+
+#View(clean_am_survey)
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+clean_am_survey <- clean_am_survey %>%
+  
+  # Ensure date is stored as a Date object
+  mutate(date = as.Date(date)) %>%
+  
+  # Work within each participant
+  group_by(id) %>%
+  
+  # Flag rows that were actually observed (i.e., real survey rows)
+  mutate(.was_observed = TRUE) %>%
+  
+  # Insert missing calendar dates within each id
+  # This prevents lead() from skipping over gaps
+  complete(
+    date = seq(
+      min(date, na.rm = TRUE),
+      max(date, na.rm = TRUE),
+      by = "day"
+    )
+  ) %>%
+  
+  # After complete(), rows that were inserted will have NA in .was_observed
+  # Convert those to FALSE so we can distinguish real vs inserted rows
+  mutate(
+    .was_observed = if_else(is.na(.was_observed), FALSE, TRUE)
+  ) %>%
+  
+  # Ensure proper chronological order
+  arrange(date) %>%
+  
+  # Shift morning reports backward one calendar day:
+  # Morning of Day T reports drinking that occurred on Day T-1
+  # So we pull the next day's report back using lead()
+  mutate(
+    
+    # Number of drinks reported this morning → assign to yesterday
+    today_num_drinks = lead(num_drinks),
+    
+    # Yes/No drinking yesterday reported this morning → assign to yesterday
+    drink_today = lead(alc_yesterday)
+    
+  ) %>%
+  
+  # Return to ungrouped data frame
+  ungroup()
+
+```
+
+```{r}
+View(clean_am_survey)
+```
+
+
+```{r}
+#create a new iso date variable called daterated based on date
+clean_am_survey <- clean_am_survey %>%
+  mutate(daterated = as.Date(date))
+
+# drop date variable
+clean_am_survey <- clean_am_survey %>%
+  select(-date)
+```
+
+
+
+```{r}
+# save this dataset to ~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output
+
+write.csv(clean_am_survey, "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/am_survey_parsed.csv", row.names = FALSE)
+```
+
+

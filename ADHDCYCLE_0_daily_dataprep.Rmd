@@ -67,7 +67,10 @@ path_supp_hormones <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Fol
 
 path_final_hormone_batch <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-08-25/Martel_IRB52576_Results_E2_P4_LH 7-23-2025.csv"
 
-path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-10-30/ADHDCYCLE_menses_ov_dates_20251030.xls"
+path_final_dates <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-11-02/adhdcyc_cycledates_20251102.xls"
+
+path_am_surveys <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/am_survey_parsed.csv"
+
 ```
 
 # --- Output Folder ---
@@ -86,10 +89,10 @@ if (!dir.exists(output_folder)) {
 
 ```{r varlists}
 # Define the final variable names that will be processed and analyzed.
-dv_list <- c("CSS_Inatt", "CSS_HypImp", "score_pinball_rev", "score_robot_rev", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
+dv_list <- c("today_num_drinks", "drink_today", "CSS_Inatt", "CSS_HypImp", "score_pinball_rev", "score_robot_rev", "BDEFS_Total", "BDEFS_WM_avg", "BDEFS_RI_avg", "UPPS_NU_avg", "UPPS_PU_avg", "UPPS_Premed_avg", "UPPS_Persev_avg", "UPPS_Sens_avg", "DEBQ_Total", "CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count", paste0("DRSP_", 1:23))
 hormlist <- c("E2", "P4", "LH")
 alldailyvars <- c(dv_list, hormlist)
-corrplotlist <- c("CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_16",  "E2", "P4", "LH")
+corrplotlist <- c("today_num_drinks", "CSS_Inatt", "CSS_HypImp", "score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg", "DEBQ_Total", "DRSP_1", "DRSP_4", "DRSP_7", "DRSP_16",  "E2", "P4", "LH")
 ```
 
 # --- Plotting Configuration ---
@@ -119,6 +122,7 @@ raw_daily <- read_sav(path_raw_daily)
 raw_daily_2 <- read_sav(path_raw_daily_2)
 supp_hormones_all <- read_csv(path_supp_hormones, show_col_types = FALSE)
 final_hormone_batch <- read_csv(path_final_hormone_batch, show_col_types = FALSE)
+am_surveys <- read_csv(path_am_surveys, show_col_types = FALSE)
 ```
 
 # --- 2. Standardize id/daterated column names for all sources ---
@@ -143,6 +147,7 @@ raw_daily <- standardize_index_names(raw_daily)
 raw_daily_2 <- standardize_index_names(raw_daily_2)
 supp_hormones_all <- standardize_index_names(supp_hormones_all)
 final_hormone_batch <- standardize_index_names(final_hormone_batch)
+am_surveys <- standardize_index_names(am_surveys)
 ```
 
 # --- 3. Create provenance flags for Venn diagram ---
@@ -152,6 +157,7 @@ raw_daily <- raw_daily %>% mutate(source_raw_daily = TRUE)
 raw_daily_2 <- raw_daily_2 %>% mutate(source_raw_daily_2 = TRUE)
 supp_hormones_all <- supp_hormones_all %>% mutate(source_supp_hormones = TRUE)
 final_hormone_batch <- final_hormone_batch %>% mutate(source_final_batch = TRUE)
+am_surveys <- am_surveys %>% mutate(source_am_surveys = TRUE)
 ```
 
 # --- 4. Force all daterated columns to "YYYY-MM-DD" string and remove missing keys ---
@@ -167,9 +173,10 @@ raw_daily$daterated <- force_ymd(raw_daily$daterated)
 raw_daily_2$daterated <- force_ymd(raw_daily_2$daterated)
 supp_hormones_all$daterated <- force_ymd(supp_hormones_all$daterated)
 final_hormone_batch$daterated <- force_ymd(final_hormone_batch$daterated)
+am_surveys$daterated <- force_ymd(am_surveys$daterated)
 
 # Remove rows where 'id' or 'daterated' is missing in any data frame
-for (df_name in c("raw_daily", "raw_daily_2", "supp_hormones_all", "final_hormone_batch")) {
+for (df_name in c("raw_daily", "raw_daily_2", "supp_hormones_all", "final_hormone_batch", "am_surveys")) {
   df <- get(df_name)
   df <- df %>% filter(!is.na(id) & !is.na(daterated))
   assign(df_name, df)
@@ -195,11 +202,12 @@ harmonize_types <- function(dfs) {
   dfs
 }
 # Harmonize types across all four sources
-data_sources <- harmonize_types(list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch))
+data_sources <- harmonize_types(list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch, am_surveys))
 raw_daily      <- data_sources[[1]]
 raw_daily_2    <- data_sources[[2]]
 supp_hormones_all <- data_sources[[3]]
 final_hormone_batch <- data_sources[[4]]
+am_surveys <- data_sources[[5]]
 ```
 
 ```{r}
@@ -211,7 +219,7 @@ final_hormone_batch <- data_sources[[4]]
 
 ```{r}
 # Merge all four data frames fully by 'id' and 'daterated'
-all_dfs <- list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch)
+all_dfs <- list(raw_daily, raw_daily_2, supp_hormones_all, final_hormone_batch, am_surveys)
 merged_df <- Reduce(function(x, y) full_join(x, y, by = c("id", "daterated")), all_dfs)
 ```
 
@@ -219,7 +227,7 @@ merged_df <- Reduce(function(x, y) full_join(x, y, by = c("id", "daterated")), a
 ```{r}
 # List of all output variables to fill
 final_vars <- c(
-  "id", "daterated", "TubeNumber", "E2", "P4", "LH", "E2_stderr", "P4_stderr", "LH_sterr",
+  "id", "daterated", "drink_today", "today_num_drinks", "TubeNumber", "E2", "P4", "LH", "E2_stderr", "P4_stderr", "LH_sterr",
   "VisitNumbers", "DEBQ_avg", "BDEFS_1", "BDEFS_2", "BDEFS_3", "BDEFS_4", "BDEFS_5", "BDEFS_6",
   "DRSP_1", "DRSP_2", "DRSP_3", "DRSP_4", "DRSP_5", "DRSP_6", "DRSP_7",
   "DRSP_8", "DRSP_9", "DRSP_10", "DRSP_11", "DRSP_12", "DRSP_13", "DRSP_14",
@@ -321,6 +329,10 @@ cat("Filtered out known bad data points.\n")
 ## --- 1. Merge Final Manually-Confirmed Cycle Dates ---
 
 ```{r}
+
+
+'/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/02_data_prep_workspace/2025-11-02/adhdcyc_cycledates_20251102.xls'
+
 
 final_dates <- read_xls(path_final_dates) %>%
   select(id, date, menses = menses_final, ovtoday = ovtoday_final) %>%
@@ -847,7 +859,7 @@ P4 variables set to missing for ID 292 from 2023-05-03 onwards.
 
 ```{r adhd1-pacts-check}
 # Set your variables to check
-pacts_vars_to_check <- c("E2", "P4", "LH", "CSS_Inatt", "DRSP_1", "score_pinball_rev")
+pacts_vars_to_check <- c("drink_today", "today_num_drinks", "E2", "P4", "LH", "CSS_Inatt", "DRSP_1", "score_pinball_rev")
 
 tempdata <- cycle_df_scaled %>%
   filter(!(id %in% as.character(c(ids_to_na, ids_to_na_cycles)))) # Remove ids with intentional missingness
