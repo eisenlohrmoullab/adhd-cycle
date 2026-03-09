@@ -7,16 +7,16 @@ output: html_document
 ```{r}
 #Load final copy of cleaned dataset cycle_df_scaled rdata from the folder here to /data:  /Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata
 
-#load("/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata")
+load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/0_dataprep_output/00_cleaned_datasets/adhd_daily_scaled_20250929.RData")
 
 # Save a copy of cycle_df_scaled as an rdata file to /data in the repo
 #save(cycle_df_scaled, file = "~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
 
 # set wd to repo
-setwd("~/CLEAR Lab Repositories/adhd-cycle")
+#setwd("~/CLEAR Lab Repositories/adhd-cycle")
 
 # load a copy of cycle_df_scaled from /data in the repo
-load("~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+#load("~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
 
 ```
 
