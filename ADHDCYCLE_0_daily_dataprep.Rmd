@@ -45,6 +45,7 @@ library(knitr)
 library(lme4)
 library(gratia)
 library(patchwork)
+library(rmcorr)
 # Explicitly state our function preferences to avoid ambiguity when multiple
 # packages have a function with the same name.
 conflict_prefer("filter", "dplyr")

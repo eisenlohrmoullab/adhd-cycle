@@ -3,34 +3,34 @@ identifiers <- c("id", "daterated")
 
 # DRSP Variables
 drsp_vars <- c(
-  "Dep", "Hopeless", "Worthless", "Anxious", "MoodSwing", "RejSens", 
-  "Angry", "Conflicts", "Loss_Interest", "Diff_Conc", "Tired", 
-  "OverEat", "Sp_Food_Crav", "High_Sleep", "Diff_Sleep", "Overwhelm", 
-  "Loss_Control", "Breast_Tend", "Breast_Swell", "Headache", 
+  "Dep", "Hopeless", "Worthless", "Anxious", "MoodSwing", "RejSens",
+  "Angry", "Conflicts", "Loss_Interest", "Diff_Conc", "Tired",
+  "OverEat", "Sp_Food_Crav", "High_Sleep", "Diff_Sleep", "Overwhelm",
+  "Loss_Control", "Breast_Tend", "Breast_Swell", "Headache",
   "JM_Pain", "Loss_Prod", "Int_Relat"
 )
 
 # BDEFS Variables
-bdefs_vars <- c("Diff_Inhib", "Diff_Stop", "Diff_Change", "Immed_Payoff", 
+bdefs_vars <- c("Diff_Inhib", "Diff_Stop", "Diff_Change", "Immed_Payoff",
                 "Res_Urge", "Diff_LongRew", "Diff_ResRew")
 
 # Cycle Variables
-cyclevars <- c("ovpos", "firstdayofperiod", "cycleday", "cycledaywzero", "midluteal_count", "perimenstrual_count", 
-               "midfol_count", "periov_count", "cyclephase_count", "midluteal_LH", "perimenstrual_LH", 
-               "midfol_LH", "periov_LH", "earlylut_LH", "sumdummy", "cyclephase_LH", 
-               "cyclephase_LHnames", "E2", "P4", "LH", "removed_from_horm_analysis", 
-               "m2mcount", "mcyclength", "cycle_incomplete", "cyclenum", "lutdaycount1", 
+cyclevars <- c("ovpos", "firstdayofperiod", "cycleday", "cycledaywzero", "midluteal_count", "perimenstrual_count",
+               "midfol_count", "periov_count", "cyclephase_count", "midluteal_LH", "perimenstrual_LH",
+               "midfol_LH", "periov_LH", "earlylut_LH", "sumdummy", "cyclephase_LH",
+               "cyclephase_LHnames", "E2", "P4", "LH", "removed_from_horm_analysis",
+               "m2mcount", "mcyclength", "cycle_incomplete", "cyclenum", "lutdaycount1",
                "lut_incomplete1", "foldaycount", "fol_incomplete")
 
 # Time Variables
 timevars <- c("visitnum", "day_in_study", "TubeNumber")
 
 # Daily Variables
-alldailyvars <- c("drink_today", "drink_today_bin", "drink_today", "fourplustoday", "Crave_Alc_AM", "Crave_Alc_PM", "Dep", "Hopeless", 
-                  "Worthless", "Anxious", "MoodSwing", "RejSens", "Angry", "Conflicts", 
-                  "Loss_Interest", "Diff_Conc", "Tired", "OverEat", "Sp_Food_Crav", "High_Sleep", 
-                  "Diff_Sleep", "Overwhelm", "Loss_Control", "Breast_Tend", "Breast_Swell", 
-                  "Headache", "JM_Pain", "Loss_Prod", "Int_Relat", "Diff_Inhib", "Diff_Stop", 
+alldailyvars <- c("drink_today", "drink_today_bin", "drink_today", "fourplustoday", "Crave_Alc_AM", "Crave_Alc_PM", "Dep", "Hopeless",
+                  "Worthless", "Anxious", "MoodSwing", "RejSens", "Angry", "Conflicts",
+                  "Loss_Interest", "Diff_Conc", "Tired", "OverEat", "Sp_Food_Crav", "High_Sleep",
+                  "Diff_Sleep", "Overwhelm", "Loss_Control", "Breast_Tend", "Breast_Swell",
+                  "Headache", "JM_Pain", "Loss_Prod", "Int_Relat", "Diff_Inhib", "Diff_Stop",
                   "Diff_Change", "Immed_Payoff", "Res_Urge", "Diff_LongRew", "Diff_ResRew", "BDEFS")
 
 # Core DVs

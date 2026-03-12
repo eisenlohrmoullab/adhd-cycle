@@ -16,6 +16,20 @@ df <- cycle_df_scaled
 ```
 
 
+# --- Output Folder ---
+
+```{r define_box_output}
+
+# Define a base output location and create a unique, timestamped subfolder for this specific run.
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
+```
+
+
+
 ```{r sort df}
 # Count nonmissing values of pinball and robot scores
 df %>%
@@ -45,7 +59,15 @@ hist(df$BDEFS_WM_avg)
 hist(df$BDEFS_RI_avg)
 
 # Example list of variables
-variable_list <- c("score_pinball_rev", "score_pinball_rev", "BDEFS_WM_avg", "BDEFS_RI_avg")
+variable_list <- c("score_pinball_rev", "score_robot_rev", "BDEFS_WM_avg", "BDEFS_RI_avg")
+
+# drop empties, enforce uniqueness
+variable_list <- unique(variable_list[nzchar(variable_list)])
+
+# keep only columns that actually exist
+variable_list <- intersect(variable_list, names(df))
+
+df[variable_list] <- lapply(df[variable_list], as.numeric)
 
 # ---- Repeated Measures Correlations ----
 
