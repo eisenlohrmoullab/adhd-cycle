@@ -1,0 +1,3495 @@
+---
+title: "ADHDCYCLE_6_subgroup_hormonecorr"
+author: "Tory Eisenlohr-Moul"
+date: "2026-03-13"
+output: html_document
+---
+
+
+```{r setup}
+# This chunk sets the global options for the entire R Markdown document.
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(scipen = 999, digits = 3)
+```
+
+# Load Required Libraries
+
+```{r libraries}
+# This chunk loads all the packages needed for the analysis.
+library(tidyverse)       # A collection of essential packages for data manipulation and visualization (includes dplyr, ggplot2, etc.)
+library(janitor)         # Provides functions for cleaning data and table creation.
+library(haven)           # For reading data from other statistical software like SPSS (.sav).
+library(readxl)          # For reading data from Excel files (.xls, .xlsx).
+library(zoo)             # For calculating rolling averages.
+library(lubridate)       # For making it easier to work with dates and times.
+library(conflicted)      # Helps manage function name conflicts between packages.
+#remotes::install_github("eisenlohrmoullab/menstrualcycleR")
+library(menstrualcycleR) # For cycle-specific analyses like PACTS scaling.
+library(gridExtra)       # For arranging multiple plots on one page.
+library(ggvenn)          # For creating Venn diagrams.
+library(readr)       # For reading CSV files
+library(dplyr)       # For data wrangling
+library(lubridate)   # For date parsing/manipulation
+library(tidyr)       # For tidying data
+library(rlang)       # For tidy evaluation
+library(visdat)      # For missing data visualization
+library(ggpubr)      # For publication-ready plots
+library(tidyverse) 
+library(mgcv)      
+library(readr)     
+library(knitr)     
+library(lme4)
+library(gratia)
+library(patchwork)
+library(rmcorr)
+# Explicitly state our function preferences to avoid ambiguity when multiple
+# packages have a function with the same name.
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("summarize", "dplyr")
+```
+
+
+# --- Output Folder ---
+
+```{r define_box_output}
+
+# Define a base output location and create a unique, timestamped subfolder for this specific run.
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output"
+output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
+```
+
+
+# OLD CODE, FULL SAMPLE CORRS -- ICCs, Between- and Within-Person Associations of Study Variables
+```{r f1_corr, echo=TRUE, message=FALSE, warning=FALSE}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Define the Heatmap Generation Function (Final Version)
+# ===================================================================
+generate_correlation_heatmap <- function(
+    data, outcome_vars, id_var, final_labels = NULL, # <-- New argument
+    sig.level = 0.05,
+    highlight_diag = TRUE,
+    show_legend = TRUE,
+    label_size = 4.6,
+    diag_label_size = 6,
+    subtitle_text = "Upper: Within-person (rmcorr); Lower: Between-person (Spearman); Diagonal: ICC"
+) {
+  # (The first part of the function is the same as the last version)
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                        dimnames = list(outcome_vars, outcome_vars))
+  
+  summary_expressions <- purrr::map(outcome_vars, ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))) %>%
+    rlang::set_names(outcome_vars)
+    
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!summary_expressions, .groups = "drop")
+
+  between_corr <- suppressWarnings(
+    cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  )
+
+  for (i in 1:(n_vars - 1)) for (j in (i + 1):n_vars) {
+    x <- person_means[[outcome_vars[i]]]
+    y <- person_means[[outcome_vars[j]]]
+    if (sum(!is.na(x) & !is.na(y)) > 2) {
+      test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+      results_matrix[i, j] <- between_corr[i, j]
+      pval_matrix[i, j] <- test$p.value
+    }
+  }
+
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(fml, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- performance::icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+        pval_matrix[i, i] <- 0
+      }
+    }
+  }
+
+  for (i in 2:n_vars) for (j in 1:(i - 1)) {
+    var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+    rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+    if (nrow(rmcorr_data) > 2) {
+      rmcorr_result <- rmcorr::rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+      results_matrix[i, j] <- rmcorr_result$r
+      pval_matrix[i, j] <- rmcorr_result$p
+    }
+  }
+
+  within_corr_matrix <- results_matrix
+  within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered    <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  no_leading_zero <- function(x) {
+    ifelse(is.na(x), NA_character_, sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      is_diag = as.character(Var1) == as.character(Var2),
+      is_sig  = p.value < sig.level,
+      label   = no_leading_zero(value)
+    )
+
+  diag_df    <- plot_df %>% filter(is_diag)
+  sig_df     <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df  <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(data = plot_df %>% filter(!is_diag),
+              aes(x = Var2, y = Var1, fill = value), color = "gray70", linewidth = 0.5) +
+    geom_tile(data = diag_df, aes(x = Var2, y = Var1),
+              fill = "gray92", color = "gray70", linewidth = 0.5) +
+    scale_fill_gradient2(low = "#6D9EC1", mid = "white", high = "#E46726",
+                       midpoint = 0, limits = c(-1, 1), name = "Correlation") +
+    labs(title = "Multilevel Correlation Matrix of Daily Outcomes", subtitle = subtitle_text) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title    = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 12, margin = margin(b = 6)),
+      axis.text.x   = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y   = element_text(face = "bold"),
+      axis.title    = element_blank(),
+      legend.position = if (show_legend) "right" else "none",
+      panel.grid.major = element_blank()
+    )
+
+  p <- p +
+    geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
+              fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +
+    geom_text(data = nonsig_df, aes(x = Var2, y = Var1, label = label),
+              color = "gray40", size = label_size, na.rm = TRUE)
+
+  if (highlight_diag && nrow(diag_df) > 0) {
+    p <- p +
+      geom_text(data = diag_df, aes(x = Var2, y = Var1, label = label),
+                fontface = "bold", color = "#4B0082", size = diag_label_size, na.rm = TRUE)
+  }
+  
+  # === NEW CODE TO RELABEL AXES AT THE END ===
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+  # ===========================================
+
+  return(p)
+}
+
+# ===================================================================
+# 3. Define Parameters and Run the Plot
+# ===================================================================
+# Technical names mapped to the desired "pretty" labels
+corrplotlist <- c(
+  "CSS_Inatt" = "Inattentive Sx",
+  "CSS_HypImp" = "Hyperactive/Impulsive Sx",
+  "E2.3roll" = "E2",
+  "P4.3roll" = "P4",
+  "score_pinball_rev" = "Working Memory Deficits (Pinball Task)",
+  "score_robot_rev" = "Response Disinhibition (Robot Task)",
+  "DRSP_1" = "Depression",
+  "DRSP_4" = "Anxiety",
+  "DRSP_7" = "Irritability",
+  "DRSP_21" = "Physical Pain"
+)
+
+# This assumes `df` exists in your environment
+if (exists("df") && exists("corrplotlist")) {
+
+  # === NEW: Create safe labels for calculation and a lookup table for plotting ===
+  # 1. Create safe labels (e.g., "Hyperactive.Impulsive.Sx") for calculations
+  safe_labels <- make.names(corrplotlist)
+  
+  # 2. Create a lookup table to map safe labels back to pretty labels
+  label_lookup <- setNames(corrplotlist, safe_labels)
+  # ===============================================================================
+
+  # Prepare the data by renaming columns to the SAFE labels
+  original_vars <- names(corrplotlist)
+  plot_data <- df[, c("id", original_vars)]
+  names(plot_data)[match(original_vars, names(plot_data))] <- safe_labels # Use safe_labels here
+
+  # Call the function with the safe labels for calculation AND the lookup table for the final plot
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = plot_data,
+    outcome_vars = safe_labels, # Use safe_labels here
+    id_var = "id",
+    final_labels = label_lookup # Pass the lookup table for final relabeling
+  )
+
+  print(correlation_heatmap)
+
+  # Define the final filename, including today's date
+dated_output_file <- file.path(output_folder, 
+                               paste0("corr_fullsample", 
+                                      format(Sys.Date(), "%Y%m%d"), 
+                                      ".png"))
+
+# Save the plot directly to the final, dated file
+ggsave(filename = dated_output_file, 
+       plot = correlation_heatmap,
+       width = 11,
+       height = 8.5)
+
+} else {
+  
+  stop("Error: 'df' or 'corrplotlist' not found in the environment.")
+}
+```
+
+
+
+
+
+
+# adding correlation annotations
+
+```{r}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Load participant-level GAM significance summary
+# ===================================================================
+singlegaminfo <- read_csv(
+  "/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/5_singlegams_output/20250923_Participant_Reports_PDF_byID/participant_significance_summary_20250923.csv"
+)
+
+# ===================================================================
+# 3. Harmonize ID type and create participant-level significance flags
+# ===================================================================
+df <- df %>%
+  mutate(id = as.character(id))
+
+participant_significance <- singlegaminfo %>%
+  mutate(id = as.character(id)) %>%
+  filter(variable %in% c("CSS_Inatt", "CSS_HypImp")) %>%
+  mutate(
+    sig_flag = p.value < 0.05,
+    variable = recode(
+      variable,
+      "CSS_Inatt" = "significant_inatt",
+      "CSS_HypImp" = "significant_hypimp"
+    )
+  ) %>%
+  select(id, variable, sig_flag) %>%
+  group_by(id, variable) %>%
+  summarise(sig_flag = any(sig_flag, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = sig_flag,
+    values_fill = list(sig_flag = FALSE)
+  )
+
+df_with_significance <- df %>%
+  left_join(participant_significance, by = "id") %>%
+  mutate(
+    significant_inatt = replace_na(significant_inatt, FALSE),
+    significant_hypimp = replace_na(significant_hypimp, FALSE)
+  )
+
+# ===================================================================
+# 4. Add person-standardized hormone variables
+#    ONLY for within-person use later
+# ===================================================================
+df_with_significance <- df_with_significance %>%
+  group_by(id) %>%
+  mutate(
+    E2_mean = mean(E2, na.rm = TRUE),
+    P4_mean = mean(P4, na.rm = TRUE),
+    E2_sd = sd(E2, na.rm = TRUE),
+    P4_sd = sd(P4, na.rm = TRUE),
+    E2_pz = case_when(
+      is.na(E2_sd) | E2_sd == 0 ~ NA_real_,
+      TRUE ~ (E2 - E2_mean) / E2_sd
+    ),
+    P4_pz = case_when(
+      is.na(P4_sd) | P4_sd == 0 ~ NA_real_,
+      TRUE ~ (P4 - P4_mean) / P4_sd
+    )
+  ) %>%
+  ungroup() %>%
+  select(-E2_mean, -P4_mean, -E2_sd, -P4_sd)
+
+# ===================================================================
+# 5. Create subgroup datasets
+# ===================================================================
+sig_inatt_df <- df_with_significance %>%
+  filter(significant_inatt)
+
+sig_hypimp_df <- df_with_significance %>%
+  filter(significant_hypimp)
+
+sig_both_df <- df_with_significance %>%
+  filter(significant_inatt & significant_hypimp)
+
+sig_either_df <- df_with_significance %>%
+  filter(significant_inatt | significant_hypimp)
+
+inatt_only_df <- df_with_significance %>%
+  filter(significant_inatt & !significant_hypimp)
+
+hypimp_only_df <- df_with_significance %>%
+  filter(!significant_inatt & significant_hypimp)
+
+group_counts <- tibble(
+  group = c(
+    "sig_inatt",
+    "sig_hypimp",
+    "sig_both",
+    "sig_either",
+    "inatt_only",
+    "hypimp_only"
+  ),
+  n_people = c(
+    n_distinct(sig_inatt_df$id),
+    n_distinct(sig_hypimp_df$id),
+    n_distinct(sig_both_df$id),
+    n_distinct(sig_either_df$id),
+    n_distinct(inatt_only_df$id),
+    n_distinct(hypimp_only_df$id)
+  )
+)
+
+print(group_counts)
+
+write_csv(
+  group_counts,
+  file.path(
+    output_folder,
+    paste0("corr_group_counts_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+)
+
+# ===================================================================
+# 6. Variable specification for hybrid matrix
+#    Display labels stay simple: E2 / P4
+#    Between-person + ICC use RAW E2 / P4
+#    Within-person uses PERSON-STANDARDIZED E2_pz / P4_pz
+# ===================================================================
+corr_var_info <- tibble(
+  display_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  display_label = c(
+    "E2",
+    "P4",
+    "Inattentive Sx",
+    "Hyperactive/Impulsive Sx",
+    "Working Memory Deficits (Pinball Task)",
+    "Response Disinhibition (Robot Task)",
+    "Depression",
+    "Anxiety",
+    "Irritability",
+    "Physical Pain"
+  ),
+  between_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  within_var = c(
+    "E2_pz",
+    "P4_pz",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  )
+)
+
+# ===================================================================
+# 7. Helper to extract ICC robustly
+# ===================================================================
+extract_icc_value <- function(icc_out) {
+
+  if (is.null(icc_out)) {
+    return(NA_real_)
+  }
+
+  if (is.atomic(icc_out) && !is.null(names(icc_out))) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_adjusted"]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_conditional"]]))
+    }
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.atomic(icc_out) && is.numeric(icc_out)) {
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.data.frame(icc_out)) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  if (is.list(icc_out)) {
+    if (!is.null(icc_out$ICC_adjusted)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if (!is.null(icc_out$ICC_conditional)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  NA_real_
+}
+
+# ===================================================================
+# 8. Compute hybrid multilevel correlation matrices
+# ===================================================================
+compute_multilevel_correlation_matrices_hybrid <- function(data, var_info, id_var) {
+
+  display_vars <- var_info$display_var
+  n_vars <- length(display_vars)
+
+  results_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  pval_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  # -----------------------------------------------------------------
+  # Upper triangle = between-person Spearman on RAW variables
+  # -----------------------------------------------------------------
+  between_summary_expressions <- purrr::map(
+    var_info$between_var,
+    ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))
+  ) %>%
+    rlang::set_names(display_vars)
+
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!between_summary_expressions, .groups = "drop")
+
+  if (nrow(person_means) >= 3) {
+    between_corr <- suppressWarnings(
+      cor(
+        person_means[, display_vars],
+        method = "spearman",
+        use = "pairwise.complete.obs"
+      )
+    )
+
+    for (i in 1:(n_vars - 1)) {
+      for (j in (i + 1):n_vars) {
+        x <- person_means[[display_vars[i]]]
+        y <- person_means[[display_vars[j]]]
+
+        if (sum(!is.na(x) & !is.na(y)) > 2) {
+          test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+          results_matrix[i, j] <- between_corr[i, j]
+          pval_matrix[i, j] <- test$p.value
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Diagonal = ICC on RAW variables
+  # -----------------------------------------------------------------
+  for (i in seq_len(n_vars)) {
+    raw_var <- var_info$between_var[i]
+    display_var <- var_info$display_var[i]
+
+    fml <- as.formula(paste0("`", raw_var, "` ~ 1 + (1|`", id_var, "`)"))
+
+    if (sum(!is.na(data[[raw_var]])) > 1 &&
+        dplyr::n_distinct(data[[id_var]][!is.na(data[[raw_var]])]) > 1) {
+
+      model_fit <- try(
+        suppressWarnings(lmer(fml, data = data)),
+        silent = TRUE
+      )
+
+      if (!inherits(model_fit, "try-error")) {
+        icc_out <- try(
+          suppressWarnings(performance::icc(model_fit)),
+          silent = TRUE
+        )
+
+        if (!inherits(icc_out, "try-error")) {
+          icc_val <- extract_icc_value(icc_out)
+
+          if (is.finite(icc_val)) {
+            results_matrix[display_var, display_var] <- icc_val
+            pval_matrix[display_var, display_var] <- 0
+          }
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Lower triangle = within-person rmcorr on person-standardized hormones
+  # -----------------------------------------------------------------
+  for (i in 2:n_vars) {
+    for (j in 1:(i - 1)) {
+
+      var1_display <- display_vars[i]
+      var2_display <- display_vars[j]
+
+      var1_within <- var_info$within_var[var_info$display_var == var1_display]
+      var2_within <- var_info$within_var[var_info$display_var == var2_display]
+
+      rmcorr_data <- data %>%
+        select(
+          all_of(id_var),
+          x = all_of(var1_within),
+          y = all_of(var2_within)
+        ) %>%
+        drop_na()
+
+      if (nrow(rmcorr_data) > 2 && n_distinct(rmcorr_data[[id_var]]) > 1) {
+        rmcorr_result <- try(
+          rmcorr::rmcorr(
+            participant = id_var,
+            measure1 = x,
+            measure2 = y,
+            dataset = rmcorr_data
+          ),
+          silent = TRUE
+        )
+
+        if (!inherits(rmcorr_result, "try-error")) {
+          results_matrix[var1_display, var2_display] <- rmcorr_result$r
+          pval_matrix[var1_display, var2_display] <- rmcorr_result$p
+        }
+      }
+    }
+  }
+
+  list(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    person_means = person_means
+  )
+}
+
+# ===================================================================
+# 9. Convert matrices to long table
+# ===================================================================
+matrices_to_table <- function(results_matrix, pval_matrix, label_lookup, group_label, n_people) {
+
+  table_df <- as.data.frame(as.table(results_matrix)) %>%
+    rename(var_row = Var1, var_col = Var2, estimate = Freq) %>%
+    mutate(
+      p_value = as.vector(pval_matrix),
+      row_index = match(var_row, rownames(results_matrix)),
+      col_index = match(var_col, colnames(results_matrix)),
+      cell_type = case_when(
+        var_row == var_col ~ "ICC",
+        row_index < col_index ~ "Between-person Spearman",
+        row_index > col_index ~ "Within-person rmcorr",
+        TRUE ~ NA_character_
+      ),
+      var_row_label = label_lookup[var_row],
+      var_col_label = label_lookup[var_col],
+      group = group_label,
+      n_people = n_people
+    ) %>%
+    select(group, n_people, cell_type, var_row, var_row_label, var_col, var_col_label, estimate, p_value)
+
+  table_df
+}
+
+# ===================================================================
+# 10. Heatmap function
+#     Thick outlines highlight WITHIN-person hormone cells
+# ===================================================================
+generate_correlation_heatmap <- function(
+    results_matrix,
+    pval_matrix,
+    final_labels = NULL,
+    main_title = "Multilevel Correlation Matrix of Daily Outcomes",
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)",
+    sig.level = 0.05,
+    label_size = 4.6,
+    diag_label_size = 6
+) {
+
+  corr_order <- rownames(results_matrix)
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+
+  plot_df <- plot_df %>%
+    mutate(
+      row_mat = match(as.character(Var1), corr_order),
+      col_mat = match(as.character(Var2), corr_order),
+      is_diag = row_mat == col_mat,
+      within_person = row_mat > col_mat,
+      between_person = row_mat < col_mat
+    )
+
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  highlight_df <- plot_df %>%
+    filter(
+      within_person,
+      as.character(Var1) %in% c("E2", "P4") | as.character(Var2) %in% c("E2", "P4")
+    )
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      label = no_leading_zero(value),
+      is_sig = p.value < sig.level
+    )
+
+  diag_df <- plot_df %>% filter(is_diag)
+  sig_df <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(
+      data = plot_df %>% filter(!is_diag),
+      aes(x = Var2, y = Var1, fill = value),
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = diag_df,
+      aes(x = Var2, y = Var1),
+      fill = "gray92",
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = highlight_df,
+      aes(x = Var2, y = Var1),
+      fill = NA,
+      color = "black",
+      linewidth = 2
+    ) +
+    scale_fill_gradient2(
+      low = "#6D9EC1",
+      mid = "white",
+      high = "#E46726",
+      midpoint = 0,
+      limits = c(-1, 1),
+      name = "Correlation"
+    ) +
+    labs(
+      title = main_title,
+      subtitle = subtitle_text
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 18),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 11),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(face = "bold"),
+      axis.title = element_blank(),
+      panel.grid.major = element_blank()
+    ) +
+    geom_text(
+      data = sig_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "black",
+      size = label_size
+    ) +
+    geom_text(
+      data = nonsig_df,
+      aes(x = Var2, y = Var1, label = label),
+      color = "gray40",
+      size = label_size
+    ) +
+    geom_text(
+      data = diag_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "#4B0082",
+      size = diag_label_size
+    )
+
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+
+  return(p)
+}
+
+# ===================================================================
+# 11. Wrapper
+# ===================================================================
+run_and_save_correlation_outputs <- function(
+    data,
+    group_label,
+    corr_var_info,
+    output_folder,
+    id_var = "id"
+) {
+
+  n_people <- data %>%
+    distinct(!!rlang::sym(id_var)) %>%
+    nrow()
+
+  message("Running group: ", group_label, " (N = ", n_people, ")")
+
+  if (n_people < 3) {
+    warning("Skipping ", group_label, ": fewer than 3 participants.")
+    return(NULL)
+  }
+
+  label_lookup <- setNames(corr_var_info$display_label, corr_var_info$display_var)
+
+  matrix_results <- compute_multilevel_correlation_matrices_hybrid(
+    data = data,
+    var_info = corr_var_info,
+    id_var = id_var
+  )
+
+  results_matrix <- matrix_results$results_matrix
+  pval_matrix <- matrix_results$pval_matrix
+
+  corr_table <- matrices_to_table(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    label_lookup = label_lookup,
+    group_label = group_label,
+    n_people = n_people
+  )
+
+  dated_csv_file <- file.path(
+    output_folder,
+    paste0("corr_table_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+
+  write_csv(corr_table, dated_csv_file)
+
+  heatmap_title <- paste0(
+    "Multilevel Correlation Matrix: ",
+    group_label,
+    " (N = ",
+    n_people,
+    ")"
+  )
+
+  heatmap_plot <- generate_correlation_heatmap(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    final_labels = label_lookup,
+    main_title = heatmap_title,
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)"
+  )
+
+  dated_png_file <- file.path(
+    output_folder,
+    paste0("corr_heatmap_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".png")
+  )
+
+  ggsave(
+    filename = dated_png_file,
+    plot = heatmap_plot,
+    width = 11,
+    height = 8.5
+  )
+
+  print(heatmap_plot)
+
+  list(
+    n_people = n_people,
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    corr_table = corr_table,
+    plot = heatmap_plot,
+    csv_file = dated_csv_file,
+    png_file = dated_png_file
+  )
+}
+
+# ===================================================================
+# 12. Run subgroup outputs
+# ===================================================================
+sig_inatt_results_hybrid <- run_and_save_correlation_outputs(
+  data = sig_inatt_df,
+  group_label = "sig_inatt",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+sig_hypimp_results_hybrid <- run_and_save_correlation_outputs(
+  data = sig_hypimp_df,
+  group_label = "sig_hypimp",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+sig_both_results_hybrid <- run_and_save_correlation_outputs(
+  data = sig_both_df,
+  group_label = "sig_both",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+sig_either_results_hybrid <- run_and_save_correlation_outputs(
+  data = sig_either_df,
+  group_label = "sig_either",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+# ===================================================================
+# 12. Person-standardize E2 and P4 within participant
+#     These are within-person z-scores
+# ===================================================================
+df_plotmods <- df_plotmods %>%
+  group_by(id) %>%
+  mutate(
+    E2_mean = mean(E2, na.rm = TRUE),
+    P4_mean = mean(P4, na.rm = TRUE),
+    E2_sd = sd(E2, na.rm = TRUE),
+    P4_sd = sd(P4, na.rm = TRUE),
+    E2_pz = case_when(
+      is.na(E2_sd) | E2_sd == 0 ~ NA_real_,
+      TRUE ~ (E2 - E2_mean) / E2_sd
+    ),
+    P4_pz = case_when(
+      is.na(P4_sd) | P4_sd == 0 ~ NA_real_,
+      TRUE ~ (P4 - P4_mean) / P4_sd
+    )
+  ) %>%
+  ungroup() %>%
+  select(-E2_mean, -P4_mean, -E2_sd, -P4_sd)
+
+# ===================================================================
+# 13. Helper function to prepare scatterplot data
+# ===================================================================
+prepare_moderation_scatter_data <- function(data, subgroup_var) {
+
+  plot_df <- data %>%
+    select(
+      id,
+      all_of(subgroup_var),
+      E2_pz,
+      P4_pz,
+      CSS_Inatt,
+      CSS_HypImp
+    ) %>%
+    pivot_longer(
+      cols = c(E2_pz, P4_pz),
+      names_to = "hormone",
+      values_to = "hormone_std"
+    ) %>%
+    pivot_longer(
+      cols = c(CSS_Inatt, CSS_HypImp),
+      names_to = "outcome",
+      values_to = "symptom"
+    ) %>%
+    drop_na(hormone_std, symptom)
+
+  plot_df <- plot_df %>%
+    mutate(
+      subgroup_status = .data[[subgroup_var]],
+      subgroup_status = factor(subgroup_status, levels = c("Not in subgroup", "In subgroup")),
+      hormone = factor(
+        hormone,
+        levels = c("E2_pz", "P4_pz"),
+        labels = c("Person-standardized E2", "Person-standardized P4")
+      ),
+      outcome = factor(
+        outcome,
+        levels = c("CSS_Inatt", "CSS_HypImp"),
+        labels = c("Daily Inattentive Symptoms", "Daily Hyperactive/Impulsive Symptoms")
+      ),
+      panel = factor(
+        paste(hormone, outcome, sep = " -> "),
+        levels = c(
+          "Person-standardized E2 -> Daily Inattentive Symptoms",
+          "Person-standardized E2 -> Daily Hyperactive/Impulsive Symptoms",
+          "Person-standardized P4 -> Daily Inattentive Symptoms",
+          "Person-standardized P4 -> Daily Hyperactive/Impulsive Symptoms"
+        )
+      )
+    )
+
+  plot_df
+}
+
+# ===================================================================
+# 14. Helper function to count people in and out of subgroup
+# ===================================================================
+get_subgroup_counts <- function(data, subgroup_var) {
+  data %>%
+    distinct(id, .data[[subgroup_var]]) %>%
+    count(.data[[subgroup_var]], name = "n_people") %>%
+    complete(
+      !!rlang::sym(subgroup_var) := c("Not in subgroup", "In subgroup"),
+      fill = list(n_people = 0)
+    ) %>%
+    mutate(label = paste0(.data[[subgroup_var]], ": N = ", n_people))
+}
+
+# ===================================================================
+# 15. Helper function to compute within-person rmcorr labels per panel/group
+# ===================================================================
+compute_panel_rmcorr_labels <- function(plot_df) {
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  combos <- plot_df %>%
+    distinct(panel, subgroup_status, hormone, outcome)
+
+  label_df <- purrr::pmap_dfr(
+    list(combos$panel, combos$subgroup_status, combos$hormone, combos$outcome),
+    function(panel_i, subgroup_i, hormone_i, outcome_i) {
+
+      dat_i <- plot_df %>%
+        filter(
+          panel == panel_i,
+          subgroup_status == subgroup_i,
+          hormone == hormone_i,
+          outcome == outcome_i
+        ) %>%
+        select(id, hormone_std, symptom) %>%
+        drop_na()
+
+      n_people <- n_distinct(dat_i$id)
+
+      if (nrow(dat_i) < 3 || n_people < 2) {
+        label_text <- paste0(subgroup_i, ": r = NA")
+      } else {
+        rmc <- try(
+          rmcorr::rmcorr(
+            participant = id,
+            measure1 = hormone_std,
+            measure2 = symptom,
+            dataset = dat_i
+          ),
+          silent = TRUE
+        )
+
+        if (inherits(rmc, "try-error")) {
+          label_text <- paste0(subgroup_i, ": r = NA")
+        } else {
+          r_txt <- no_leading_zero(rmc$r)
+
+          stars <- case_when(
+            rmc$p < .001 ~ "***",
+            rmc$p < .01 ~ "**",
+            rmc$p < .05 ~ "*",
+            TRUE ~ ""
+          )
+
+          label_text <- paste0(subgroup_i, ": r = ", r_txt, stars)
+        }
+      }
+
+      tibble(
+        panel = panel_i,
+        subgroup_status = subgroup_i,
+        label = label_text,
+        x = Inf,
+        y = Inf,
+        vjust = ifelse(subgroup_i == "In subgroup", 1.2, 2.6)
+      )
+    }
+  )
+
+  label_df
+}
+
+# ===================================================================
+# 16. Plotting function
+# ===================================================================
+plot_hormone_symptom_moderation <- function(
+    data,
+    subgroup_var,
+    subgroup_label,
+    output_folder,
+    point_alpha = 0.18,
+    point_size = 1.2,
+    line_size = 1.1
+) {
+
+  plot_df <- prepare_moderation_scatter_data(data, subgroup_var)
+  subgroup_counts <- get_subgroup_counts(data, subgroup_var)
+  label_df <- compute_panel_rmcorr_labels(plot_df)
+
+  count_text <- paste(subgroup_counts$label, collapse = "    |    ")
+
+  p <- ggplot(
+    plot_df,
+    aes(x = hormone_std, y = symptom, color = subgroup_status)
+  ) +
+    geom_point(alpha = point_alpha, size = point_size) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = line_size) +
+    geom_text(
+      data = label_df,
+      aes(x = x, y = y, label = label, color = subgroup_status, vjust = vjust),
+      inherit.aes = FALSE,
+      hjust = 1.05,
+      size = 3.6,
+      fontface = "bold",
+      show.legend = FALSE
+    ) +
+    facet_wrap(
+      ~ panel,
+      nrow = 2,
+      scales = "free"
+    ) +
+    labs(
+      title = paste0("Hormone-Symptom Associations Moderated by ", subgroup_label),
+      subtitle = paste0(
+        count_text,
+        "\nText in each panel shows within-person repeated-measures correlation (rmcorr)."
+      ),
+      x = NULL,
+      y = "Daily symptom level",
+      color = NULL
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      strip.text = element_text(face = "bold"),
+      legend.position = "top",
+      panel.grid.minor = element_blank()
+    )
+
+  print(p)
+
+  output_file <- file.path(
+    output_folder,
+    paste0(
+      "scatter_moderation_personstandardized_",
+      subgroup_var,
+      "_",
+      format(Sys.Date(), "%Y%m%d"),
+      ".png"
+    )
+  )
+
+  ggsave(
+    filename = output_file,
+    plot = p,
+    width = 12,
+    height = 8
+  )
+
+  invisible(
+    list(
+      plot = p,
+      plot_data = plot_df,
+      label_data = label_df,
+      output_file = output_file
+    )
+  )
+}
+
+# ===================================================================
+# 17. Run moderation scatterplots for subgroup definitions
+# ===================================================================
+scatter_sig_inatt_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "subgroup_sig_inatt",
+  subgroup_label = "Significant Inattentive GAM",
+  output_folder = output_folder
+)
+
+scatter_sig_hypimp_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "subgroup_sig_hypimp",
+  subgroup_label = "Significant Hyperactive/Impulsive GAM",
+  output_folder = output_folder
+)
+
+scatter_sig_both_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "subgroup_sig_both",
+  subgroup_label = "Significant on Both GAMs",
+  output_folder = output_folder
+)
+
+scatter_sig_either_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "subgroup_sig_either",
+  subgroup_label = "Significant on Either GAM",
+  output_folder = output_folder
+)
+```
+```{r}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Load participant-level GAM significance summary
+# ===================================================================
+singlegaminfo <- read_csv(
+  "/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/5_singlegams_output/20250923_Participant_Reports_PDF_byID/participant_significance_summary_20250923.csv"
+)
+
+# ===================================================================
+# 3. Harmonize ID type and create participant-level cyclical flags
+# ===================================================================
+df <- df %>%
+  mutate(id = as.character(id))
+
+participant_significance <- singlegaminfo %>%
+  mutate(id = as.character(id)) %>%
+  filter(variable %in% c("CSS_Inatt", "CSS_HypImp")) %>%
+  mutate(
+    sig_flag = p.value < 0.05,
+    variable = recode(
+      variable,
+      "CSS_Inatt" = "significant_inatt",
+      "CSS_HypImp" = "significant_hypimp"
+    )
+  ) %>%
+  select(id, variable, sig_flag) %>%
+  group_by(id, variable) %>%
+  summarise(sig_flag = any(sig_flag, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = sig_flag,
+    values_fill = list(sig_flag = FALSE)
+  )
+
+df_with_significance <- df %>%
+  left_join(participant_significance, by = "id") %>%
+  mutate(
+    significant_inatt = replace_na(significant_inatt, FALSE),
+    significant_hypimp = replace_na(significant_hypimp, FALSE)
+  )
+
+# ===================================================================
+# 4. Add person-standardized hormone variables
+#    ONLY for within-person use later
+# ===================================================================
+df_with_significance <- df_with_significance %>%
+  group_by(id) %>%
+  mutate(
+    E2_mean = mean(E2, na.rm = TRUE),
+    P4_mean = mean(P4, na.rm = TRUE),
+    E2_sd = sd(E2, na.rm = TRUE),
+    P4_sd = sd(P4, na.rm = TRUE),
+    E2_pz = case_when(
+      is.na(E2_sd) | E2_sd == 0 ~ NA_real_,
+      TRUE ~ (E2 - E2_mean) / E2_sd
+    ),
+    P4_pz = case_when(
+      is.na(P4_sd) | P4_sd == 0 ~ NA_real_,
+      TRUE ~ (P4 - P4_mean) / P4_sd
+    )
+  ) %>%
+  ungroup() %>%
+  select(-E2_mean, -P4_mean, -E2_sd, -P4_sd)
+
+# ===================================================================
+# 5. Create subgroup datasets
+# ===================================================================
+full_sample_df <- df_with_significance
+
+cyclical_inattention_df <- df_with_significance %>%
+  filter(significant_inatt)
+
+cyclical_hypimp_df <- df_with_significance %>%
+  filter(significant_hypimp)
+
+cyclical_both_df <- df_with_significance %>%
+  filter(significant_inatt & significant_hypimp)
+
+cyclical_either_df <- df_with_significance %>%
+  filter(significant_inatt | significant_hypimp)
+
+inattention_only_df <- df_with_significance %>%
+  filter(significant_inatt & !significant_hypimp)
+
+hypimp_only_df <- df_with_significance %>%
+  filter(!significant_inatt & significant_hypimp)
+
+group_counts <- tibble(
+  group = c(
+    "full_sample",
+    "cyclical_inattention",
+    "cyclical_hyperactivity_impulsivity",
+    "cyclical_both",
+    "cyclical_either",
+    "inattention_only",
+    "hyperactivity_impulsivity_only"
+  ),
+  n_people = c(
+    n_distinct(full_sample_df$id),
+    n_distinct(cyclical_inattention_df$id),
+    n_distinct(cyclical_hypimp_df$id),
+    n_distinct(cyclical_both_df$id),
+    n_distinct(cyclical_either_df$id),
+    n_distinct(inattention_only_df$id),
+    n_distinct(hypimp_only_df$id)
+  )
+)
+
+print(group_counts)
+
+write_csv(
+  group_counts,
+  file.path(
+    output_folder,
+    paste0("group_counts_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+)
+
+# ===================================================================
+# 6. Variable specification for hybrid matrix
+#    Display labels stay simple: E2 / P4
+#    Between-person + ICC use RAW E2 / P4
+#    Within-person uses PERSON-STANDARDIZED E2_pz / P4_pz
+# ===================================================================
+corr_var_info <- tibble(
+  display_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  display_label = c(
+    "E2",
+    "P4",
+    "Inattentive Sx",
+    "Hyperactive/Impulsive Sx",
+    "Working Memory Deficits (Pinball Task)",
+    "Response Disinhibition (Robot Task)",
+    "Depression",
+    "Anxiety",
+    "Irritability",
+    "Physical Pain"
+  ),
+  between_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  within_var = c(
+    "E2_pz",
+    "P4_pz",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  )
+)
+
+# ===================================================================
+# 7. Helper to extract ICC robustly
+# ===================================================================
+extract_icc_value <- function(icc_out) {
+
+  if (is.null(icc_out)) {
+    return(NA_real_)
+  }
+
+  if (is.atomic(icc_out) && !is.null(names(icc_out))) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_adjusted"]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_conditional"]]))
+    }
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.atomic(icc_out) && is.numeric(icc_out)) {
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.data.frame(icc_out)) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  if (is.list(icc_out)) {
+    if (!is.null(icc_out$ICC_adjusted)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if (!is.null(icc_out$ICC_conditional)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  NA_real_
+}
+
+# ===================================================================
+# 8. Compute hybrid multilevel correlation matrices
+# ===================================================================
+compute_multilevel_correlation_matrices_hybrid <- function(data, var_info, id_var) {
+
+  display_vars <- var_info$display_var
+  n_vars <- length(display_vars)
+
+  results_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  pval_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  # -----------------------------------------------------------------
+  # Upper triangle = between-person Spearman on RAW variables
+  # -----------------------------------------------------------------
+  between_summary_expressions <- purrr::map(
+    var_info$between_var,
+    ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))
+  ) %>%
+    rlang::set_names(display_vars)
+
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!between_summary_expressions, .groups = "drop")
+
+  if (nrow(person_means) >= 3) {
+    between_corr <- suppressWarnings(
+      cor(
+        person_means[, display_vars],
+        method = "spearman",
+        use = "pairwise.complete.obs"
+      )
+    )
+
+    for (i in 1:(n_vars - 1)) {
+      for (j in (i + 1):n_vars) {
+        x <- person_means[[display_vars[i]]]
+        y <- person_means[[display_vars[j]]]
+
+        if (sum(!is.na(x) & !is.na(y)) > 2) {
+          test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+          results_matrix[i, j] <- between_corr[i, j]
+          pval_matrix[i, j] <- test$p.value
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Diagonal = ICC on RAW variables
+  # -----------------------------------------------------------------
+  for (i in seq_len(n_vars)) {
+    raw_var <- var_info$between_var[i]
+    display_var <- var_info$display_var[i]
+
+    fml <- as.formula(paste0("`", raw_var, "` ~ 1 + (1|`", id_var, "`)"))
+
+    if (sum(!is.na(data[[raw_var]])) > 1 &&
+        dplyr::n_distinct(data[[id_var]][!is.na(data[[raw_var]])]) > 1) {
+
+      model_fit <- try(
+        suppressWarnings(lmer(fml, data = data)),
+        silent = TRUE
+      )
+
+      if (!inherits(model_fit, "try-error")) {
+        icc_out <- try(
+          suppressWarnings(performance::icc(model_fit)),
+          silent = TRUE
+        )
+
+        if (!inherits(icc_out, "try-error")) {
+          icc_val <- extract_icc_value(icc_out)
+
+          if (is.finite(icc_val)) {
+            results_matrix[display_var, display_var] <- icc_val
+            pval_matrix[display_var, display_var] <- 0
+          }
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Lower triangle = within-person rmcorr on person-standardized hormones
+  # -----------------------------------------------------------------
+  for (i in 2:n_vars) {
+    for (j in 1:(i - 1)) {
+
+      var1_display <- display_vars[i]
+      var2_display <- display_vars[j]
+
+      var1_within <- var_info$within_var[var_info$display_var == var1_display]
+      var2_within <- var_info$within_var[var_info$display_var == var2_display]
+
+      rmcorr_data <- data %>%
+        select(
+          all_of(id_var),
+          x = all_of(var1_within),
+          y = all_of(var2_within)
+        ) %>%
+        drop_na()
+
+      if (nrow(rmcorr_data) > 2 && n_distinct(rmcorr_data[[id_var]]) > 1) {
+        rmcorr_result <- try(
+          rmcorr::rmcorr(
+            participant = id_var,
+            measure1 = x,
+            measure2 = y,
+            dataset = rmcorr_data
+          ),
+          silent = TRUE
+        )
+
+        if (!inherits(rmcorr_result, "try-error")) {
+          results_matrix[var1_display, var2_display] <- rmcorr_result$r
+          pval_matrix[var1_display, var2_display] <- rmcorr_result$p
+        }
+      }
+    }
+  }
+
+  list(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    person_means = person_means
+  )
+}
+
+# ===================================================================
+# 9. Convert matrices to long table
+# ===================================================================
+matrices_to_table <- function(results_matrix, pval_matrix, label_lookup, group_label, n_people) {
+
+  table_df <- as.data.frame(as.table(results_matrix)) %>%
+    rename(var_row = Var1, var_col = Var2, estimate = Freq) %>%
+    mutate(
+      p_value = as.vector(pval_matrix),
+      row_index = match(var_row, rownames(results_matrix)),
+      col_index = match(var_col, colnames(results_matrix)),
+      cell_type = case_when(
+        var_row == var_col ~ "ICC",
+        row_index < col_index ~ "Between-person Spearman",
+        row_index > col_index ~ "Within-person rmcorr",
+        TRUE ~ NA_character_
+      ),
+      var_row_label = label_lookup[var_row],
+      var_col_label = label_lookup[var_col],
+      group = group_label,
+      n_people = n_people
+    ) %>%
+    select(group, n_people, cell_type, var_row, var_row_label, var_col, var_col_label, estimate, p_value)
+
+  table_df
+}
+
+# ===================================================================
+# 10. Heatmap function
+# ===================================================================
+generate_correlation_heatmap <- function(
+    results_matrix,
+    pval_matrix,
+    final_labels = NULL,
+    main_title = "Multilevel Correlation Matrix of Daily Outcomes",
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)",
+    sig.level = 0.05,
+    label_size = 4.6,
+    diag_label_size = 6
+) {
+
+  corr_order <- rownames(results_matrix)
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+
+  plot_df <- plot_df %>%
+    mutate(
+      row_mat = match(as.character(Var1), corr_order),
+      col_mat = match(as.character(Var2), corr_order),
+      is_diag = row_mat == col_mat,
+      within_person = row_mat > col_mat,
+      between_person = row_mat < col_mat
+    )
+
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  highlight_df <- plot_df %>%
+    filter(
+      within_person,
+      as.character(Var1) %in% c("E2", "P4") | as.character(Var2) %in% c("E2", "P4")
+    )
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      label = no_leading_zero(value),
+      is_sig = p.value < sig.level
+    )
+
+  diag_df <- plot_df %>% filter(is_diag)
+  sig_df <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(
+      data = plot_df %>% filter(!is_diag),
+      aes(x = Var2, y = Var1, fill = value),
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = diag_df,
+      aes(x = Var2, y = Var1),
+      fill = "gray92",
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = highlight_df,
+      aes(x = Var2, y = Var1),
+      fill = NA,
+      color = "black",
+      linewidth = 2
+    ) +
+    scale_fill_gradient2(
+      low = "#6D9EC1",
+      mid = "white",
+      high = "#E46726",
+      midpoint = 0,
+      limits = c(-1, 1),
+      name = "Correlation"
+    ) +
+    labs(
+      title = main_title,
+      subtitle = subtitle_text
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 18),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 11),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(face = "bold"),
+      axis.title = element_blank(),
+      panel.grid.major = element_blank()
+    ) +
+    geom_text(
+      data = sig_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "black",
+      size = label_size
+    ) +
+    geom_text(
+      data = nonsig_df,
+      aes(x = Var2, y = Var1, label = label),
+      color = "gray40",
+      size = label_size
+    ) +
+    geom_text(
+      data = diag_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "#4B0082",
+      size = diag_label_size
+    )
+
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+
+  return(p)
+}
+
+# ===================================================================
+# 11. Wrapper for correlation outputs
+# ===================================================================
+run_and_save_correlation_outputs <- function(
+    data,
+    group_label,
+    corr_var_info,
+    output_folder,
+    id_var = "id"
+) {
+
+  n_people <- data %>%
+    distinct(!!rlang::sym(id_var)) %>%
+    nrow()
+
+  message("Running group: ", group_label, " (N = ", n_people, ")")
+
+  if (n_people < 3) {
+    warning("Skipping ", group_label, ": fewer than 3 participants.")
+    return(NULL)
+  }
+
+  label_lookup <- setNames(corr_var_info$display_label, corr_var_info$display_var)
+
+  matrix_results <- compute_multilevel_correlation_matrices_hybrid(
+    data = data,
+    var_info = corr_var_info,
+    id_var = id_var
+  )
+
+  results_matrix <- matrix_results$results_matrix
+  pval_matrix <- matrix_results$pval_matrix
+
+  corr_table <- matrices_to_table(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    label_lookup = label_lookup,
+    group_label = group_label,
+    n_people = n_people
+  )
+
+  dated_csv_file <- file.path(
+    output_folder,
+    paste0("corr_table_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+
+  write_csv(corr_table, dated_csv_file)
+
+  heatmap_title <- paste0(
+    "Multilevel Correlation Matrix: ",
+    group_label,
+    " (N = ",
+    n_people,
+    ")"
+  )
+
+  heatmap_plot <- generate_correlation_heatmap(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    final_labels = label_lookup,
+    main_title = heatmap_title,
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)"
+  )
+
+  dated_png_file <- file.path(
+    output_folder,
+    paste0("corr_heatmap_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".png")
+  )
+
+  ggsave(
+    filename = dated_png_file,
+    plot = heatmap_plot,
+    width = 11,
+    height = 8.5
+  )
+
+  print(heatmap_plot)
+
+  list(
+    n_people = n_people,
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    corr_table = corr_table,
+    plot = heatmap_plot,
+    csv_file = dated_csv_file,
+    png_file = dated_png_file
+  )
+}
+
+# ===================================================================
+# 12. Run correlation outputs
+# ===================================================================
+full_sample_results_hybrid <- run_and_save_correlation_outputs(
+  data = full_sample_df,
+  group_label = "full_sample",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_inattention_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_inattention_df,
+  group_label = "cyclical_inattention",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_hypimp_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_hypimp_df,
+  group_label = "cyclical_hyperactivity_impulsivity",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_both_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_both_df,
+  group_label = "cyclical_both",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_either_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_either_df,
+  group_label = "cyclical_either",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+# ===================================================================
+# 13. Create plotting dataset with cyclical status indicators
+# ===================================================================
+df_plotmods <- df_with_significance %>%
+  mutate(
+    cyclical_inattention = if_else(significant_inatt, "Cyclical", "Not Cyclical"),
+    cyclical_hyperactivity_impulsivity = if_else(significant_hypimp, "Cyclical", "Not Cyclical"),
+    cyclical_both = if_else(significant_inatt & significant_hypimp, "Cyclical", "Not Cyclical"),
+    cyclical_either = if_else(significant_inatt | significant_hypimp, "Cyclical", "Not Cyclical")
+  )
+
+# ===================================================================
+# 14. Helper function to prepare scatterplot data
+# ===================================================================
+prepare_moderation_scatter_data <- function(data, subgroup_var) {
+
+  plot_df <- data %>%
+    select(
+      id,
+      all_of(subgroup_var),
+      E2_pz,
+      P4_pz,
+      CSS_Inatt,
+      CSS_HypImp
+    ) %>%
+    pivot_longer(
+      cols = c(E2_pz, P4_pz),
+      names_to = "hormone",
+      values_to = "hormone_std"
+    ) %>%
+    pivot_longer(
+      cols = c(CSS_Inatt, CSS_HypImp),
+      names_to = "outcome",
+      values_to = "symptom"
+    ) %>%
+    drop_na(hormone_std, symptom)
+
+  plot_df <- plot_df %>%
+    mutate(
+      subgroup_status = .data[[subgroup_var]],
+      subgroup_status = factor(subgroup_status, levels = c("Not Cyclical", "Cyclical")),
+      hormone = factor(
+        hormone,
+        levels = c("E2_pz", "P4_pz"),
+        labels = c("Person-standardized E2", "Person-standardized P4")
+      ),
+      outcome = factor(
+        outcome,
+        levels = c("CSS_Inatt", "CSS_HypImp"),
+        labels = c("Daily Inattentive Symptoms", "Daily Hyperactive/Impulsive Symptoms")
+      ),
+      panel = factor(
+        paste(hormone, outcome, sep = " -> "),
+        levels = c(
+          "Person-standardized E2 -> Daily Inattentive Symptoms",
+          "Person-standardized E2 -> Daily Hyperactive/Impulsive Symptoms",
+          "Person-standardized P4 -> Daily Inattentive Symptoms",
+          "Person-standardized P4 -> Daily Hyperactive/Impulsive Symptoms"
+        )
+      )
+    )
+
+  plot_df
+}
+
+# ===================================================================
+# 15. Helper function to count people in each subgroup status
+# ===================================================================
+get_subgroup_counts <- function(data, subgroup_var) {
+  data %>%
+    distinct(id, .data[[subgroup_var]]) %>%
+    count(.data[[subgroup_var]], name = "n_people") %>%
+    complete(
+      !!rlang::sym(subgroup_var) := c("Not Cyclical", "Cyclical"),
+      fill = list(n_people = 0)
+    ) %>%
+    mutate(label = paste0(.data[[subgroup_var]], ": N = ", n_people))
+}
+
+# ===================================================================
+# 16. Helper function to compute within-person rmcorr labels per panel/group
+# ===================================================================
+compute_panel_rmcorr_labels <- function(plot_df) {
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  combos <- plot_df %>%
+    distinct(panel, subgroup_status, hormone, outcome)
+
+  label_df <- purrr::pmap_dfr(
+    list(combos$panel, combos$subgroup_status, combos$hormone, combos$outcome),
+    function(panel_i, subgroup_i, hormone_i, outcome_i) {
+
+      dat_i <- plot_df %>%
+        filter(
+          panel == panel_i,
+          subgroup_status == subgroup_i,
+          hormone == hormone_i,
+          outcome == outcome_i
+        ) %>%
+        select(id, hormone_std, symptom) %>%
+        drop_na()
+
+      n_people <- n_distinct(dat_i$id)
+
+      if (nrow(dat_i) < 3 || n_people < 2) {
+        label_text <- paste0(subgroup_i, ": r = NA")
+      } else {
+        rmc <- try(
+          rmcorr::rmcorr(
+            participant = id,
+            measure1 = hormone_std,
+            measure2 = symptom,
+            dataset = dat_i
+          ),
+          silent = TRUE
+        )
+
+        if (inherits(rmc, "try-error")) {
+          label_text <- paste0(subgroup_i, ": r = NA")
+        } else {
+          r_txt <- no_leading_zero(rmc$r)
+
+          stars <- case_when(
+            rmc$p < .001 ~ "***",
+            rmc$p < .01 ~ "**",
+            rmc$p < .05 ~ "*",
+            TRUE ~ ""
+          )
+
+          label_text <- paste0(subgroup_i, ": r = ", r_txt, stars)
+        }
+      }
+
+      tibble(
+        panel = panel_i,
+        subgroup_status = subgroup_i,
+        label = label_text,
+        x = Inf,
+        y = Inf,
+        vjust = ifelse(subgroup_i == "Cyclical", 1.2, 2.6)
+      )
+    }
+  )
+
+  label_df
+}
+
+# ===================================================================
+# 17. Full-sample rmcorr labels
+# ===================================================================
+compute_fullsample_rmcorr_labels <- function(plot_df) {
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  combos <- plot_df %>%
+    distinct(panel, hormone, outcome)
+
+  label_df <- purrr::pmap_dfr(
+    list(combos$panel, combos$hormone, combos$outcome),
+    function(panel_i, hormone_i, outcome_i) {
+
+      dat_i <- plot_df %>%
+        filter(
+          panel == panel_i,
+          hormone == hormone_i,
+          outcome == outcome_i
+        ) %>%
+        select(id, hormone_std, symptom) %>%
+        drop_na()
+
+      n_people <- n_distinct(dat_i$id)
+
+      if (nrow(dat_i) < 3 || n_people < 2) {
+        label_text <- "Full sample: r = NA"
+      } else {
+        rmc <- try(
+          rmcorr::rmcorr(
+            participant = id,
+            measure1 = hormone_std,
+            measure2 = symptom,
+            dataset = dat_i
+          ),
+          silent = TRUE
+        )
+
+        if (inherits(rmc, "try-error")) {
+          label_text <- "Full sample: r = NA"
+        } else {
+          r_txt <- no_leading_zero(rmc$r)
+
+          stars <- case_when(
+            rmc$p < .001 ~ "***",
+            rmc$p < .01 ~ "**",
+            rmc$p < .05 ~ "*",
+            TRUE ~ ""
+          )
+
+          label_text <- paste0("Full sample: r = ", r_txt, stars)
+        }
+      }
+
+      tibble(
+        panel = panel_i,
+        label = label_text,
+        x = Inf,
+        y = Inf
+      )
+    }
+  )
+
+  label_df
+}
+
+# ===================================================================
+# 18. Plotting function for cyclical vs not cyclical moderation
+# ===================================================================
+plot_hormone_symptom_moderation <- function(
+    data,
+    subgroup_var,
+    subgroup_label,
+    output_folder,
+    point_alpha = 0.18,
+    point_size = 1.2,
+    line_size = 1.1
+) {
+
+  plot_df <- prepare_moderation_scatter_data(data, subgroup_var)
+  subgroup_counts <- get_subgroup_counts(data, subgroup_var)
+  label_df <- compute_panel_rmcorr_labels(plot_df)
+
+  count_text <- paste(subgroup_counts$label, collapse = "    |    ")
+
+  p <- ggplot(
+    plot_df,
+    aes(x = hormone_std, y = symptom, color = subgroup_status)
+  ) +
+    geom_point(alpha = point_alpha, size = point_size) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = line_size) +
+    geom_text(
+      data = label_df,
+      aes(x = x, y = y, label = label, color = subgroup_status, vjust = vjust),
+      inherit.aes = FALSE,
+      hjust = 1.05,
+      size = 3.6,
+      fontface = "bold",
+      show.legend = FALSE
+    ) +
+    facet_wrap(
+      ~ panel,
+      nrow = 2,
+      scales = "free"
+    ) +
+    labs(
+      title = paste0("Hormone-Symptom Associations by ", subgroup_label),
+      subtitle = paste0(
+        count_text,
+        "\nText in each panel shows within-person repeated-measures correlation (rmcorr)."
+      ),
+      x = NULL,
+      y = "Daily symptom level",
+      color = NULL
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      strip.text = element_text(face = "bold"),
+      legend.position = "top",
+      panel.grid.minor = element_blank()
+    )
+
+  print(p)
+
+  output_file <- file.path(
+    output_folder,
+    paste0(
+      "scatter_moderation_personstandardized_",
+      subgroup_var,
+      "_",
+      format(Sys.Date(), "%Y%m%d"),
+      ".png"
+    )
+  )
+
+  ggsave(
+    filename = output_file,
+    plot = p,
+    width = 12,
+    height = 8
+  )
+
+  invisible(
+    list(
+      plot = p,
+      plot_data = plot_df,
+      label_data = label_df,
+      output_file = output_file
+    )
+  )
+}
+
+# ===================================================================
+# 19. Plotting function for full sample
+# ===================================================================
+plot_hormone_symptom_fullsample <- function(
+    data,
+    sample_label,
+    output_folder,
+    point_alpha = 0.18,
+    point_size = 1.2,
+    line_size = 1.1
+) {
+
+  plot_df <- data %>%
+    select(
+      id,
+      E2_pz,
+      P4_pz,
+      CSS_Inatt,
+      CSS_HypImp
+    ) %>%
+    pivot_longer(
+      cols = c(E2_pz, P4_pz),
+      names_to = "hormone",
+      values_to = "hormone_std"
+    ) %>%
+    pivot_longer(
+      cols = c(CSS_Inatt, CSS_HypImp),
+      names_to = "outcome",
+      values_to = "symptom"
+    ) %>%
+    drop_na(hormone_std, symptom) %>%
+    mutate(
+      hormone = factor(
+        hormone,
+        levels = c("E2_pz", "P4_pz"),
+        labels = c("Person-standardized E2", "Person-standardized P4")
+      ),
+      outcome = factor(
+        outcome,
+        levels = c("CSS_Inatt", "CSS_HypImp"),
+        labels = c("Daily Inattentive Symptoms", "Daily Hyperactive/Impulsive Symptoms")
+      ),
+      panel = factor(
+        paste(hormone, outcome, sep = " -> "),
+        levels = c(
+          "Person-standardized E2 -> Daily Inattentive Symptoms",
+          "Person-standardized E2 -> Daily Hyperactive/Impulsive Symptoms",
+          "Person-standardized P4 -> Daily Inattentive Symptoms",
+          "Person-standardized P4 -> Daily Hyperactive/Impulsive Symptoms"
+        )
+      )
+    )
+
+  label_df <- compute_fullsample_rmcorr_labels(plot_df)
+
+  n_people <- n_distinct(plot_df$id)
+
+  p <- ggplot(
+    plot_df,
+    aes(x = hormone_std, y = symptom)
+  ) +
+    geom_point(alpha = point_alpha, size = point_size, color = "gray35") +
+    geom_smooth(method = "lm", se = TRUE, linewidth = line_size, color = "black") +
+    geom_text(
+      data = label_df,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE,
+      hjust = 1.05,
+      vjust = 1.2,
+      size = 3.6,
+      fontface = "bold"
+    ) +
+    facet_wrap(
+      ~ panel,
+      nrow = 2,
+      scales = "free"
+    ) +
+    labs(
+      title = paste0("Hormone-Symptom Associations: ", sample_label),
+      subtitle = paste0(
+        "Full sample: N = ",
+        n_people,
+        "\nText in each panel shows within-person repeated-measures correlation (rmcorr)."
+      ),
+      x = NULL,
+      y = "Daily symptom level"
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      strip.text = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+
+  print(p)
+
+  output_file <- file.path(
+    output_folder,
+    paste0(
+      "scatter_fullsample_personstandardized_",
+      format(Sys.Date(), "%Y%m%d"),
+      ".png"
+    )
+  )
+
+  ggsave(
+    filename = output_file,
+    plot = p,
+    width = 12,
+    height = 8
+  )
+
+  invisible(
+    list(
+      plot = p,
+      plot_data = plot_df,
+      label_data = label_df,
+      output_file = output_file
+    )
+  )
+}
+
+# ===================================================================
+# 20. Run scatterplots
+# ===================================================================
+scatter_fullsample_pz <- plot_hormone_symptom_fullsample(
+  data = df_plotmods,
+  sample_label = "Full Sample",
+  output_folder = output_folder
+)
+
+scatter_cyclical_inattention_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_inattention",
+  subgroup_label = "Cyclical Inattention",
+  output_folder = output_folder
+)
+
+scatter_cyclical_hypimp_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_hyperactivity_impulsivity",
+  subgroup_label = "Cyclical Hyperactivity/Impulsivity",
+  output_folder = output_folder
+)
+
+scatter_cyclical_both_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_both",
+  subgroup_label = "Both Cyclical Inattention and Cyclical Hyperactivity/Impulsivity",
+  output_folder = output_folder
+)
+
+scatter_cyclical_either_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_either",
+  subgroup_label = "Either Cyclical Inattention or Cyclical Hyperactivity/Impulsivity",
+  output_folder = output_folder
+)
+```
+
+# Select people with valid hormone data first
+
+```{r}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Load participant-level GAM significance summary
+# ===================================================================
+singlegaminfo <- read_csv(
+  "/Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/5_singlegams_output/20250923_Participant_Reports_PDF_byID/participant_significance_summary_20250923.csv"
+)
+
+# ===================================================================
+# 3. Harmonize ID type and create participant-level cyclical flags
+# ===================================================================
+df <- df %>%
+  mutate(id = as.character(id))
+
+participant_significance <- singlegaminfo %>%
+  mutate(id = as.character(id)) %>%
+  filter(variable %in% c("CSS_Inatt", "CSS_HypImp")) %>%
+  mutate(
+    sig_flag = p.value < 0.05,
+    variable = recode(
+      variable,
+      "CSS_Inatt" = "significant_inatt",
+      "CSS_HypImp" = "significant_hypimp"
+    )
+  ) %>%
+  select(id, variable, sig_flag) %>%
+  group_by(id, variable) %>%
+  summarise(sig_flag = any(sig_flag, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = sig_flag,
+    values_fill = list(sig_flag = FALSE)
+  )
+
+df_with_significance <- df %>%
+  left_join(participant_significance, by = "id") %>%
+  mutate(
+    significant_inatt = replace_na(significant_inatt, FALSE),
+    significant_hypimp = replace_na(significant_hypimp, FALSE)
+  )
+
+# ===================================================================
+# 4. Restrict to analytic sample with any available hormone data
+#    This is the shared sample for ALL tables, heatmaps, and scatterplots
+# ===================================================================
+analytic_ids_with_hormones <- df_with_significance %>%
+  group_by(id) %>%
+  summarise(
+    has_any_hormone_data = any(!is.na(E2) | !is.na(P4)),
+    .groups = "drop"
+  ) %>%
+  filter(has_any_hormone_data) %>%
+  pull(id)
+
+df_with_significance <- df_with_significance %>%
+  filter(id %in% analytic_ids_with_hormones)
+
+# ===================================================================
+# 5. Add person-standardized hormone variables
+#    ONLY for within-person use later
+# ===================================================================
+df_with_significance <- df_with_significance %>%
+  group_by(id) %>%
+  mutate(
+    E2_mean = mean(E2, na.rm = TRUE),
+    P4_mean = mean(P4, na.rm = TRUE),
+    E2_sd = sd(E2, na.rm = TRUE),
+    P4_sd = sd(P4, na.rm = TRUE),
+    E2_pz = case_when(
+      is.na(E2_sd) | E2_sd == 0 ~ NA_real_,
+      TRUE ~ (E2 - E2_mean) / E2_sd
+    ),
+    P4_pz = case_when(
+      is.na(P4_sd) | P4_sd == 0 ~ NA_real_,
+      TRUE ~ (P4 - P4_mean) / P4_sd
+    )
+  ) %>%
+  ungroup() %>%
+  select(-E2_mean, -P4_mean, -E2_sd, -P4_sd)
+
+# ===================================================================
+# 6. Create subgroup datasets
+# ===================================================================
+full_sample_df <- df_with_significance
+
+cyclical_inattention_df <- df_with_significance %>%
+  filter(significant_inatt)
+
+cyclical_hypimp_df <- df_with_significance %>%
+  filter(significant_hypimp)
+
+cyclical_both_df <- df_with_significance %>%
+  filter(significant_inatt & significant_hypimp)
+
+cyclical_either_df <- df_with_significance %>%
+  filter(significant_inatt | significant_hypimp)
+
+inattention_only_df <- df_with_significance %>%
+  filter(significant_inatt & !significant_hypimp)
+
+hypimp_only_df <- df_with_significance %>%
+  filter(!significant_inatt & significant_hypimp)
+
+group_counts <- tibble(
+  group = c(
+    "full_sample",
+    "cyclical_inattention",
+    "cyclical_hyperactivity_impulsivity",
+    "cyclical_both",
+    "cyclical_either",
+    "inattention_only",
+    "hyperactivity_impulsivity_only"
+  ),
+  n_people = c(
+    n_distinct(full_sample_df$id),
+    n_distinct(cyclical_inattention_df$id),
+    n_distinct(cyclical_hypimp_df$id),
+    n_distinct(cyclical_both_df$id),
+    n_distinct(cyclical_either_df$id),
+    n_distinct(inattention_only_df$id),
+    n_distinct(hypimp_only_df$id)
+  )
+)
+
+print(group_counts)
+
+write_csv(
+  group_counts,
+  file.path(
+    output_folder,
+    paste0("group_counts_hormone_analytic_sample_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+)
+
+# ===================================================================
+# 7. Variable specification for hybrid matrix
+#    Display labels stay simple: E2 / P4
+#    Between-person + ICC use RAW E2 / P4
+#    Within-person uses PERSON-STANDARDIZED E2_pz / P4_pz
+# ===================================================================
+corr_var_info <- tibble(
+  display_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  display_label = c(
+    "E2",
+    "P4",
+    "Inattentive Sx",
+    "Hyperactive/Impulsive Sx",
+    "Working Memory Deficits (Pinball Task)",
+    "Response Disinhibition (Robot Task)",
+    "Depression",
+    "Anxiety",
+    "Irritability",
+    "Physical Pain"
+  ),
+  between_var = c(
+    "E2",
+    "P4",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  ),
+  within_var = c(
+    "E2_pz",
+    "P4_pz",
+    "CSS_Inatt",
+    "CSS_HypImp",
+    "score_pinball_rev",
+    "score_robot_rev",
+    "DRSP_1",
+    "DRSP_4",
+    "DRSP_7",
+    "DRSP_21"
+  )
+)
+
+# ===================================================================
+# 8. Helper to extract ICC robustly
+# ===================================================================
+extract_icc_value <- function(icc_out) {
+
+  if (is.null(icc_out)) {
+    return(NA_real_)
+  }
+
+  if (is.atomic(icc_out) && !is.null(names(icc_out))) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_adjusted"]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out[["ICC_conditional"]]))
+    }
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.atomic(icc_out) && is.numeric(icc_out)) {
+    return(as.numeric(icc_out[[1]]))
+  }
+
+  if (is.data.frame(icc_out)) {
+    if ("ICC_adjusted" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if ("ICC_conditional" %in% names(icc_out)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  if (is.list(icc_out)) {
+    if (!is.null(icc_out$ICC_adjusted)) {
+      return(as.numeric(icc_out$ICC_adjusted[[1]]))
+    }
+    if (!is.null(icc_out$ICC_conditional)) {
+      return(as.numeric(icc_out$ICC_conditional[[1]]))
+    }
+  }
+
+  NA_real_
+}
+
+# ===================================================================
+# 9. Compute hybrid multilevel correlation matrices
+# ===================================================================
+compute_multilevel_correlation_matrices_hybrid <- function(data, var_info, id_var) {
+
+  display_vars <- var_info$display_var
+  n_vars <- length(display_vars)
+
+  results_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  pval_matrix <- matrix(
+    NA_real_,
+    nrow = n_vars,
+    ncol = n_vars,
+    dimnames = list(display_vars, display_vars)
+  )
+
+  # -----------------------------------------------------------------
+  # Upper triangle = between-person Spearman on RAW variables
+  # -----------------------------------------------------------------
+  between_summary_expressions <- purrr::map(
+    var_info$between_var,
+    ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))
+  ) %>%
+    rlang::set_names(display_vars)
+
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!between_summary_expressions, .groups = "drop")
+
+  if (nrow(person_means) >= 3) {
+    between_corr <- suppressWarnings(
+      cor(
+        person_means[, display_vars],
+        method = "spearman",
+        use = "pairwise.complete.obs"
+      )
+    )
+
+    for (i in 1:(n_vars - 1)) {
+      for (j in (i + 1):n_vars) {
+        x <- person_means[[display_vars[i]]]
+        y <- person_means[[display_vars[j]]]
+
+        if (sum(!is.na(x) & !is.na(y)) > 2) {
+          test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+          results_matrix[i, j] <- between_corr[i, j]
+          pval_matrix[i, j] <- test$p.value
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Diagonal = ICC on RAW variables
+  # -----------------------------------------------------------------
+  for (i in seq_len(n_vars)) {
+    raw_var <- var_info$between_var[i]
+    display_var <- var_info$display_var[i]
+
+    fml <- as.formula(paste0("`", raw_var, "` ~ 1 + (1|`", id_var, "`)"))
+
+    if (sum(!is.na(data[[raw_var]])) > 1 &&
+        dplyr::n_distinct(data[[id_var]][!is.na(data[[raw_var]])]) > 1) {
+
+      model_fit <- try(
+        suppressWarnings(lmer(fml, data = data)),
+        silent = TRUE
+      )
+
+      if (!inherits(model_fit, "try-error")) {
+        icc_out <- try(
+          suppressWarnings(performance::icc(model_fit)),
+          silent = TRUE
+        )
+
+        if (!inherits(icc_out, "try-error")) {
+          icc_val <- extract_icc_value(icc_out)
+
+          if (is.finite(icc_val)) {
+            results_matrix[display_var, display_var] <- icc_val
+            pval_matrix[display_var, display_var] <- 0
+          }
+        }
+      }
+    }
+  }
+
+  # -----------------------------------------------------------------
+  # Lower triangle = within-person rmcorr on person-standardized hormones
+  # -----------------------------------------------------------------
+  for (i in 2:n_vars) {
+    for (j in 1:(i - 1)) {
+
+      var1_display <- display_vars[i]
+      var2_display <- display_vars[j]
+
+      var1_within <- var_info$within_var[var_info$display_var == var1_display]
+      var2_within <- var_info$within_var[var_info$display_var == var2_display]
+
+      rmcorr_data <- data %>%
+        select(
+          all_of(id_var),
+          x = all_of(var1_within),
+          y = all_of(var2_within)
+        ) %>%
+        drop_na()
+
+      if (nrow(rmcorr_data) > 2 && n_distinct(rmcorr_data[[id_var]]) > 1) {
+        rmcorr_result <- try(
+          rmcorr::rmcorr(
+            participant = id_var,
+            measure1 = x,
+            measure2 = y,
+            dataset = rmcorr_data
+          ),
+          silent = TRUE
+        )
+
+        if (!inherits(rmcorr_result, "try-error")) {
+          results_matrix[var1_display, var2_display] <- rmcorr_result$r
+          pval_matrix[var1_display, var2_display] <- rmcorr_result$p
+        }
+      }
+    }
+  }
+
+  list(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    person_means = person_means
+  )
+}
+
+# ===================================================================
+# 10. Convert matrices to long table
+# ===================================================================
+matrices_to_table <- function(results_matrix, pval_matrix, label_lookup, group_label, n_people) {
+
+  table_df <- as.data.frame(as.table(results_matrix)) %>%
+    rename(var_row = Var1, var_col = Var2, estimate = Freq) %>%
+    mutate(
+      p_value = as.vector(pval_matrix),
+      row_index = match(var_row, rownames(results_matrix)),
+      col_index = match(var_col, colnames(results_matrix)),
+      cell_type = case_when(
+        var_row == var_col ~ "ICC",
+        row_index < col_index ~ "Between-person Spearman",
+        row_index > col_index ~ "Within-person rmcorr",
+        TRUE ~ NA_character_
+      ),
+      var_row_label = label_lookup[var_row],
+      var_col_label = label_lookup[var_col],
+      group = group_label,
+      n_people = n_people
+    ) %>%
+    select(group, n_people, cell_type, var_row, var_row_label, var_col, var_col_label, estimate, p_value)
+
+  table_df
+}
+
+# ===================================================================
+# 11. Heatmap function
+# ===================================================================
+generate_correlation_heatmap <- function(
+    results_matrix,
+    pval_matrix,
+    final_labels = NULL,
+    main_title = "Multilevel Correlation Matrix of Daily Outcomes",
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)",
+    sig.level = 0.05,
+    label_size = 4.6,
+    diag_label_size = 6
+) {
+
+  corr_order <- rownames(results_matrix)
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+
+  plot_df <- plot_df %>%
+    mutate(
+      row_mat = match(as.character(Var1), corr_order),
+      col_mat = match(as.character(Var2), corr_order),
+      is_diag = row_mat == col_mat,
+      within_person = row_mat > col_mat,
+      between_person = row_mat < col_mat
+    )
+
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  highlight_df <- plot_df %>%
+    filter(
+      within_person,
+      as.character(Var1) %in% c("E2", "P4") | as.character(Var2) %in% c("E2", "P4")
+    )
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      label = no_leading_zero(value),
+      is_sig = p.value < sig.level
+    )
+
+  diag_df <- plot_df %>% filter(is_diag)
+  sig_df <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(
+      data = plot_df %>% filter(!is_diag),
+      aes(x = Var2, y = Var1, fill = value),
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = diag_df,
+      aes(x = Var2, y = Var1),
+      fill = "gray92",
+      color = "gray70",
+      linewidth = 0.5
+    ) +
+    geom_tile(
+      data = highlight_df,
+      aes(x = Var2, y = Var1),
+      fill = NA,
+      color = "black",
+      linewidth = 2
+    ) +
+    scale_fill_gradient2(
+      low = "#6D9EC1",
+      mid = "white",
+      high = "#E46726",
+      midpoint = 0,
+      limits = c(-1, 1),
+      name = "Correlation"
+    ) +
+    labs(
+      title = main_title,
+      subtitle = subtitle_text
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 18),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 11),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(face = "bold"),
+      axis.title = element_blank(),
+      panel.grid.major = element_blank()
+    ) +
+    geom_text(
+      data = sig_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "black",
+      size = label_size
+    ) +
+    geom_text(
+      data = nonsig_df,
+      aes(x = Var2, y = Var1, label = label),
+      color = "gray40",
+      size = label_size
+    ) +
+    geom_text(
+      data = diag_df,
+      aes(x = Var2, y = Var1, label = label),
+      fontface = "bold",
+      color = "#4B0082",
+      size = diag_label_size
+    )
+
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+
+  return(p)
+}
+
+# ===================================================================
+# 12. Wrapper for correlation outputs
+# ===================================================================
+run_and_save_correlation_outputs <- function(
+    data,
+    group_label,
+    corr_var_info,
+    output_folder,
+    id_var = "id"
+) {
+
+  n_people <- n_distinct(data[[id_var]])
+
+  message("Running group: ", group_label, " (N = ", n_people, ")")
+
+  if (n_people < 3) {
+    warning("Skipping ", group_label, ": fewer than 3 participants.")
+    return(NULL)
+  }
+
+  label_lookup <- setNames(corr_var_info$display_label, corr_var_info$display_var)
+
+  matrix_results <- compute_multilevel_correlation_matrices_hybrid(
+    data = data,
+    var_info = corr_var_info,
+    id_var = id_var
+  )
+
+  results_matrix <- matrix_results$results_matrix
+  pval_matrix <- matrix_results$pval_matrix
+
+  corr_table <- matrices_to_table(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    label_lookup = label_lookup,
+    group_label = group_label,
+    n_people = n_people
+  )
+
+  dated_csv_file <- file.path(
+    output_folder,
+    paste0("corr_table_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".csv")
+  )
+
+  write_csv(corr_table, dated_csv_file)
+
+  heatmap_title <- paste0(
+    "Multilevel Correlation Matrix: ",
+    group_label,
+    " (N = ",
+    n_people,
+    ")"
+  )
+
+  heatmap_plot <- generate_correlation_heatmap(
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    final_labels = label_lookup,
+    main_title = heatmap_title,
+    subtitle_text = "Upper: Between-person (Spearman, raw hormones) | Lower: Within-person (rmcorr, person-standardized hormones) | Diagonal: ICC (raw hormones)"
+  )
+
+  dated_png_file <- file.path(
+    output_folder,
+    paste0("corr_heatmap_hybridHormones_", group_label, "_", format(Sys.Date(), "%Y%m%d"), ".png")
+  )
+
+  ggsave(
+    filename = dated_png_file,
+    plot = heatmap_plot,
+    width = 11,
+    height = 8.5
+  )
+
+  print(heatmap_plot)
+
+  list(
+    n_people = n_people,
+    results_matrix = results_matrix,
+    pval_matrix = pval_matrix,
+    corr_table = corr_table,
+    plot = heatmap_plot,
+    csv_file = dated_csv_file,
+    png_file = dated_png_file
+  )
+}
+
+# ===================================================================
+# 13. Run correlation outputs
+# ===================================================================
+full_sample_results_hybrid <- run_and_save_correlation_outputs(
+  data = full_sample_df,
+  group_label = "full_sample",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_inattention_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_inattention_df,
+  group_label = "cyclical_inattention",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_hypimp_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_hypimp_df,
+  group_label = "cyclical_hyperactivity_impulsivity",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_both_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_both_df,
+  group_label = "cyclical_both",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+cyclical_either_results_hybrid <- run_and_save_correlation_outputs(
+  data = cyclical_either_df,
+  group_label = "cyclical_either",
+  corr_var_info = corr_var_info,
+  output_folder = output_folder,
+  id_var = "id"
+)
+
+# ===================================================================
+# 14. Create plotting dataset with cyclical status indicators
+# ===================================================================
+df_plotmods <- df_with_significance %>%
+  mutate(
+    cyclical_inattention = if_else(significant_inatt, "Cyclical", "Not Cyclical"),
+    cyclical_hyperactivity_impulsivity = if_else(significant_hypimp, "Cyclical", "Not Cyclical"),
+    cyclical_both = if_else(significant_inatt & significant_hypimp, "Cyclical", "Not Cyclical"),
+    cyclical_either = if_else(significant_inatt | significant_hypimp, "Cyclical", "Not Cyclical")
+  )
+
+# ===================================================================
+# 15. Helper function to prepare scatterplot data
+# ===================================================================
+prepare_moderation_scatter_data <- function(data, subgroup_var) {
+
+  plot_df <- data %>%
+    select(
+      id,
+      all_of(subgroup_var),
+      E2_pz,
+      P4_pz,
+      CSS_Inatt,
+      CSS_HypImp
+    ) %>%
+    pivot_longer(
+      cols = c(E2_pz, P4_pz),
+      names_to = "hormone",
+      values_to = "hormone_std"
+    ) %>%
+    pivot_longer(
+      cols = c(CSS_Inatt, CSS_HypImp),
+      names_to = "outcome",
+      values_to = "symptom"
+    ) %>%
+    drop_na(hormone_std, symptom)
+
+  plot_df <- plot_df %>%
+    mutate(
+      subgroup_status = .data[[subgroup_var]],
+      subgroup_status = factor(subgroup_status, levels = c("Not Cyclical", "Cyclical")),
+      hormone = factor(
+        hormone,
+        levels = c("E2_pz", "P4_pz"),
+        labels = c("Person-standardized E2", "Person-standardized P4")
+      ),
+      outcome = factor(
+        outcome,
+        levels = c("CSS_Inatt", "CSS_HypImp"),
+        labels = c("Daily Inattentive Symptoms", "Daily Hyperactive/Impulsive Symptoms")
+      ),
+      panel = factor(
+        paste(hormone, outcome, sep = " -> "),
+        levels = c(
+          "Person-standardized E2 -> Daily Inattentive Symptoms",
+          "Person-standardized E2 -> Daily Hyperactive/Impulsive Symptoms",
+          "Person-standardized P4 -> Daily Inattentive Symptoms",
+          "Person-standardized P4 -> Daily Hyperactive/Impulsive Symptoms"
+        )
+      )
+    )
+
+  plot_df
+}
+
+# ===================================================================
+# 16. Helper function to count people in each subgroup status
+# ===================================================================
+get_subgroup_counts <- function(data, subgroup_var) {
+  data %>%
+    distinct(id, .data[[subgroup_var]]) %>%
+    count(.data[[subgroup_var]], name = "n_people") %>%
+    complete(
+      !!rlang::sym(subgroup_var) := c("Not Cyclical", "Cyclical"),
+      fill = list(n_people = 0)
+    ) %>%
+    mutate(label = paste0(.data[[subgroup_var]], ": N = ", n_people))
+}
+
+# ===================================================================
+# 17. Helper function to compute within-person rmcorr labels per panel/group
+# ===================================================================
+compute_panel_rmcorr_labels <- function(plot_df) {
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  combos <- plot_df %>%
+    distinct(panel, subgroup_status, hormone, outcome)
+
+  label_df <- purrr::pmap_dfr(
+    list(combos$panel, combos$subgroup_status, combos$hormone, combos$outcome),
+    function(panel_i, subgroup_i, hormone_i, outcome_i) {
+
+      dat_i <- plot_df %>%
+        filter(
+          panel == panel_i,
+          subgroup_status == subgroup_i,
+          hormone == hormone_i,
+          outcome == outcome_i
+        ) %>%
+        select(id, hormone_std, symptom) %>%
+        drop_na()
+
+      n_people <- n_distinct(dat_i$id)
+
+      if (nrow(dat_i) < 3 || n_people < 2) {
+        label_text <- paste0(subgroup_i, ": r = NA")
+      } else {
+        rmc <- try(
+          rmcorr::rmcorr(
+            participant = id,
+            measure1 = hormone_std,
+            measure2 = symptom,
+            dataset = dat_i
+          ),
+          silent = TRUE
+        )
+
+        if (inherits(rmc, "try-error")) {
+          label_text <- paste0(subgroup_i, ": r = NA")
+        } else {
+          r_txt <- no_leading_zero(rmc$r)
+
+          stars <- case_when(
+            rmc$p < .001 ~ "***",
+            rmc$p < .01 ~ "**",
+            rmc$p < .05 ~ "*",
+            TRUE ~ ""
+          )
+
+          label_text <- paste0(subgroup_i, ": r = ", r_txt, stars)
+        }
+      }
+
+      tibble(
+        panel = panel_i,
+        subgroup_status = subgroup_i,
+        label = label_text,
+        x = Inf,
+        y = Inf,
+        vjust = ifelse(subgroup_i == "Cyclical", 1.2, 2.6)
+      )
+    }
+  )
+
+  label_df
+}
+
+# ===================================================================
+# 18. Full-sample rmcorr labels
+# ===================================================================
+compute_fullsample_rmcorr_labels <- function(plot_df) {
+
+  no_leading_zero <- function(x) {
+    ifelse(
+      is.na(x),
+      NA_character_,
+      sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x))
+    )
+  }
+
+  combos <- plot_df %>%
+    distinct(panel, hormone, outcome)
+
+  label_df <- purrr::pmap_dfr(
+    list(combos$panel, combos$hormone, combos$outcome),
+    function(panel_i, hormone_i, outcome_i) {
+
+      dat_i <- plot_df %>%
+        filter(
+          panel == panel_i,
+          hormone == hormone_i,
+          outcome == outcome_i
+        ) %>%
+        select(id, hormone_std, symptom) %>%
+        drop_na()
+
+      n_people <- n_distinct(dat_i$id)
+
+      if (nrow(dat_i) < 3 || n_people < 2) {
+        label_text <- "Full sample: r = NA"
+      } else {
+        rmc <- try(
+          rmcorr::rmcorr(
+            participant = id,
+            measure1 = hormone_std,
+            measure2 = symptom,
+            dataset = dat_i
+          ),
+          silent = TRUE
+        )
+
+        if (inherits(rmc, "try-error")) {
+          label_text <- "Full sample: r = NA"
+        } else {
+          r_txt <- no_leading_zero(rmc$r)
+
+          stars <- case_when(
+            rmc$p < .001 ~ "***",
+            rmc$p < .01 ~ "**",
+            rmc$p < .05 ~ "*",
+            TRUE ~ ""
+          )
+
+          label_text <- paste0("Full sample: r = ", r_txt, stars)
+        }
+      }
+
+      tibble(
+        panel = panel_i,
+        label = label_text,
+        x = Inf,
+        y = Inf
+      )
+    }
+  )
+
+  label_df
+}
+
+# ===================================================================
+# 19. Plotting function for cyclical vs not cyclical moderation
+# ===================================================================
+plot_hormone_symptom_moderation <- function(
+    data,
+    subgroup_var,
+    subgroup_label,
+    output_folder,
+    point_alpha = 0.18,
+    point_size = 1.2,
+    line_size = 1.1
+) {
+
+  plot_df <- prepare_moderation_scatter_data(data, subgroup_var)
+  subgroup_counts <- get_subgroup_counts(data, subgroup_var)
+  label_df <- compute_panel_rmcorr_labels(plot_df)
+
+  count_text <- paste(subgroup_counts$label, collapse = "    |    ")
+
+  p <- ggplot(
+    plot_df,
+    aes(x = hormone_std, y = symptom, color = subgroup_status)
+  ) +
+    geom_point(alpha = point_alpha, size = point_size) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = line_size) +
+    geom_text(
+      data = label_df,
+      aes(x = x, y = y, label = label, color = subgroup_status, vjust = vjust),
+      inherit.aes = FALSE,
+      hjust = 1.05,
+      size = 3.6,
+      fontface = "bold",
+      show.legend = FALSE
+    ) +
+    facet_wrap(
+      ~ panel,
+      nrow = 2,
+      scales = "free"
+    ) +
+    labs(
+      title = paste0("Hormone-Symptom Associations by ", subgroup_label),
+      subtitle = paste0(
+        count_text,
+        "\nText in each panel shows within-person repeated-measures correlation (rmcorr)."
+      ),
+      x = NULL,
+      y = "Daily symptom level",
+      color = NULL
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      strip.text = element_text(face = "bold"),
+      legend.position = "top",
+      panel.grid.minor = element_blank()
+    )
+
+  print(p)
+
+  output_file <- file.path(
+    output_folder,
+    paste0(
+      "scatter_moderation_personstandardized_",
+      subgroup_var,
+      "_",
+      format(Sys.Date(), "%Y%m%d"),
+      ".png"
+    )
+  )
+
+  ggsave(
+    filename = output_file,
+    plot = p,
+    width = 12,
+    height = 8
+  )
+
+  invisible(
+    list(
+      plot = p,
+      plot_data = plot_df,
+      label_data = label_df,
+      output_file = output_file
+    )
+  )
+}
+
+# ===================================================================
+# 20. Plotting function for full sample
+# ===================================================================
+plot_hormone_symptom_fullsample <- function(
+    data,
+    sample_label,
+    output_folder,
+    point_alpha = 0.18,
+    point_size = 1.2,
+    line_size = 1.1
+) {
+
+  plot_df <- data %>%
+    select(
+      id,
+      E2_pz,
+      P4_pz,
+      CSS_Inatt,
+      CSS_HypImp
+    ) %>%
+    pivot_longer(
+      cols = c(E2_pz, P4_pz),
+      names_to = "hormone",
+      values_to = "hormone_std"
+    ) %>%
+    pivot_longer(
+      cols = c(CSS_Inatt, CSS_HypImp),
+      names_to = "outcome",
+      values_to = "symptom"
+    ) %>%
+    drop_na(hormone_std, symptom) %>%
+    mutate(
+      hormone = factor(
+        hormone,
+        levels = c("E2_pz", "P4_pz"),
+        labels = c("Person-standardized E2", "Person-standardized P4")
+      ),
+      outcome = factor(
+        outcome,
+        levels = c("CSS_Inatt", "CSS_HypImp"),
+        labels = c("Daily Inattentive Symptoms", "Daily Hyperactive/Impulsive Symptoms")
+      ),
+      panel = factor(
+        paste(hormone, outcome, sep = " -> "),
+        levels = c(
+          "Person-standardized E2 -> Daily Inattentive Symptoms",
+          "Person-standardized E2 -> Daily Hyperactive/Impulsive Symptoms",
+          "Person-standardized P4 -> Daily Inattentive Symptoms",
+          "Person-standardized P4 -> Daily Hyperactive/Impulsive Symptoms"
+        )
+      )
+    )
+
+  label_df <- compute_fullsample_rmcorr_labels(plot_df)
+
+  n_people <- n_distinct(plot_df$id)
+
+  p <- ggplot(
+    plot_df,
+    aes(x = hormone_std, y = symptom)
+  ) +
+    geom_point(alpha = point_alpha, size = point_size, color = "gray35") +
+    geom_smooth(method = "lm", se = TRUE, linewidth = line_size, color = "black") +
+    geom_text(
+      data = label_df,
+      aes(x = x, y = y, label = label),
+      inherit.aes = FALSE,
+      hjust = 1.05,
+      vjust = 1.2,
+      size = 3.6,
+      fontface = "bold"
+    ) +
+    facet_wrap(
+      ~ panel,
+      nrow = 2,
+      scales = "free"
+    ) +
+    labs(
+      title = paste0("Hormone-Symptom Associations: ", sample_label),
+      subtitle = paste0(
+        "Full sample: N = ",
+        n_people,
+        "\nText in each panel shows within-person repeated-measures correlation (rmcorr)."
+      ),
+      x = NULL,
+      y = "Daily symptom level"
+    ) +
+    coord_cartesian(clip = "off") +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      strip.text = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+
+  print(p)
+
+  output_file <- file.path(
+    output_folder,
+    paste0(
+      "scatter_fullsample_personstandardized_",
+      format(Sys.Date(), "%Y%m%d"),
+      ".png"
+    )
+  )
+
+  ggsave(
+    filename = output_file,
+    plot = p,
+    width = 12,
+    height = 8
+  )
+
+  invisible(
+    list(
+      plot = p,
+      plot_data = plot_df,
+      label_data = label_df,
+      output_file = output_file
+    )
+  )
+}
+
+# ===================================================================
+# 21. Run scatterplots
+# ===================================================================
+scatter_fullsample_pz <- plot_hormone_symptom_fullsample(
+  data = df_plotmods,
+  sample_label = "Full Sample",
+  output_folder = output_folder
+)
+
+scatter_cyclical_inattention_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_inattention",
+  subgroup_label = "Cyclical Inattention",
+  output_folder = output_folder
+)
+
+scatter_cyclical_hypimp_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_hyperactivity_impulsivity",
+  subgroup_label = "Cyclical Hyperactivity/Impulsivity",
+  output_folder = output_folder
+)
+
+scatter_cyclical_both_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_both",
+  subgroup_label = "Both Cyclical Inattention and Cyclical Hyperactivity/Impulsivity",
+  output_folder = output_folder
+)
+
+scatter_cyclical_either_pz <- plot_hormone_symptom_moderation(
+  data = df_plotmods,
+  subgroup_var = "cyclical_either",
+  subgroup_label = "Cyclical ADHD Sx (Inattention or Hyperactivity/Impulsivity)",
+  output_folder = output_folder
+)
+```
+
