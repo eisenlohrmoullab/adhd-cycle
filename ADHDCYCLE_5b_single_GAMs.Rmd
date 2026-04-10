@@ -1,6 +1,6 @@
 ---
-title: "TCS_1.5_GAMs"
-author: "Ashley Ross"
+title: "ADHDCYCLE_Single_GAMs_v2"
+author: "Tory and Ashley"
 date: "`r Sys.Date()`"
 output: html_document
 ---
