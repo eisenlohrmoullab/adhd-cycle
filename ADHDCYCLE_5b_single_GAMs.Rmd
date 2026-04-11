@@ -26,7 +26,7 @@ set.seed(12345)
 
 # Data
 ```{r}
-cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/02_data/CYCADHD_daily_scaled.RData"))
+cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/1_interim_datasets/adhd_daily_df_scaled_20250922.RData"))
 ```
 
 # 1 - Set output folder & time vars to use
@@ -182,6 +182,48 @@ if (length(missing_colors) > 0) {
   warning("Missing colors for: ", paste(missing_colors, collapse = ", "),
           ". Falling back to #0072B2 for these outcomes.")
 }
+
+# --- Per-outcome y-axis limits and reference-line settings ---
+# y_axis_mode "fixed" uses a hard y_min/y_max (Likert 1-6 scale).
+# y_axis_mode "data"  uses data-driven limits; no fixed reference line.
+outcome_plot_settings <- tribble(
+  ~variable,          ~y_axis_mode, ~y_min, ~y_max, ~ref_line,
+  "CSS_Inatt_Count",  "fixed",       1,      6,      4,
+  "CSS_Hyp_Count",    "fixed",       1,      6,      4,
+  "CSS_Imp_Count",    "fixed",       1,      6,      4,
+  "CSS_Inatt",        "fixed",       1,      6,      4,
+  "CSS_HypImp",       "fixed",       1,      6,      4,
+  "score_pinball",    "data",        NA,     NA,     NA,
+  "score_robot",      "data",        NA,     NA,     NA,
+  "BDEFS_WM_avg",     "data",        NA,     NA,     NA,
+  "BDEFS_RI_avg",     "data",        NA,     NA,     NA,
+  "DRSP_1",           "fixed",       1,      6,      4,
+  "DRSP_2",           "fixed",       1,      6,      4,
+  "DRSP_3",           "fixed",       1,      6,      4,
+  "DRSP_4",           "fixed",       1,      6,      4,
+  "DRSP_5",           "fixed",       1,      6,      4,
+  "DRSP_6",           "fixed",       1,      6,      4,
+  "DRSP_7",           "fixed",       1,      6,      4,
+  "DRSP_8",           "fixed",       1,      6,      4,
+  "DRSP_9",           "fixed",       1,      6,      4,
+  "DRSP_10",          "fixed",       1,      6,      4,
+  "DRSP_11",          "fixed",       1,      6,      4,
+  "DRSP_12",          "fixed",       1,      6,      4,
+  "DRSP_13",          "fixed",       1,      6,      4,
+  "DRSP_14",          "fixed",       1,      6,      4,
+  "DRSP_15",          "fixed",       1,      6,      4,
+  "DRSP_16",          "fixed",       1,      6,      4,
+  "DRSP_17",          "fixed",       1,      6,      4,
+  "DRSP_18",          "fixed",       1,      6,      4,
+  "DRSP_19",          "fixed",       1,      6,      4,
+  "DRSP_20",          "fixed",       1,      6,      4,
+  "DRSP_21",          "fixed",       1,      6,      4,
+  "DRSP_22",          "fixed",       1,      6,      4,
+  "DRSP_23",          "fixed",       1,      6,      4,
+  "E2",               "data",        NA,     NA,     NA,
+  "P4",               "data",        NA,     NA,     NA,
+  "LH",               "data",        NA,     NA,     NA
+)
 ```
 
 # 4 - Per ID outcomes
@@ -368,7 +410,10 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
 # }
 
 # --- Plot one outcome curve with annotations ---
-create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6)) {
+# y_limits = NULL means: use per-outcome defaults from outcome_plot_settings
+#   (fixed outcomes → c(y_min, y_max); data-mode outcomes → data-driven, no clamp)
+# y_limits = c(lo, hi) means: use those limits as-is (e.g. from shared-y section)
+create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) {
   if (is.null(plot_df) || nrow(plot_df) == 0) return(NULL)
   
   max_pt <- dplyr::slice_max(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
@@ -380,6 +425,21 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
   outcome_var <- dplyr::first(plot_df$outcome_var)
   line_col <- drsp_color_map[[outcome_var]]
   if (is.null(line_col) || is.na(line_col)) line_col <- "#0072B2"
+
+  # Look up per-outcome y-axis and reference-line settings
+  ps        <- outcome_plot_settings[outcome_plot_settings$variable == outcome_var, ]
+  mode      <- if (nrow(ps) > 0) ps$y_axis_mode[1] else "fixed"
+  ref_line  <- if (nrow(ps) > 0) ps$ref_line[1]    else 4
+  y_fix_min <- if (nrow(ps) > 0) ps$y_min[1]       else 1
+  y_fix_max <- if (nrow(ps) > 0) ps$y_max[1]       else 6
+
+  # Resolve y-axis limits when not explicitly supplied by the caller
+  if (is.null(y_limits)) {
+    if (mode == "fixed" && !is.na(y_fix_min) && !is.na(y_fix_max)) {
+      y_limits <- c(y_fix_min, y_fix_max)
+    }
+    # data mode: leave y_limits = NULL → ggplot auto-scales
+  }
   
   range_band_label <- dplyr::case_when(
     is.finite(rng) && rng >= 1.5 ~ "Range >= 1.5 | ",
@@ -403,8 +463,15 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
   
   meta <- axis_meta_list[[tv]]
 
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate)) +
-    ggplot2::geom_hline(yintercept = 4, color = "red", linewidth = 0.4, alpha = 0.4) +
+  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate))
+
+  # Reference line only for outcomes that define one (Likert-scale outcomes)
+  if (!is.na(ref_line)) {
+    p <- p + ggplot2::geom_hline(yintercept = ref_line, color = "red",
+                                 linewidth = 0.4, alpha = 0.4)
+  }
+
+  p <- p +
     ggplot2::geom_vline(xintercept = meta$menses, color = "red") +
     ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen") +
     ggplot2::geom_line(linewidth = 1, color = line_col) +
@@ -418,11 +485,15 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
       breaks = seq(-1, 1, by = 0.5),
       labels = meta$labels
     ) +
-    ggplot2::coord_cartesian(ylim = y_limits) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
       plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
     )
+
+  # Apply y-axis limits only when defined (NULL → ggplot auto-scales)
+  if (!is.null(y_limits)) {
+    p <- p + ggplot2::coord_cartesian(ylim = y_limits)
+  }
 
   border_col <- dplyr::case_when(
     is.finite(rng) && rng >= 1.5 ~ "darkorange",
@@ -1073,16 +1144,16 @@ if (nrow(sig_ranked) == 0) {
 
     # ---- NEW PAGE SET: Symptom trajectories with ID-specific shared y-range ----
   # For each ID and time variable:
-  #   - find the largest predicted range across outcomes
-  #   - add 0.25
-  #   - apply that same total y-range to every outcome plot
-  #   - clamp all y-axes to [1, 6]
+  #   - find the largest predicted range per y_axis_mode group (fixed / data)
+  #   - add 0.25, then apply that shared total y-range to every outcome in the group
+  #   - fixed-scale outcomes (DRSP/CSS): clamped to [1, 6]
+  #   - data-scale outcomes (hormones/scores): unclamped, data-driven bounds
   for (tv in names(preds_by_tv)) {
 
     combined_plot_data <- preds_by_tv[[tv]]
     if (is.null(combined_plot_data) || nrow(combined_plot_data) == 0) next
 
-    # Compute outcome-specific predicted ranges for this ID/time variable
+    # Compute outcome-specific predicted ranges and join with plot settings
     id_range_df <- combined_plot_data %>%
       dplyr::group_by(outcome_var, outcome_label) %>%
       dplyr::summarise(
@@ -1090,15 +1161,39 @@ if (nrow(sig_ranked) == 0) {
         ymax = max(estimate, na.rm = TRUE),
         yrange = ymax - ymin,
         .groups = "drop"
+      ) %>%
+      dplyr::left_join(
+        dplyr::select(outcome_plot_settings, variable, y_axis_mode, y_min, y_max),
+        by = c("outcome_var" = "variable")
+      ) %>%
+      dplyr::mutate(
+        y_axis_mode = dplyr::coalesce(y_axis_mode, "fixed"),
+        # Fixed outcomes: clamp to configured scale bounds; data outcomes: use data bounds
+        lower_bound = dplyr::if_else(
+          y_axis_mode == "fixed", dplyr::coalesce(y_min, 1), ymin - 0.5
+        ),
+        upper_bound = dplyr::if_else(
+          y_axis_mode == "fixed", dplyr::coalesce(y_max, 6), ymax + 0.5
+        )
       )
 
     if (nrow(id_range_df) == 0) next
 
-    # Shared total range across all plots for this ID/time variable
-    shared_total_range <- max(id_range_df$yrange, na.rm = TRUE) + 0.25
-
-    # Since y is clamped to [1, 6], the maximum usable total span is 5
-    shared_total_range <- min(shared_total_range, 5)
+    # Shared total range computed WITHIN each y_axis_mode group
+    shared_range_by_mode <- id_range_df %>%
+      dplyr::group_by(y_axis_mode) %>%
+      dplyr::summarise(
+        shared_total_range = max(yrange, na.rm = TRUE) + 0.25,
+        .groups = "drop"
+      ) %>%
+      # Cap fixed-scale shared range to the maximum scale span (e.g. 5 for 1-6)
+      dplyr::mutate(
+        shared_total_range = dplyr::if_else(
+          y_axis_mode == "fixed",
+          pmin(shared_total_range, 5),
+          shared_total_range
+        )
+      )
 
     all_outcome_labels <- unique(combined_plot_data$outcome_label)
     outcome_pages_shared <- split(
@@ -1114,11 +1209,19 @@ if (nrow(sig_ranked) == 0) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
         if (nrow(plot_df) == 0) return(NULL)
 
+        ov        <- dplyr::first(plot_df$outcome_var)
+        mode_row  <- id_range_df[id_range_df$outcome_var == ov, ]
+        mode_str  <- if (nrow(mode_row) > 0) mode_row$y_axis_mode[1] else "fixed"
+        lb        <- if (nrow(mode_row) > 0) mode_row$lower_bound[1] else 1
+        ub        <- if (nrow(mode_row) > 0) mode_row$upper_bound[1] else 6
+        rng_row   <- shared_range_by_mode[shared_range_by_mode$y_axis_mode == mode_str, ]
+        str_range <- if (nrow(rng_row) > 0) rng_row$shared_total_range[1] else 5
+
         shared_y_limits <- make_shared_id_y_limits(
           plot_df = plot_df,
-          shared_total_range = shared_total_range,
-          lower_bound = 1,
-          upper_bound = 6
+          shared_total_range = str_range,
+          lower_bound = lb,
+          upper_bound = ub
         )
 
         create_annotated_plot(
@@ -1145,9 +1248,8 @@ if (nrow(sig_ranked) == 0) {
         )
 
         page_subtitle_shared <- paste0(
-          "All plots use total y-range = ",
-          round(shared_total_range, 2),
-          " (max ID-specific range + 0.25), clamped to [1, 6]"
+          "Shared y-range per scale group (fixed=Likert [1-6]; data=data-driven). ",
+          "Time variable: ", tv
         )
 
         final_page_shared <- patchwork::wrap_plots(
