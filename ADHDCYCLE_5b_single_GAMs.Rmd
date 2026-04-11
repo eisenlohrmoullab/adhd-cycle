@@ -26,39 +26,16 @@ set.seed(12345)
 
 # Data
 ```{r}
-df <- readRDS("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/TEENCYCLESTUDY/03_analytic_projects/01_RossDissertation/02_datasets_output/Scaled Data/tcs_scaled_kalman_biocycle_20260119.rds")
-
-# length(unique(df$id)) #124
-colnames(df)
-
-# rename suicide outcomes as drsp
-df <- df %>%
-  rename(
-   "drsp_1"   = "drsp1_depblue",
-   "drsp_2"   = "drsp2_hopeless",
-   "drsp_3"   = "drsp3_worthguilt",
-   "drsp_4"   = "drsp4_anxious",
-   "drsp_5"   = "drsp5_moodswings",
-   "drsp_6"   = "drsp6_rejsens",
-   "drsp_7"   = "drsp7_angirr",
-   "drsp_8"   = "drsp8_intconflict",
-   "drsp_9"   = "drsp9_lessint",
-   "drsp_16"  = "drsp16_overwhelm",
-   "drsp_20"  = "drsp20_headache",
-   "drsp_31"  = "suicide_urgekill",
-   "drsp_32"  = "suicide_intentionkill",
-   "drsp_33"  = "suicide_abilityresisturgekill",
-   "drsp_34"  = "suicide_urgeNSSI"
-  )
+cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/1_interim_datasets/adhd_daily_df_scaled_20250922.RData"))
 ```
 
 # 1 - Set output folder & time vars to use
 ```{r}
 # --- Path to the main output directory ---
-gam_output_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/TEENCYCLESTUDY/03_analytic_projects/01_RossDissertation/02_datasets_output/Individual GAMs/"
+gam_output_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies/Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/6_GAMs/"
 
 # --- Define all Time Variables to iterate over (must be scaled to [-1, 1]) ---
-time_vars_to_run <- c("cyclic_time_impute") # other options "cyclic_time", "cyclic_time_ov", "cyclic_time_impute", "cyclic_time_imp_ov")
+time_vars_to_run <- c("cyclic_time", "cyclic_time_ov", "cyclic_time_impute", "cyclic_time_imp_ov")
 
 # --- Table Formatting ---
 table_cols_per_page <- 6
@@ -76,7 +53,7 @@ output_folder <- file.path(gam_output_base, paste0("GAM_Reports_", current_date)
 dir.create(output_folder, showWarnings = FALSE, recursive = TRUE)
 
 # --- Robustness: Verify time variables exist ---
-time_vars <- intersect(time_vars_to_run, names(df))
+time_vars <- intersect(time_vars_to_run, names(cycle_df_scaled))
 if (length(time_vars) < length(time_vars_to_run)) {
   missing_vars <- setdiff(time_vars_to_run, time_vars)
   warning("The following time_vars were not found and will be skipped: ", paste(missing_vars, collapse = ", "))
@@ -86,73 +63,176 @@ if (length(time_vars) < length(time_vars_to_run)) {
 # 3 - Define outcomes
 ```{r}
 outcomes <- c(
- "drsp_1"  = "Depression",
- "drsp_2"  = "Hopelessness",
- "drsp_3"  = "Worthlessness",
- "drsp_4"  = "Anxiety",
- "drsp_5"  = "Mood Swings",
- "drsp_6"  = "Rejection Sensitivity",
- "drsp_7"  = "Anger/Irritability",
- "drsp_8"  = "Interpersonal Conflicts",
- "drsp_9"  = "Loss of Interest",
- "drsp_16" = "Feeling Overwhelmed",
- "drsp_20" = "Headache",
- "drsp_31" = "Urge Kill",
- "drsp_32" = "Intention Kill",
- "drsp_33" = "Ability Resist Urge Kill",
- "drsp_34" = "Urge NSSI"
+  "CSS_Inatt_Count" = "CSS Inattention Sx Count", "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
+  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_Inatt" = "CSS Inattention Sx Severity",
+  "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity", "score_pinball" = "Working Memory Score (Pinball)",
+  "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+  "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", "DRSP_1" = "Depressed Mood", "DRSP_2" = "Hopelessness",
+  "DRSP_3" = "Worthlessness/Guilt", "DRSP_4" = "Anxiety", "DRSP_5" = "Mood Swings",
+  "DRSP_6" = "Rejection Sensitivity", "DRSP_7" = "Irritability", "DRSP_8" = "Interpersonal Conflicts",
+  "DRSP_9" = "Less Interest in Activities", "DRSP_10" = "Difficulty Concentrating", "DRSP_11" = "Lethargy/Fatigue",
+  "DRSP_12" = "Increased Appetite/Overate", "DRSP_13" = "Food Cravings", "DRSP_14" = "Hypersomnia",
+  "DRSP_15" = "Insomnia", "DRSP_16" = "Overwhelmed/Couldn't Cope", "DRSP_17" = "Felt Out of Control",
+  "DRSP_18" = "Breast Tenderness", "DRSP_19" = "Swelling/Bloating", "DRSP_20" = "Headache",
+  "DRSP_21" = "Joint/Muscle Pain", "DRSP_22" = "Work Impairment", "DRSP_23" = "Relationship Impairment",
+  "E2" = "Estradiol", "P4" = "Progesterone", "LH" = "Luteinizing Hormone"
+)
+
+# --- Define Categories for organization ---
+outcome_categories <- tribble(
+  ~category, ~variable,
+  "ADHD Symptoms (CSS)", "CSS_Inatt_Count", "ADHD Symptoms (CSS)", "CSS_Hyp_Count",
+  "ADHD Symptoms (CSS)", "CSS_Imp_Count", "ADHD Symptoms (CSS)", "CSS_Inatt",
+  "ADHD Symptoms (CSS)", "CSS_HypImp",
+  "Cognitive Score", "score_pinball", "Cognitive Score", "score_robot",
+  "Executive Function (BDEFS)", "BDEFS_WM_avg", "Executive Function (BDEFS)", "BDEFS_RI_avg",
+  "Hormone", "E2", "Hormone", "P4", "Hormone", "LH",
+  "Mood & Physical (DRSP)", "DRSP_1", "Mood & Physical (DRSP)", "DRSP_2", "Mood & Physical (DRSP)", "DRSP_3",
+  "Mood & Physical (DRSP)", "DRSP_4", "Mood & Physical (DRSP)", "DRSP_5", "Mood & Physical (DRSP)", "DRSP_6",
+  "Mood & Physical (DRSP)", "DRSP_7", "Mood & Physical (DRSP)", "DRSP_8", "Mood & Physical (DRSP)", "DRSP_9",
+  "Mood & Physical (DRSP)", "DRSP_10", "Mood & Physical (DRSP)", "DRSP_11", "Mood & Physical (DRSP)", "DRSP_12",
+  "Mood & Physical (DRSP)", "DRSP_13", "Mood & Physical (DRSP)", "DRSP_14", "Mood & Physical (DRSP)", "DRSP_15",
+  "Mood & Physical (DRSP)", "DRSP_16", "Mood & Physical (DRSP)", "DRSP_17", "Mood & Physical (DRSP)", "DRSP_18",
+  "Mood & Physical (DRSP)", "DRSP_19", "Mood & Physical (DRSP)", "DRSP_20", "Mood & Physical (DRSP)", "DRSP_21",
+  "Impairment (DRSP)", "DRSP_22", "Impairment (DRSP)", "DRSP_23"
+) %>%
+  right_join(enframe(outcomes, name = "variable", value = "outcome_label"), by = "variable")
+
+# --- Define custom page layouts ---
+page_definitions <- c(
+  list(
+    CSS_Page = outcome_categories %>% filter(category == "ADHD Symptoms (CSS)") %>% pull(outcome_label),
+    Hormone_Page = outcome_categories %>% filter(category == "Hormone") %>% pull(outcome_label),
+    Cog_EF_Page = c("Response Inhibition (Robot Factory)", "Response Inhibition Sx (BDEFS)",
+                    "Working Memory Score (Pinball)", "Working Memory Sx (BDEFS)")
+  ),
+  split(
+    outcome_categories %>% filter(grepl("DRSP", category)) %>% pull(outcome_label),
+    ceiling(seq_along(outcome_categories %>% filter(grepl("DRSP", category)) %>% pull(outcome_label)) / 9)
   )
+)
+names(page_definitions)[4:length(page_definitions)] <- paste0("DRSP_Page_", 1:(length(page_definitions)-3))
 
 # --- Physical vs Affect symptom classification (raw DRSP items only) ---
-physical_symptoms <- c("drsp_20")
+physical_symptoms <- c("DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21")
 
 # --- Max possible counts per category (for density-plot Y-axis scaling) ---
-all_raw_drsp <- names(outcomes)[grepl("^drsp_\\d+$", names(outcomes))]
+all_raw_drsp <- names(outcomes)[grepl("^DRSP_\\d+$", names(outcomes))]
 n_physical_max <- length(intersect(all_raw_drsp, physical_symptoms))
 n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
 
 # --- Pre-calculate log-transformations ---
 for (var in names(outcomes)) {
-  if (var %in% names(df)) {
+  if (var %in% names(cycle_df_scaled)) {
     log_var_name <- paste0(var, "_Log")
-    df[[log_var_name]] <- log(df[[var]] + 1)
+    cycle_df_scaled[[log_var_name]] <- log(cycle_df_scaled[[var]] + 1)
   }
 }
 
-# --- Define colors for plots (each drsp item stays consistent) ---
+# --- Define colors for plots (each outcome stays consistent) ---
 ## Use a colorblind friendly palette
 drsp_color_map <- c(
-  "drsp_1"  = "#0072B2",  # blue
-  "drsp_2"  = "#E69F00",  # orange
-  "drsp_3"  = "#009E73",  # green
-  "drsp_4"  = "#D55E00",  # vermillion
-  "drsp_5"  = "#CC79A7",  # reddish purple
-  "drsp_6"  = "#56B4E9",  # sky blue
-  "drsp_7"  = "#F0E442",  # yellow
-  "drsp_8"  = "#000000",  # black
-  "drsp_9"  = "#999999",  # gray
-  "drsp_16" = "#004488",  # dark blue
-  "drsp_20" = "#BB5566",  # muted red
-  "drsp_31" = "#228833",  # dark green
-  "drsp_32" = "#EE6677",  # soft red
-  "drsp_33" = "#AA3377",  # magenta
-  "drsp_34" = "#66CCEE"   # light cyan
+  # DRSP mood/affect items
+  "DRSP_1"  = "#0072B2",  # blue
+  "DRSP_2"  = "#E69F00",  # orange
+  "DRSP_3"  = "#009E73",  # green
+  "DRSP_4"  = "#D55E00",  # vermillion
+  "DRSP_5"  = "#CC79A7",  # reddish purple
+  "DRSP_6"  = "#56B4E9",  # sky blue
+  "DRSP_7"  = "#F0E442",  # yellow
+  "DRSP_8"  = "#000000",  # black
+  "DRSP_9"  = "#999999",  # gray
+  "DRSP_10" = "#004488",  # dark blue
+  "DRSP_11" = "#BB5566",  # muted red
+  "DRSP_12" = "#228833",  # dark green
+  "DRSP_13" = "#EE6677",  # soft red
+  "DRSP_14" = "#AA3377",  # magenta
+  "DRSP_15" = "#66CCEE",  # light cyan
+  "DRSP_16" = "#332288",  # deep purple
+  "DRSP_17" = "#117733",  # dark green 2
+  # DRSP physical items
+  "DRSP_18" = "#44AA99",  # teal
+  "DRSP_19" = "#88CCEE",  # light blue
+  "DRSP_20" = "#DDCC77",  # sand
+  "DRSP_21" = "#CC6677",  # rose
+  # DRSP impairment items
+  "DRSP_22" = "#882255",  # dark rose
+  "DRSP_23" = "#661100",  # dark red
+  # CSS (ADHD symptoms)
+  "CSS_Inatt_Count" = "#1B9E77",
+  "CSS_Hyp_Count"   = "#D95F02",
+  "CSS_Imp_Count"   = "#7570B3",
+  "CSS_Inatt"       = "#E7298A",
+  "CSS_HypImp"      = "#66A61E",
+  # Cognitive scores
+  "score_pinball" = "#E6AB02",
+  "score_robot"   = "#A6761D",
+  # BDEFS executive function
+  "BDEFS_WM_avg" = "#666666",
+  "BDEFS_RI_avg" = "#1F78B4",
+  # Hormones
+  "E2" = "#A6CEE3",
+  "P4" = "#B2DF8A",
+  "LH" = "#FB9A99"
 )
 
-# Safety check: make sure every outcome has a color
+# Safety check: warn (do not stop) if any outcome is missing a color
 missing_colors <- setdiff(names(outcomes), names(drsp_color_map))
 if (length(missing_colors) > 0) {
-  stop("Missing colors for: ", paste(missing_colors, collapse = ", "))
+  warning("Missing colors for: ", paste(missing_colors, collapse = ", "),
+          ". Falling back to #0072B2 for these outcomes.")
 }
+
+# --- Per-outcome y-axis limits and reference-line settings ---
+# y_axis_mode "fixed" uses a hard y_min/y_max (Likert 1-6 scale).
+# y_axis_mode "data"  uses data-driven limits; no fixed reference line.
+outcome_plot_settings <- tribble(
+  ~variable,          ~y_axis_mode, ~y_min, ~y_max, ~ref_line,
+  "CSS_Inatt_Count",  "fixed",       1,      6,      4,
+  "CSS_Hyp_Count",    "fixed",       1,      6,      4,
+  "CSS_Imp_Count",    "fixed",       1,      6,      4,
+  "CSS_Inatt",        "fixed",       1,      6,      4,
+  "CSS_HypImp",       "fixed",       1,      6,      4,
+  "score_pinball",    "data",        NA,     NA,     NA,
+  "score_robot",      "data",        NA,     NA,     NA,
+  "BDEFS_WM_avg",     "data",        NA,     NA,     NA,
+  "BDEFS_RI_avg",     "data",        NA,     NA,     NA,
+  "DRSP_1",           "fixed",       1,      6,      4,
+  "DRSP_2",           "fixed",       1,      6,      4,
+  "DRSP_3",           "fixed",       1,      6,      4,
+  "DRSP_4",           "fixed",       1,      6,      4,
+  "DRSP_5",           "fixed",       1,      6,      4,
+  "DRSP_6",           "fixed",       1,      6,      4,
+  "DRSP_7",           "fixed",       1,      6,      4,
+  "DRSP_8",           "fixed",       1,      6,      4,
+  "DRSP_9",           "fixed",       1,      6,      4,
+  "DRSP_10",          "fixed",       1,      6,      4,
+  "DRSP_11",          "fixed",       1,      6,      4,
+  "DRSP_12",          "fixed",       1,      6,      4,
+  "DRSP_13",          "fixed",       1,      6,      4,
+  "DRSP_14",          "fixed",       1,      6,      4,
+  "DRSP_15",          "fixed",       1,      6,      4,
+  "DRSP_16",          "fixed",       1,      6,      4,
+  "DRSP_17",          "fixed",       1,      6,      4,
+  "DRSP_18",          "fixed",       1,      6,      4,
+  "DRSP_19",          "fixed",       1,      6,      4,
+  "DRSP_20",          "fixed",       1,      6,      4,
+  "DRSP_21",          "fixed",       1,      6,      4,
+  "DRSP_22",          "fixed",       1,      6,      4,
+  "DRSP_23",          "fixed",       1,      6,      4,
+  "E2",               "data",        NA,     NA,     NA,
+  "P4",               "data",        NA,     NA,     NA,
+  "LH",               "data",        NA,     NA,     NA
+)
 ```
 
 # 4 - Per ID outcomes
 ```{r}
 # --- Prediction grids reused per time var ---
 pred_grid_list <- setNames(lapply(time_vars, function(tv) {
-  df <- data.frame(seq(-1, 1, by = 0.05))
-  names(df) <- tv
-  df
+  pg_df <- data.frame(seq(-1, 1, by = 0.05))
+  names(pg_df) <- tv
+  pg_df
 }), time_vars)
 
 # --- Axis labels + reference lines per time var ---
@@ -330,7 +410,10 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
 # }
 
 # --- Plot one outcome curve with annotations ---
-create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6)) {
+# y_limits = NULL means: use per-outcome defaults from outcome_plot_settings
+#   (fixed outcomes → c(y_min, y_max); data-mode outcomes → data-driven, no clamp)
+# y_limits = c(lo, hi) means: use those limits as-is (e.g. from shared-y section)
+create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) {
   if (is.null(plot_df) || nrow(plot_df) == 0) return(NULL)
   
   max_pt <- dplyr::slice_max(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
@@ -342,6 +425,21 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
   outcome_var <- dplyr::first(plot_df$outcome_var)
   line_col <- drsp_color_map[[outcome_var]]
   if (is.null(line_col) || is.na(line_col)) line_col <- "#0072B2"
+
+  # Look up per-outcome y-axis and reference-line settings
+  ps        <- outcome_plot_settings[outcome_plot_settings$variable == outcome_var, ]
+  mode      <- if (nrow(ps) > 0) ps$y_axis_mode[1] else "fixed"
+  ref_line  <- if (nrow(ps) > 0) ps$ref_line[1]    else 4
+  y_fix_min <- if (nrow(ps) > 0) ps$y_min[1]       else 1
+  y_fix_max <- if (nrow(ps) > 0) ps$y_max[1]       else 6
+
+  # Resolve y-axis limits when not explicitly supplied by the caller
+  if (is.null(y_limits)) {
+    if (mode == "fixed" && !is.na(y_fix_min) && !is.na(y_fix_max)) {
+      y_limits <- c(y_fix_min, y_fix_max)
+    }
+    # data mode: leave y_limits = NULL → ggplot auto-scales
+  }
   
   range_band_label <- dplyr::case_when(
     is.finite(rng) && rng >= 1.5 ~ "Range >= 1.5 | ",
@@ -365,8 +463,15 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
   
   meta <- axis_meta_list[[tv]]
 
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate)) +
-    ggplot2::geom_hline(yintercept = 4, color = "red", linewidth = 0.4, alpha = 0.4) +
+  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate))
+
+  # Reference line only for outcomes that define one (Likert-scale outcomes)
+  if (!is.na(ref_line)) {
+    p <- p + ggplot2::geom_hline(yintercept = ref_line, color = "red",
+                                 linewidth = 0.4, alpha = 0.4)
+  }
+
+  p <- p +
     ggplot2::geom_vline(xintercept = meta$menses, color = "red") +
     ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen") +
     ggplot2::geom_line(linewidth = 1, color = line_col) +
@@ -380,11 +485,15 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = c(1, 6
       breaks = seq(-1, 1, by = 0.5),
       labels = meta$labels
     ) +
-    ggplot2::coord_cartesian(ylim = y_limits) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
       plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
     )
+
+  # Apply y-axis limits only when defined (NULL → ggplot auto-scales)
+  if (!is.null(y_limits)) {
+    p <- p + ggplot2::coord_cartesian(ylim = y_limits)
+  }
 
   border_col <- dplyr::case_when(
     is.finite(rng) && rng >= 1.5 ~ "darkorange",
@@ -437,7 +546,7 @@ make_shared_id_y_limits <- function(plot_df, shared_total_range, lower_bound = 1
 report_folder <- file.path(output_folder, "Participant_Reports_PDF_byID")
 dir.create(report_folder, showWarnings = FALSE, recursive = TRUE)
 
-ids_to_run    <- unique(df$id)   # set to subset for testing, e.g., c("203","109")
+ids_to_run    <- unique(cycle_df_scaled$id)   # set to subset for testing, e.g., c("203","109")
 skip_existing <- TRUE            # set FALSE to overwrite
 
 # collector for a single CSV at the end
@@ -453,7 +562,7 @@ table_theme <- gridExtra::ttheme_default(
 
 for (current_id in ids_to_run) {
   message(sprintf("--- Processing ID: %s ---", current_id))
-  datSX_id <- subset(df, id == current_id)
+  datSX_id <- subset(cycle_df_scaled, id == current_id)
 
   # Pass 1: fit & collect
   preds_by_tv <- list()
@@ -495,7 +604,7 @@ for (current_id in ids_to_run) {
   }
   grDevices::pdf(pdf_filename, width = 11, height = 8.5)   # LANDSCAPE
 
-  # ---- COVER: Compact counts by time_var ----
+  # ---- COVER: Compact counts by category x time_var ----
   sig_all_clean <- sig_all %>%
     dplyr::mutate(
       stars = dplyr::case_when(
@@ -504,18 +613,27 @@ for (current_id in ids_to_run) {
         is.finite(p.value) & p.value < 0.05  ~ "*",
         TRUE ~ ""
       )
+    ) %>%
+    dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable")
+
+  cover_cpass <- sig_all_clean %>%
+    dplyr::group_by(category) %>%
+    dplyr::summarise(
+      `Range ≥1.5 sig` = sum(is.finite(range) & range >= 1.5 & stars != "", na.rm = TRUE),
+      .groups = "drop"
     )
 
   cover_counts <- sig_all_clean %>%
-    dplyr::group_by(time_var) %>%
+    dplyr::group_by(category, time_var) %>%
     dplyr::summarise(
       tested = dplyr::n(),
       n_sig  = sum(stars != "", na.rm = TRUE),
-      n_cpass = sum(is.finite(range) & range >= 1.5 & stars != "", na.rm = TRUE),
       .groups = "drop"
     ) %>%
     tidyr::unite("count", n_sig, tested, sep = " / ") %>%
-    dplyr::rename(`Sig / Tested` = count, `Range ≥1.5 sig` = n_cpass)
+    tidyr::pivot_wider(names_from = time_var, values_from = count, values_fill = "0 / 0") %>%
+    dplyr::left_join(cover_cpass, by = "category") %>%
+    dplyr::arrange(category)
 
   cover_theme <- gridExtra::ttheme_default(
     base_size = 9,
@@ -530,7 +648,7 @@ for (current_id in ids_to_run) {
 
   title_grob    <- grid::textGrob(paste("Compact Summary — ID:", current_id),
                                   gp = grid::gpar(fontsize = 16, fontface = "bold"))
-  subtitle_grob <- grid::textGrob("Rows show: # significant / # tested (p < .05) for each time variable",
+  subtitle_grob <- grid::textGrob("Cells show: # significant / # tested (p < .05) per category × time variable",
                                   gp = grid::gpar(fontsize = 9))
   cover_grob    <- gridExtra::tableGrob(cover_counts, rows = NULL, theme = cover_theme)
   gridExtra::grid.arrange(title_grob, subtitle_grob, cover_grob,
@@ -552,9 +670,9 @@ for (current_id in ids_to_run) {
         TRUE ~ ""
       )
     ) %>%
-    dplyr::select(Outcome, time_var, stars) %>%
+    dplyr::select(category, Outcome, time_var, stars) %>%
     tidyr::pivot_wider(names_from = time_var, values_from = stars, values_fill = "") %>%
-    dplyr::arrange(Outcome)
+    dplyr::arrange(category, Outcome)
 
   if (nrow(compact_stars) > 0) {
     compact_theme <- gridExtra::ttheme_default(
@@ -579,6 +697,7 @@ sig_ranked <- sig_all_clean %>%
     Outcome = ifelse(nchar(Outcome) > 40, variable, Outcome) # shorten long names
   ) %>%
   dplyr::transmute(
+    Category = category,
     Outcome,
     TimeVar  = time_var,
     EDF      = round(edf, 2),
@@ -586,7 +705,7 @@ sig_ranked <- sig_all_clean %>%
     F        = round(F, 2),
     N        = n
   ) %>%
-  dplyr::arrange(dplyr::desc(Range), Outcome, TimeVar)
+  dplyr::arrange(dplyr::desc(Range), Category, Outcome, TimeVar)
 
 if (nrow(sig_ranked) == 0) {
   # show an empty-state page
@@ -637,7 +756,7 @@ if (nrow(sig_ranked) == 0) {
     # Keep only raw DRSP items (drsp_1, drsp_2, …), exclude composites;
     # further restrict to items that are significant (p < .05) OR have range >= 1.5
     sig_tv_raw <- sig_tv %>%
-      dplyr::filter(grepl("^drsp_\\d+$", variable)) %>%
+      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
@@ -726,7 +845,7 @@ if (nrow(sig_ranked) == 0) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying <- sig_tv %>%
-      dplyr::filter(grepl("^drsp_\\d+$", variable)) %>%
+      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
@@ -782,6 +901,10 @@ if (nrow(sig_ranked) == 0) {
 
     n_curves <- length(overlay_vars)
 
+    overlay_colors <- drsp_color_map[overlay_vars]
+    overlay_colors[is.na(overlay_colors)] <- "#0072B2"
+    names(overlay_colors) <- overlay_vars
+
     p_overlay <- ggplot2::ggplot(overlay_data,
     ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)) +
     ggplot2::geom_hline(yintercept = 4, color = "red",
@@ -792,7 +915,7 @@ if (nrow(sig_ranked) == 0) {
                       linewidth = 0.6, linetype = "dashed") +
     ggplot2::geom_line(linewidth = 0.9) +
     ggplot2::scale_color_manual(
-      values = drsp_color_map,
+      values = overlay_colors,
       breaks = overlay_vars,
       labels = outcomes[overlay_vars]
       ) +
@@ -829,7 +952,7 @@ if (nrow(sig_ranked) == 0) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying_1 <- sig_tv %>%
-      dplyr::filter(grepl("^drsp_\\d+$", variable)) %>%
+      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.0)
@@ -843,6 +966,10 @@ if (nrow(sig_ranked) == 0) {
 
     n_curves_1 <- length(overlay_vars_1)
 
+    overlay_colors_1 <- drsp_color_map[overlay_vars_1]
+    overlay_colors_1[is.na(overlay_colors_1)] <- "#0072B2"
+    names(overlay_colors_1) <- overlay_vars_1
+
     p_overlay_1 <- ggplot2::ggplot(
       overlay_data_1,
       ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)
@@ -855,7 +982,7 @@ if (nrow(sig_ranked) == 0) {
                           linewidth = 0.6, linetype = "dashed") +
       ggplot2::geom_line(linewidth = 0.9) +
       ggplot2::scale_color_manual(
-        values = drsp_color_map,
+        values = overlay_colors_1,
         breaks = overlay_vars_1,
         labels = outcomes[overlay_vars_1]
       ) +
@@ -897,7 +1024,7 @@ if (nrow(sig_ranked) == 0) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying_05 <- sig_tv %>%
-      dplyr::filter(grepl("^drsp_\\d+$", variable)) %>%
+      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 0.5)
@@ -911,6 +1038,10 @@ if (nrow(sig_ranked) == 0) {
 
     n_curves_05 <- length(overlay_vars_05)
 
+    overlay_colors_05 <- drsp_color_map[overlay_vars_05]
+    overlay_colors_05[is.na(overlay_colors_05)] <- "#0072B2"
+    names(overlay_colors_05) <- overlay_vars_05
+
     p_overlay_05 <- ggplot2::ggplot(
       overlay_data_05,
       ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)
@@ -923,7 +1054,7 @@ if (nrow(sig_ranked) == 0) {
                           linewidth = 0.6, linetype = "dashed") +
       ggplot2::geom_line(linewidth = 0.9) +
       ggplot2::scale_color_manual(
-        values = drsp_color_map,
+        values = overlay_colors_05,
         breaks = overlay_vars_05,
         labels = outcomes[overlay_vars_05]
       ) +
@@ -961,6 +1092,7 @@ if (nrow(sig_ranked) == 0) {
 
     # NA-safe compact significance table (optionally filter to significant only)
     summary_df <- sig_by_tv[[tv]] %>%
+      dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable") %>%
       dplyr::mutate(
         stars = dplyr::case_when(
           is.finite(p.value) & p.value < 0.001 ~ "***",
@@ -970,8 +1102,8 @@ if (nrow(sig_ranked) == 0) {
         ),
         Outcome = dplyr::coalesce(outcome_label, variable)
       ) %>%
-      dplyr::select(Outcome, N = n, EDF = edf, F = F, Range = range, Sig = stars) %>%
-      dplyr::arrange(Outcome)
+      dplyr::select(Category = category, Outcome, N = n, EDF = edf, F = F, Range = range, Sig = stars) %>%
+      dplyr::arrange(Category, Outcome)
     # Uncomment to show significant rows only:
     # summary_df <- dplyr::filter(summary_df, Sig != "")
 
@@ -981,12 +1113,10 @@ if (nrow(sig_ranked) == 0) {
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
 
-    # Plots paginated across all outcomes
+    # Plots by predefined pages
     combined_plot_data <- preds_by_tv[[tv]]
-    all_outcome_labels <- unique(combined_plot_data$outcome_label)
-    outcome_pages <- split(all_outcome_labels, ceiling(seq_along(all_outcome_labels) / max_plots_per_page))
-
-    for (page_outcomes in outcome_pages) {
+    for (page_name in names(page_definitions)) {
+      page_outcomes <- page_definitions[[page_name]]
       page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
       if (nrow(page_data) == 0) next
 
@@ -1001,7 +1131,7 @@ if (nrow(sig_ranked) == 0) {
           plot_list <- c(plot_list,
                          rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
         }
-        page_title <- paste("Symptom Trajectories — ID:", current_id, "| Time Variable:", tv)
+        page_title <- paste("Symptom & Hormone Trajectories — ID:", current_id, "| Time Variable:", tv)
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
@@ -1014,16 +1144,16 @@ if (nrow(sig_ranked) == 0) {
 
     # ---- NEW PAGE SET: Symptom trajectories with ID-specific shared y-range ----
   # For each ID and time variable:
-  #   - find the largest predicted range across outcomes
-  #   - add 0.25
-  #   - apply that same total y-range to every outcome plot
-  #   - clamp all y-axes to [1, 6]
+  #   - find the largest predicted range per y_axis_mode group (fixed / data)
+  #   - add 0.25, then apply that shared total y-range to every outcome in the group
+  #   - fixed-scale outcomes (DRSP/CSS): clamped to [1, 6]
+  #   - data-scale outcomes (hormones/scores): unclamped, data-driven bounds
   for (tv in names(preds_by_tv)) {
 
     combined_plot_data <- preds_by_tv[[tv]]
     if (is.null(combined_plot_data) || nrow(combined_plot_data) == 0) next
 
-    # Compute outcome-specific predicted ranges for this ID/time variable
+    # Compute outcome-specific predicted ranges and join with plot settings
     id_range_df <- combined_plot_data %>%
       dplyr::group_by(outcome_var, outcome_label) %>%
       dplyr::summarise(
@@ -1031,15 +1161,39 @@ if (nrow(sig_ranked) == 0) {
         ymax = max(estimate, na.rm = TRUE),
         yrange = ymax - ymin,
         .groups = "drop"
+      ) %>%
+      dplyr::left_join(
+        dplyr::select(outcome_plot_settings, variable, y_axis_mode, y_min, y_max),
+        by = c("outcome_var" = "variable")
+      ) %>%
+      dplyr::mutate(
+        y_axis_mode = dplyr::coalesce(y_axis_mode, "fixed"),
+        # Fixed outcomes: clamp to configured scale bounds; data outcomes: use data bounds
+        lower_bound = dplyr::if_else(
+          y_axis_mode == "fixed", dplyr::coalesce(y_min, 1), ymin - 0.5
+        ),
+        upper_bound = dplyr::if_else(
+          y_axis_mode == "fixed", dplyr::coalesce(y_max, 6), ymax + 0.5
+        )
       )
 
     if (nrow(id_range_df) == 0) next
 
-    # Shared total range across all plots for this ID/time variable
-    shared_total_range <- max(id_range_df$yrange, na.rm = TRUE) + 0.25
-
-    # Since y is clamped to [1, 6], the maximum usable total span is 5
-    shared_total_range <- min(shared_total_range, 5)
+    # Shared total range computed WITHIN each y_axis_mode group
+    shared_range_by_mode <- id_range_df %>%
+      dplyr::group_by(y_axis_mode) %>%
+      dplyr::summarise(
+        shared_total_range = max(yrange, na.rm = TRUE) + 0.25,
+        .groups = "drop"
+      ) %>%
+      # Cap fixed-scale shared range to the maximum scale span (e.g. 5 for 1-6)
+      dplyr::mutate(
+        shared_total_range = dplyr::if_else(
+          y_axis_mode == "fixed",
+          pmin(shared_total_range, 5),
+          shared_total_range
+        )
+      )
 
     all_outcome_labels <- unique(combined_plot_data$outcome_label)
     outcome_pages_shared <- split(
@@ -1055,11 +1209,19 @@ if (nrow(sig_ranked) == 0) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
         if (nrow(plot_df) == 0) return(NULL)
 
+        ov        <- dplyr::first(plot_df$outcome_var)
+        mode_row  <- id_range_df[id_range_df$outcome_var == ov, ]
+        mode_str  <- if (nrow(mode_row) > 0) mode_row$y_axis_mode[1] else "fixed"
+        lb        <- if (nrow(mode_row) > 0) mode_row$lower_bound[1] else 1
+        ub        <- if (nrow(mode_row) > 0) mode_row$upper_bound[1] else 6
+        rng_row   <- shared_range_by_mode[shared_range_by_mode$y_axis_mode == mode_str, ]
+        str_range <- if (nrow(rng_row) > 0) rng_row$shared_total_range[1] else 5
+
         shared_y_limits <- make_shared_id_y_limits(
           plot_df = plot_df,
-          shared_total_range = shared_total_range,
-          lower_bound = 1,
-          upper_bound = 6
+          shared_total_range = str_range,
+          lower_bound = lb,
+          upper_bound = ub
         )
 
         create_annotated_plot(
@@ -1086,9 +1248,8 @@ if (nrow(sig_ranked) == 0) {
         )
 
         page_subtitle_shared <- paste0(
-          "All plots use total y-range = ",
-          round(shared_total_range, 2),
-          " (max ID-specific range + 0.25), clamped to [1, 6]"
+          "Shared y-range per scale group (fixed=Likert [1-6]; data=data-driven). ",
+          "Time variable: ", tv
         )
 
         final_page_shared <- patchwork::wrap_plots(
@@ -1665,7 +1826,7 @@ if (length(all_ids_signif) > 0) {
       # Pre-compute all predictions for global y-axis range
       all_fit_results <- list()
       for (qid in qualifying_ids) {
-        dat_id <- subset(df, as.character(id) == qid)
+        dat_id <- subset(cycle_df_scaled, as.character(id) == qid)
         if (nrow(dat_id) == 0) next
 
         res <- tryCatch(
