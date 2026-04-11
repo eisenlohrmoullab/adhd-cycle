@@ -26,16 +26,17 @@ set.seed(12345)
 
 # Data
 ```{r}
-cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/1_interim_datasets/adhd_daily_df_scaled_20250922.RData"))
+cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_dataedits_output/0_dataprep_output/00_cleaned_datasets/adhd_daily_scaled_20250929.RData"))
+
 ```
 
 # 1 - Set output folder & time vars to use
 ```{r}
 # --- Path to the main output directory ---
-gam_output_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies/Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/6_GAMs/"
+gam_output_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_dataedits_output/5b_Single_GAMs/"
 
 # --- Define all Time Variables to iterate over (must be scaled to [-1, 1]) ---
-time_vars_to_run <- c("cyclic_time", "cyclic_time_ov", "cyclic_time_impute", "cyclic_time_imp_ov")
+time_vars_to_run <- c("cyclic_time_impute") #"cyclic_time", "cyclic_time_ov", "cyclic_time_imp_ov"
 
 # --- Table Formatting ---
 table_cols_per_page <- 6
@@ -312,102 +313,6 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
     )
   )
 }
-
-# --- Plot one outcome curve with annotations ---
-# create_annotated_plot <- function(plot_df, tv, axis_meta_list) {
-#   if (is.null(plot_df) || nrow(plot_df) == 0) return(NULL)
-#   
-#   max_pt <- dplyr::slice_max(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
-#   min_pt <- dplyr::slice_min(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
-#   rng   <- dplyr::first(plot_df$raw_range)
-#   p_val <- dplyr::first(plot_df$p.value)
-#   n_obs <- dplyr::first(plot_df$n)
-#   
-#   outcome_var <- dplyr::first(plot_df$outcome_var)                 # AR - update 4/4/26
-#   line_col <- drsp_color_map[[outcome_var]]                        # AR - update 4/4/26
-#   if (is.null(line_col) || is.na(line_col)) line_col <- "#0072B2"  # AR - update 4/4/26
-#   
-#   # cpass_flag <- !is.null(rng) && is.finite(rng) && rng >= 1.5 # Threshold of 1.5 for "C-PASS based" effect size
-#   # stars <- dplyr::case_when(
-#   #   is.finite(p_val) & p_val < 0.001 ~ "***",
-#   #   is.finite(p_val) & p_val < 0.01  ~ "**",
-#   #   is.finite(p_val) & p_val < 0.05  ~ "*",
-#   #   TRUE ~ ""
-#   # )
-#   # cpass_label <- if (cpass_flag) "\u25B2 Range \u22651.5 | " else ""
-#   # ann <- if (!is.null(n_obs) && !is.na(n_obs)) {
-#   #   sprintf("%s%s Range = %.2f, N = %d", cpass_label, stars, rng, as.integer(n_obs))
-#   # } else {
-#   #   sprintf("%s%s Range = %.2f", cpass_label, stars, rng)
-#   # }
-#   
-#   # Replaced by AR on 04/05/2026
-#   cpass_flag <- !is.null(rng) && is.finite(rng) && rng >= 1.5
-# 
-#   range_band_label <- dplyr::case_when(
-#     is.finite(rng) && rng >= 1.5            ~ "\u25B2 Range \u22651.5 | ",
-#     is.finite(rng) && rng >= 1.0            ~ "\u25B2 Range 1.0-1.49 | ",
-#     is.finite(rng) && rng >= 0.5            ~ "\u25B2 Range 0.5-0.99 | ",
-#     TRUE                                    ~ ""
-#   )
-#   
-#   stars <- dplyr::case_when(
-#     is.finite(p_val) & p_val < 0.001 ~ "***",
-#     is.finite(p_val) & p_val < 0.01  ~ "**",
-#     is.finite(p_val) & p_val < 0.05  ~ "*",
-#     TRUE ~ ""
-#   )
-#   
-#   ann <- if (!is.null(n_obs) && !is.na(n_obs)) {
-#     sprintf("%s%s Range = %.2f, N = %d", range_band_label, stars, rng, as.integer(n_obs))
-#   } else {
-#     sprintf("%s%s Range = %.2f", range_band_label, stars, rng)
-#   }
-#   
-#   meta  <- axis_meta_list[[tv]]
-# 
-#   p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate)) +
-#     ggplot2::geom_hline(yintercept = 4, color = "red", linewidth = 0.4, alpha = 0.4) +
-#     ggplot2::geom_vline(xintercept = meta$menses, color = "red") +
-#     ggplot2::geom_vline(xintercept = meta$ov,     color = "forestgreen") +
-#     #ggplot2::geom_line(linewidth = 1, color = "#0072B2") +  # AR - update 4/4/26
-#     ggplot2::geom_line(linewidth = 1, color = line_col) +    # AR - update 4/4/26
-#     ggplot2::geom_point(data = max_pt, size = 2.5) +
-#     ggplot2::geom_point(data = min_pt, size = 2.5) +
-#     ggplot2::annotate("text", x = -1, y = Inf, label = ann,
-#                       hjust = -0.1, vjust = 1.5, size = 3, fontface = "bold") +
-#     ggplot2::labs(title = dplyr::first(plot_df$outcome_label), x = "Cycle Phase", y = NULL) +
-#     ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.5),
-#                                 labels = meta$labels) +
-#     ggplot2::coord_cartesian(ylim = c(1, 6)) +
-#     ggplot2::theme_minimal() +
-#     ggplot2::theme(plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5))
-# 
-#   # Highlight plots that meet range >= 1.5 threshold with a gold border
-# #   if (cpass_flag) {
-# #     p <- p + ggplot2::theme(
-# #       panel.border = ggplot2::element_rect(color = "goldenrod2", linewidth = 1.5, fill = NA))
-# #   }
-# #   p
-# # }
-#   
-#   # Replaced by AR on 4/5/2026
-#   # Highlight plots by range band
-#   border_col <- dplyr::case_when(
-#     is.finite(rng) && rng >= 1.5 ~ "darkorange",
-#     is.finite(rng) && rng >= 1.0 ~ "goldenrod1",
-#     is.finite(rng) && rng >= 0.5 ~ "yellow",
-#     TRUE                         ~ NA_character_
-#   )
-#   
-#   if (!is.na(border_col)) {
-#     p <- p + ggplot2::theme(
-#       panel.border = ggplot2::element_rect(color = border_col, linewidth = 1.5, fill = NA)
-#     )
-#   }
-# 
-#   p
-# }
 
 # --- Plot one outcome curve with annotations ---
 # y_limits = NULL means: use per-outcome defaults from outcome_plot_settings
