@@ -189,15 +189,15 @@ if (length(missing_colors) > 0) {
 # y_axis_mode "data"  uses data-driven limits; no fixed reference line.
 outcome_plot_settings <- tribble(
   ~variable,          ~y_axis_mode, ~y_min, ~y_max, ~ref_line,
-  "CSS_Inatt_Count",  "fixed",       1,      6,      4,
-  "CSS_Hyp_Count",    "fixed",       1,      6,      4,
-  "CSS_Imp_Count",    "fixed",       1,      6,      4,
-  "CSS_Inatt",        "fixed",       1,      6,      4,
-  "CSS_HypImp",       "fixed",       1,      6,      4,
+  "CSS_Inatt_Count",  "fixed",       0,      9,      NA,
+  "CSS_Hyp_Count",    "fixed",       0,      5,      NA,
+  "CSS_Imp_Count",    "fixed",       0,      4,      NA,
+  "CSS_Inatt",        "fixed",       0,      3,      NA,
+  "CSS_HypImp",       "fixed",       0,      3,      NA,
   "score_pinball",    "data",        NA,     NA,     NA,
   "score_robot",      "data",        NA,     NA,     NA,
-  "BDEFS_WM_avg",     "data",        NA,     NA,     NA,
-  "BDEFS_RI_avg",     "data",        NA,     NA,     NA,
+  "BDEFS_WM_avg",     "data",        1,     4,     NA,
+  "BDEFS_RI_avg",     "data",        1,     4,     NA,
   "DRSP_1",           "fixed",       1,      6,      4,
   "DRSP_2",           "fixed",       1,      6,      4,
   "DRSP_3",           "fixed",       1,      6,      4,
@@ -670,62 +670,83 @@ if (nrow(sig_ranked) == 0) {
 
     meta <- axis_meta[[tv]]
 
-    # Helper to build a density plot for one symptom category
-    # max_n = maximum possible number of variables in this category (for Y-axis)
-    make_timing_density <- function(sig_subset, category_label, max_n) {
-      tl <- dplyr::bind_rows(
-        sig_subset %>% dplyr::filter(!is.na(peak_time)) %>%
-          dplyr::transmute(time = peak_time, type = "Peak (Max)", outcome = outcome_label),
-        sig_subset %>% dplyr::filter(!is.na(trough_time)) %>%
-          dplyr::transmute(time = trough_time, type = "Trough (Min)", outcome = outcome_label)
-      )
-      if (nrow(tl) < 4) return(NULL)  # need >= 2 per group for density estimation (total)
+  # Helper to build a peak/trough timing plot for one symptom category.
+# Uses a histogram-style count (binwidth = 0.1 on the [-1,1] scale) so the
+# y-axis literally = number of qualifying items whose peak/trough falls in
+# that bin. max_n fixes the axis ceiling = total possible qualifying items,
+# making plots comparable across participants.
+make_timing_density <- function(sig_subset, category_label, max_n) {
+  tl <- dplyr::bind_rows(
+    sig_subset %>% dplyr::filter(!is.na(peak_time)) %>%
+      dplyr::transmute(time = peak_time,   type = "Peak (Max)",   outcome = outcome_label),
+    sig_subset %>% dplyr::filter(!is.na(trough_time)) %>%
+      dplyr::transmute(time = trough_time, type = "Trough (Min)", outcome = outcome_label)
+  )
+  if (nrow(tl) < 2) return(NULL)
 
-      tl_peak   <- dplyr::filter(tl, type == "Peak (Max)")
-      tl_trough <- dplyr::filter(tl, type == "Trough (Min)")
+  tl_peak   <- dplyr::filter(tl, type == "Peak (Max)")
+  tl_trough <- dplyr::filter(tl, type == "Trough (Min)")
 
-      # Ensure each type group has at least 2 observations for density estimation
-      if (nrow(tl_peak) < 2 || nrow(tl_trough) < 2) return(NULL)
+  # Need at least 1 in each group to plot
+  if (nrow(tl_peak) < 1 || nrow(tl_trough) < 1) return(NULL)
 
-      # Peaks go upward; troughs are mirrored downward so lower symptoms look lower
-      ggplot2::ggplot() +
-        ggplot2::geom_density(data = tl_peak,
-                              ggplot2::aes(x = time,
-                                           y = ggplot2::after_stat(ndensity) * max_n,
-                                           fill = "Peak (Max)", color = "Peak (Max)"),
-                              alpha = 0.3, adjust = 1.2) +
-        ggplot2::geom_density(data = tl_trough,
-                              ggplot2::aes(x = time,
-                                           y = -ggplot2::after_stat(ndensity) * max_n,
-                                           fill = "Trough (Min)", color = "Trough (Min)"),
-                              alpha = 0.3, adjust = 1.2) +
-        ggplot2::geom_rug(data = tl, ggplot2::aes(x = time, color = type),
-                          alpha = 0.5, length = grid::unit(0.03, "npc")) +
-        ggplot2::geom_hline(yintercept = 0, linewidth = 0.5, color = "grey40") +
-        ggplot2::geom_vline(xintercept = meta$menses, color = "red", linewidth = 0.8,
-                            linetype = "dashed") +
-        ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen", linewidth = 0.8,
-                            linetype = "dashed") +
-        ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.5),
-                                    labels = meta$labels) +
-        ggplot2::scale_y_continuous(limits = c(-max_n, max_n),
-                                    breaks = seq(-max_n, max_n, by = 1),
-                                    labels = abs) +
-        ggplot2::labs(
-          title = paste0(category_label, " Symptoms \u2014 ID: ", current_id),
-          subtitle = paste0("Items with p < .05 or range \u2265 1.5  |  ",
-                            "N outcomes = ", nrow(sig_subset), " / ", max_n,
-                            "  |  Time variable: ", tv),
-          x = "Cycle Phase",
-          y = paste0("Peaks \u2191 / Troughs \u2193 (0\u2013", max_n, " scale)"),
-          fill = NULL, color = NULL
-        ) +
-        ggplot2::theme_minimal(base_size = 12) +
-        ggplot2::scale_fill_manual(values = c("Peak (Max)" = "#D55E00",
-                                              "Trough (Min)" = "#0072B2")) +
-        ggplot2::scale_color_manual(values = c("Peak (Max)" = "#D55E00",
-                                               "Trough (Min)" = "#0072B2"))
-    }
+  # --- Bin the peak/trough times into counts on a fixed grid ---
+  bins   <- seq(-1, 1, by = 0.1)
+  bin_mid <- bins[-length(bins)] + 0.05  # midpoints
+
+  count_bins <- function(times) {
+    counts <- hist(times, breaks = bins, plot = FALSE)$counts
+    data.frame(x = bin_mid, count = counts)
+  }
+
+  df_peak   <- count_bins(tl_peak$time)
+  df_trough <- count_bins(tl_trough$time)
+  df_trough$count <- -df_trough$count  # mirror downward for troughs
+
+  ggplot2::ggplot() +
+    # Peaks upward (orange)
+    ggplot2::geom_col(data = df_peak,
+                      ggplot2::aes(x = x, y = count),
+                      width = 0.09, fill = "#D55E00", color = "#D55E00", alpha = 0.6) +
+    # Troughs downward (blue, already negative)
+    ggplot2::geom_col(data = df_trough,
+                      ggplot2::aes(x = x, y = count),
+                      width = 0.09, fill = "#0072B2", color = "#0072B2", alpha = 0.6) +
+    # Rug marks showing exact peak/trough locations
+    ggplot2::geom_rug(data = tl_peak,
+                      ggplot2::aes(x = time), color = "#D55E00",
+                      alpha = 0.7, length = grid::unit(0.03, "npc"), sides = "b") +
+    ggplot2::geom_rug(data = tl_trough,
+                      ggplot2::aes(x = time), color = "#0072B2",
+                      alpha = 0.7, length = grid::unit(0.03, "npc"), sides = "t") +
+    ggplot2::geom_hline(yintercept = 0, linewidth = 0.5, color = "grey40") +
+    ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                        linewidth = 0.8, linetype = "dashed") +
+    ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                        linewidth = 0.8, linetype = "dashed") +
+    ggplot2::scale_x_continuous(limits = c(-1, 1),
+                                breaks = seq(-1, 1, by = 0.5),
+                                labels = meta$labels) +
+    ggplot2::scale_y_continuous(limits = c(-max_n, max_n),
+                                breaks = seq(-max_n, max_n, by = 1),
+                                labels = abs) +
+    ggplot2::annotate("text", x = -0.95, y =  max_n * 0.9,
+                      label = paste0("Peaks (orange): n = ", nrow(tl_peak)),
+                      hjust = 0, size = 3.5, color = "#D55E00", fontface = "bold") +
+    ggplot2::annotate("text", x = -0.95, y = -max_n * 0.9,
+                      label = paste0("Troughs (blue): n = ", nrow(tl_trough)),
+                      hjust = 0, size = 3.5, color = "#0072B2", fontface = "bold") +
+    ggplot2::labs(
+      title    = paste0(category_label, " Symptoms \u2014 ID: ", current_id),
+      subtitle = paste0("Items with p < .05 or range \u2265 1.5  |  ",
+                        "N qualifying = ", nrow(sig_subset), " / ", max_n,
+                        "  |  Time variable: ", tv,
+                        "\nBars = count of items peaking/troughing in each 0.1-unit bin"),
+      x = "Cycle Phase",
+      y = paste0("N items: Peaks \u2191 / Troughs \u2193 (max = ", max_n, ")")
+    ) +
+    ggplot2::theme_minimal(base_size = 12)
+}
 
     p_physical <- make_timing_density(
       sig_tv_raw %>% dplyr::filter(variable %in% physical_symptoms), "Physical",
@@ -756,46 +777,6 @@ if (nrow(sig_ranked) == 0) {
         (is.finite(range) & range >= 1.5)
       )
     if (nrow(qualifying) == 0) next
-
-    # overlay_labels <- unique(qualifying$outcome_label)
-    # overlay_data   <- pred_tv %>%
-    #   dplyr::filter(outcome_label %in% overlay_labels)
-    # if (nrow(overlay_data) == 0) next
-    # 
-    # n_curves <- length(overlay_labels)
-    # 
-    # p_overlay <- ggplot2::ggplot(overlay_data,
-    #     ggplot2::aes(x = .data[[tv]], y = estimate,
-    #                  color = outcome_label)) +
-    #   ggplot2::geom_hline(yintercept = 4, color = "red",
-    #                       linewidth = 0.4, alpha = 0.4) +
-    #   ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-    #                       linewidth = 0.6, linetype = "dashed") +
-    #   ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-    #                       linewidth = 0.6, linetype = "dashed") +
-    #   ggplot2::geom_line(linewidth = 0.9) +
-    #   ggplot2::scale_x_continuous(limits = c(-1, 1),
-    #                               breaks = seq(-1, 1, by = 0.5),
-    #                               labels = meta$labels) +
-    #   ggplot2::coord_cartesian(ylim = c(1, 6)) +
-    #   ggplot2::labs(
-    #     title = paste0("Overlaid GAM Curves \u2014 ID: ", current_id),
-    #     subtitle = paste0("Individual items with p < .05 or range \u2265 1.5  |  ",
-    #                       "N curves = ", n_curves, "  |  Time variable: ", tv),
-    #     x = "Cycle Phase", y = "Predicted Score",
-    #     color = "Outcome"
-    #   ) +
-    #   ggplot2::theme_minimal(base_size = 12) +
-    #   ggplot2::theme(
-    #     legend.position = "bottom",
-    #     legend.text = ggplot2::element_text(size = 7),
-    #     plot.title = ggplot2::element_text(face = "bold", size = 14)
-    #   ) +
-    #   ggplot2::guides(
-    #     color = ggplot2::guide_legend(ncol = 3)
-    #   )
-    # 
-    # print(p_overlay)
  
     # AR edits to color mapping 4/4/26
     
@@ -1185,6 +1166,7 @@ if (length(all_ids_signif)) {
   write.csv(dplyr::bind_rows(all_ids_signif), eval_csv, row.names = FALSE)
   message(sprintf("Wrote summary CSV: %s", eval_csv))
 }
+
 ```
 
 # 6 - Per outcome exploration
