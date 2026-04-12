@@ -1414,6 +1414,15 @@ get_drsp_variables <- function(df) {
     .[grepl("^drsp", ., ignore.case = TRUE)]
 }
 
+# --- Extract ADHD symptom variable names (CSS items) from the summary data ---
+get_adhd_variables <- function(df) {
+  df %>%
+    clean_gam_summary() %>%
+    dplyr::distinct(variable) %>%
+    dplyr::pull(variable) %>%
+    .[grepl("^CSS_", .)]
+}
+
 # --- Peak and trough timing distribution plot for significant participants ---
 plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
   meta <- axis_meta_list[[tv]]
@@ -1497,7 +1506,10 @@ if (length(all_ids_signif) > 0) {
   dir.create(explore_folder, showWarnings = FALSE, recursive = TRUE)
 
   drsp_vars <- get_drsp_variables(gam_summary_df)
-  cat("Found", length(drsp_vars), "DRSP variables to process\n")
+  adhd_vars <- get_adhd_variables(gam_summary_df)
+  all_outcome_vars <- c(adhd_vars, drsp_vars)
+  cat("Found", length(adhd_vars), "ADHD symptom (CSS) variables and",
+      length(drsp_vars), "DRSP variables to process\n")
 
   # Thresholds for the exploration
   explore_thresholds <- c(0.10, 0.20, 0.25, 0.36, 0.50, 0.75, 1.00)
@@ -1519,7 +1531,7 @@ if (length(all_ids_signif) > 0) {
     colhead = list(fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"))
   )
 
-  for (target_var in drsp_vars) {
+  for (target_var in all_outcome_vars) {
     cat(sprintf("\n=== Processing: %s ===\n", target_var))
 
     # 1. Run exploration analysis
