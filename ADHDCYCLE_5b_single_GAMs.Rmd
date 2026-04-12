@@ -117,10 +117,14 @@ names(page_definitions)[4:length(page_definitions)] <- paste0("DRSP_Page_", 1:(l
 # --- Physical vs Affect symptom classification (raw DRSP items only) ---
 physical_symptoms <- c("DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21")
 
+# --- ADHD symptom variable list (CSS items) ---
+all_raw_css <- names(outcomes)[grepl("^CSS_", names(outcomes))]
+
 # --- Max possible counts per category (for density-plot Y-axis scaling) ---
 all_raw_drsp <- names(outcomes)[grepl("^DRSP_\\d+$", names(outcomes))]
 n_physical_max <- length(intersect(all_raw_drsp, physical_symptoms))
 n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
+n_adhd_max     <- length(all_raw_css)
 
 # --- Pre-calculate log-transformations ---
 for (var in names(outcomes)) {
@@ -652,8 +656,8 @@ if (nrow(sig_ranked) == 0) {
 }
 
   # ---- Person-Specific Peak & Trough Timing Distribution ----
-  # Separate density plots for Physical vs Affect symptoms
-  # Only raw DRSP items with p < .05 or range >= 1.5
+  # Separate density plots for Physical vs Affect DRSP symptoms AND ADHD (CSS) symptoms
+  # Only items with p < .05 or range >= 1.5
   for (tv in names(sig_by_tv)) {
     sig_tv <- sig_by_tv[[tv]]
     if (nrow(sig_tv) == 0) next
@@ -666,7 +670,17 @@ if (nrow(sig_ranked) == 0) {
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
       )
-    if (nrow(sig_tv_raw) == 0) next
+
+    # Keep CSS (ADHD symptom) items that are significant or have range >= 1.5
+    sig_tv_adhd <- sig_tv %>%
+      dplyr::filter(grepl("^CSS_", variable)) %>%
+      dplyr::filter(
+        (is.finite(p.value) & p.value < 0.05) |
+        (is.finite(range) & range >= 1.5)
+      )
+
+    # Skip entirely if neither DRSP nor ADHD items qualify
+    if (nrow(sig_tv_raw) == 0 && nrow(sig_tv_adhd) == 0) next
 
     meta <- axis_meta[[tv]]
 
@@ -756,10 +770,15 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
       sig_tv_raw %>% dplyr::filter(!variable %in% physical_symptoms), "Affect",
       n_affect_max
     )
+    p_adhd <- make_timing_density(
+      sig_tv_adhd, "ADHD (CSS)",
+      n_adhd_max
+    )
 
     # Print each plot on its own page
     if (!is.null(p_physical)) print(p_physical)
     if (!is.null(p_affect))   print(p_affect)
+    if (!is.null(p_adhd))     print(p_adhd)
   }
 
   # ---- Overlay page: all qualifying individual GAM curves on one plot ----
@@ -973,6 +992,82 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
     print(p_overlay_05)
   }
   
+  # ---- Overlay page: ADHD (CSS) symptom curves on one plot ----
+  # Show CSS items that are significant (p < .05) OR have range >= 0.5
+  for (tv in names(preds_by_tv)) {
+    sig_tv   <- sig_by_tv[[tv]]
+    pred_tv  <- preds_by_tv[[tv]]
+    meta     <- axis_meta[[tv]]
+
+    # Identify qualifying CSS outcomes
+    qualifying_adhd <- sig_tv %>%
+      dplyr::filter(grepl("^CSS_", variable)) %>%
+      dplyr::filter(
+        (is.finite(p.value) & p.value < 0.05) |
+        (is.finite(range) & range >= 0.5)
+      )
+    if (nrow(qualifying_adhd) == 0) next
+
+    overlay_vars_adhd <- unique(qualifying_adhd$variable)
+    overlay_data_adhd <- pred_tv %>%
+      dplyr::filter(outcome_var %in% overlay_vars_adhd)
+    if (nrow(overlay_data_adhd) == 0) next
+
+    n_curves_adhd <- length(overlay_vars_adhd)
+
+    overlay_colors_adhd <- drsp_color_map[overlay_vars_adhd]
+    overlay_colors_adhd[is.na(overlay_colors_adhd)] <- "#0072B2"
+    names(overlay_colors_adhd) <- overlay_vars_adhd
+
+    # Use data-driven y-axis since CSS items have different scales (0-9, 0-5, 0-4, 0-3)
+    adhd_y_min <- min(overlay_data_adhd$conf.low, na.rm = TRUE)
+    adhd_y_max <- max(overlay_data_adhd$conf.high, na.rm = TRUE)
+    adhd_y_pad <- (adhd_y_max - adhd_y_min) * 0.05
+    adhd_ylim  <- c(max(0, adhd_y_min - adhd_y_pad), adhd_y_max + adhd_y_pad)
+
+    p_overlay_adhd <- ggplot2::ggplot(
+      overlay_data_adhd,
+      ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)
+    ) +
+      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_line(linewidth = 0.9) +
+      ggplot2::scale_color_manual(
+        values = overlay_colors_adhd,
+        breaks = overlay_vars_adhd,
+        labels = outcomes[overlay_vars_adhd]
+      ) +
+      ggplot2::scale_x_continuous(
+        limits = c(-1, 1),
+        breaks = seq(-1, 1, by = 0.5),
+        labels = meta$labels
+      ) +
+      ggplot2::coord_cartesian(ylim = adhd_ylim) +
+      ggplot2::labs(
+        title = paste0("ADHD Symptom (CSS) Overlaid GAM Curves \u2014 ID: ", current_id),
+        subtitle = paste0(
+          "CSS items with p < .05 or range \u2265 0.5  |  ",
+          "N curves = ", n_curves_adhd, "  |  Time variable: ", tv
+        ),
+        x = "Cycle Phase",
+        y = "Predicted Score",
+        color = "Outcome"
+      ) +
+      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme(
+        legend.position = "bottom",
+        legend.text = ggplot2::element_text(size = 7),
+        plot.title = ggplot2::element_text(face = "bold", size = 14)
+      ) +
+      ggplot2::guides(
+        color = ggplot2::guide_legend(ncol = 2)
+      )
+
+    print(p_overlay_adhd)
+  }
+
   # ---- Sections per time variable: compact table + pages of plots ----
   for (tv in names(preds_by_tv)) {
 
@@ -1484,7 +1579,7 @@ plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
 # =========================================================
 # GENERATE PER-OUTCOME EXPLORATION PDF REPORTS
 # =========================================================
-# For each DRSP outcome, generates a landscape PDF containing:
+# For each ADHD symptom (CSS) and DRSP outcome, generates a landscape PDF containing:
 #   1. Summary page: descriptive stats + threshold table + peak/trough timing
 #   2. Significance probability plot (logistic curve)
 #   3. Histogram of range by significance
