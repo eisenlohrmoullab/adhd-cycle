@@ -196,8 +196,8 @@ outcome_plot_settings <- tribble(
   "CSS_HypImp",       "fixed",       0,      3,      NA,
   "score_pinball",    "data",        NA,     NA,     NA,
   "score_robot",      "data",        NA,     NA,     NA,
-  "BDEFS_WM_avg",     "data",        1,     4,     NA,
-  "BDEFS_RI_avg",     "data",        1,     4,     NA,
+  "BDEFS_WM_avg",     "fixed",        1,     4,     NA,
+  "BDEFS_RI_avg",     "fixed",        1,     4,     NA,
   "DRSP_1",           "fixed",       1,      6,      4,
   "DRSP_2",           "fixed",       1,      6,      4,
   "DRSP_3",           "fixed",       1,      6,      4,
@@ -401,9 +401,9 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
   }
 
   border_col <- dplyr::case_when(
-    is.finite(rng) && rng >= 1.5 ~ "darkorange",
-    is.finite(rng) && rng >= 1.0 ~ "goldenrod1",
-    is.finite(rng) && rng >= 0.5 ~ "yellow",
+    is.finite(rng) && rng >= 1.5 ~ "red",
+    is.finite(rng) && rng >= 1.0 ~ "salmon",
+    is.finite(rng) && rng >= 0.5 ~ "pink",
     TRUE                         ~ NA_character_
   )
   
