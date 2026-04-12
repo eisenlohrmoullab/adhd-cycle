@@ -117,11 +117,15 @@ names(page_definitions)[4:length(page_definitions)] <- paste0("DRSP_Page_", 1:(l
 # --- Physical vs Affect symptom classification (raw DRSP items only) ---
 physical_symptoms <- c("DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21")
 
+# --- Pattern constants for variable matching ---
+ADHD_VAR_PATTERN <- "^CSS_"
+DRSP_VAR_PATTERN <- "^DRSP_\\d+$"
+
 # --- ADHD symptom variable list (CSS items) ---
-all_raw_css <- names(outcomes)[grepl("^CSS_", names(outcomes))]
+all_raw_css <- names(outcomes)[grepl(ADHD_VAR_PATTERN, names(outcomes))]
 
 # --- Max possible counts per category (for density-plot Y-axis scaling) ---
-all_raw_drsp <- names(outcomes)[grepl("^DRSP_\\d+$", names(outcomes))]
+all_raw_drsp <- names(outcomes)[grepl(DRSP_VAR_PATTERN, names(outcomes))]
 n_physical_max <- length(intersect(all_raw_drsp, physical_symptoms))
 n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
 n_adhd_max     <- length(all_raw_css)
@@ -665,7 +669,7 @@ if (nrow(sig_ranked) == 0) {
     # Keep only raw DRSP items (drsp_1, drsp_2, …), exclude composites;
     # further restrict to items that are significant (p < .05) OR have range >= 1.5
     sig_tv_raw <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
@@ -673,7 +677,7 @@ if (nrow(sig_ranked) == 0) {
 
     # Keep CSS (ADHD symptom) items that are significant or have range >= 1.5
     sig_tv_adhd <- sig_tv %>%
-      dplyr::filter(grepl("^CSS_", variable)) %>%
+      dplyr::filter(grepl(ADHD_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
@@ -790,7 +794,7 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
@@ -857,7 +861,7 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying_1 <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.0)
@@ -929,7 +933,7 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
 
     # Identify qualifying outcomes (individual DRSP items only, exclude composites)
     qualifying_05 <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 0.5)
@@ -1001,7 +1005,7 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
 
     # Identify qualifying CSS outcomes
     qualifying_adhd <- sig_tv %>%
-      dplyr::filter(grepl("^CSS_", variable)) %>%
+      dplyr::filter(grepl(ADHD_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 0.5)
@@ -1515,7 +1519,7 @@ get_adhd_variables <- function(df) {
     clean_gam_summary() %>%
     dplyr::distinct(variable) %>%
     dplyr::pull(variable) %>%
-    .[grepl("^CSS_", .)]
+    .[grepl(ADHD_VAR_PATTERN, .)]
 }
 
 # --- Peak and trough timing distribution plot for significant participants ---
