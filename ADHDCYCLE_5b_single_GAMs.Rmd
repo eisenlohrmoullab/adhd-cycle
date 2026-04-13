@@ -134,14 +134,14 @@ n_adhd_max     <- length(all_raw_css)
 CSS_COUNT_VARS    <- c("CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count")
 CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
 
-# --- Task outcome variables (cognitive scores + executive function) ---
-TASK_VARS <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
-
 # --- BDEFS executive function variables (separate from cognitive task scores) ---
 BDEFS_VARS <- c("BDEFS_WM_avg", "BDEFS_RI_avg")
 
 # --- Cognitive task performance variables ---
 COGNITIVE_TASK_VARS <- c("score_pinball", "score_robot")
+
+# --- Task outcome variables (cognitive scores + executive function) ---
+TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
 # Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
@@ -788,6 +788,7 @@ for (current_id in ids_to_run) {
     ))
 
     if (length(all_qualifying_vars) > 0) {
+      # range_thresh = 0 so all pre-filtered vars pass the internal filter
       plot_overlay_page(
         sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
         tv = tv, meta = axis_meta[[tv]],
@@ -830,26 +831,17 @@ for (current_id in ids_to_run) {
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
 
-    # Plots ordered by range (descending)
+    # Plots organized by outcome category (using page_definitions)
     combined_plot_data <- preds_by_tv[[tv]]
 
-    # Compute range per outcome and sort descending
-    outcome_order <- combined_plot_data %>%
-      dplyr::group_by(outcome_label) %>%
-      dplyr::summarise(raw_range = max(estimate, na.rm = TRUE) - min(estimate, na.rm = TRUE),
-                       .groups = "drop") %>%
-      dplyr::arrange(dplyr::desc(raw_range)) %>%
-      dplyr::pull(outcome_label)
-
-    outcome_pages <- split(outcome_order,
-                           ceiling(seq_along(outcome_order) / max_plots_per_page))
-
-    for (page_outcomes in outcome_pages) {
-      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
+    for (page_name in names(page_definitions)) {
+      page_outcome_labels <- page_definitions[[page_name]]
+      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcome_labels)
       if (nrow(page_data) == 0) next
 
-      plot_list <- lapply(page_outcomes, function(lab) {
+      plot_list <- lapply(page_outcome_labels, function(lab) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
+        if (nrow(plot_df) == 0) return(NULL)
         create_annotated_plot(plot_df, tv, axis_meta)
       })
       plot_list <- Filter(Negate(is.null), plot_list)
@@ -859,7 +851,8 @@ for (current_id in ids_to_run) {
           plot_list <- c(plot_list,
                          rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
         }
-        page_title <- paste("Symptom & Hormone Trajectories (by Range) — ID:", current_id, "| Time Variable:", tv)
+        page_title_label <- gsub("_", " ", page_name)
+        page_title <- paste(page_title_label, "\u2014 ID:", current_id, "| Time Variable:", tv)
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
