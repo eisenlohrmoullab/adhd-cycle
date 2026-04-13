@@ -148,10 +148,14 @@ COGNITIVE_TASK_YLIM <- {
     if (v %in% names(cycle_df_scaled)) cycle_df_scaled[[v]] else numeric(0)
   }))
   task_vals <- task_vals[!is.na(task_vals)]
-  q1  <- quantile(task_vals, 0.25)
-  q3  <- quantile(task_vals, 0.75)
-  iqr <- q3 - q1
-  c(max(0, q1 - 1.5 * iqr), q3 + 1.5 * iqr)
+  if (length(task_vals) == 0) {
+    c(0, 1)
+  } else {
+    q1  <- quantile(task_vals, 0.25)
+    q3  <- quantile(task_vals, 0.75)
+    iqr <- q3 - q1
+    c(max(0, q1 - 1.5 * iqr), q3 + 1.5 * iqr)
+  }
 }
 
 # --- Task outcome variables (cognitive scores + executive function) ---
@@ -554,11 +558,20 @@ for (current_id in ids_to_run) {
   # ---- Page 0: Raw data coverage (P4 + CSS Inattention Severity) ----
   # Shows raw data points across the cycle variable so the reader can quickly
   # judge whether there is enough data across phases for interpretation.
-  {
+  if (length(time_vars) > 0) {
     tv0 <- time_vars[1]
     meta0 <- axis_meta[[tv0]]
 
     make_raw_panel <- function(dat, tv, meta, var, y_lab, color) {
+      if (!var %in% names(dat)) {
+        # Column missing — render an empty "No data" panel
+        p <- ggplot2::ggplot() +
+          ggplot2::annotate("text", x = 0, y = 0, label = paste0(var, " not in data"),
+                            size = 5, color = "grey50") +
+          ggplot2::labs(x = "Cycle Phase", y = y_lab, subtitle = "n = 0 daily observations") +
+          ggplot2::theme_minimal(base_size = 12)
+        return(p)
+      }
       vals <- dat[[var]]
       has_data <- !all(is.na(vals))
       n_obs <- sum(!is.na(vals))
@@ -597,7 +610,7 @@ for (current_id in ids_to_run) {
         )
       )
     print(p_cover)
-  }
+  } # end Page 0 guard
 
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
@@ -673,8 +686,8 @@ for (current_id in ids_to_run) {
           est_max   = max(estimate, na.rm = TRUE),
           est_range = est_max - est_min,
           estimate  = ifelse(est_range > 0, (estimate  - est_min) / est_range, 0.5),
-          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0),
-          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 1)
+          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0.5),
+          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 0.5)
         ) %>%
         dplyr::select(-est_min, -est_max, -est_range) %>%
         dplyr::ungroup()
@@ -894,14 +907,15 @@ for (current_id in ids_to_run) {
     ))
 
     if (length(all_qualifying_vars) > 0) {
-      # range_thresh = 0 so all pre-filtered vars pass the internal filter
+      # Use the meaningful DRSP range criterion here so the auto-generated
+      # filter text matches the actual page selection rules.
       plot_overlay_page(
         sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
         tv = tv, meta = axis_meta[[tv]],
         var_list       = all_qualifying_vars,
-        range_thresh   = 0,
+        range_thresh   = 0.5,
         title_prefix   = "All Qualifying Outcomes (Normalized 0\u20131)",
-        subtitle_label = "All outcomes passing category-specific selection rules",
+        subtitle_label = "Category-specific rules: DRSP p < .05 or range \u2265 0.5; all other outcomes p < .05",
         ylim_strategy  = "fixed", fixed_ylim = c(0, 1),
         show_hline = FALSE,
         legend_ncol = 4,
