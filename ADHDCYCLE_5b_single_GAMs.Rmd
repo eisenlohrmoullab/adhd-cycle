@@ -138,6 +138,7 @@ CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
 TASK_VARS <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
+# Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
 CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4)
 
 # --- Variables for combined symptom overlay (DRSP + CSS severity + tasks) ---
@@ -893,10 +894,21 @@ if (nrow(sig_ranked) == 0) {
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
 
-    # Plots by predefined pages
+    # Plots ordered by range (descending)
     combined_plot_data <- preds_by_tv[[tv]]
-    for (page_name in names(page_definitions)) {
-      page_outcomes <- page_definitions[[page_name]]
+
+    # Compute range per outcome and sort descending
+    outcome_order <- combined_plot_data %>%
+      dplyr::group_by(outcome_label) %>%
+      dplyr::summarise(raw_range = max(estimate, na.rm = TRUE) - min(estimate, na.rm = TRUE),
+                       .groups = "drop") %>%
+      dplyr::arrange(dplyr::desc(raw_range)) %>%
+      dplyr::pull(outcome_label)
+
+    outcome_pages <- split(outcome_order,
+                           ceiling(seq_along(outcome_order) / max_plots_per_page))
+
+    for (page_outcomes in outcome_pages) {
       page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
       if (nrow(page_data) == 0) next
 
@@ -911,7 +923,7 @@ if (nrow(sig_ranked) == 0) {
           plot_list <- c(plot_list,
                          rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
         }
-        page_title <- paste("Symptom & Hormone Trajectories — ID:", current_id, "| Time Variable:", tv)
+        page_title <- paste("Symptom & Hormone Trajectories (by Range) — ID:", current_id, "| Time Variable:", tv)
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
@@ -975,7 +987,9 @@ if (nrow(sig_ranked) == 0) {
         )
       )
 
-    all_outcome_labels <- unique(combined_plot_data$outcome_label)
+    all_outcome_labels <- id_range_df %>%
+      dplyr::arrange(dplyr::desc(yrange)) %>%
+      dplyr::pull(outcome_label)
     outcome_pages_shared <- split(
       all_outcome_labels,
       ceiling(seq_along(all_outcome_labels) / max_plots_per_page)
