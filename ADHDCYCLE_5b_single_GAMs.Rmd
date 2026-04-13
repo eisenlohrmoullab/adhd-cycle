@@ -43,7 +43,13 @@ table_cols_per_page <- 6
 
 # --- Plot Layout (grid per page) ---
 plots_per_col <- 3
-plots_per_row <- 3 
+plots_per_row <- 3
+
+# --- Minimum observations per cycle-half to run GAMs ---
+# If a participant has fewer than this many non-missing cycle predictor
+# observations in either half (ovulation-to-menses or menses-to-ovulation),
+# GAMs are skipped and only the raw data coverage page is produced.
+min_obs_per_half <- 3
 ```
 
 # 2 - Create output folders & check time vars
@@ -429,7 +435,7 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     ggplot2::geom_point(data = max_pt, size = 2.5, color = line_col) +
     ggplot2::geom_point(data = min_pt, size = 2.5, color = line_col) +
     ggplot2::annotate("text", x = -1, y = Inf, label = ann,
-                      hjust = -0.1, vjust = 1.5, size = 3, fontface = "bold") +
+                      hjust = -0.05, vjust = 1.5, size = 2.5, fontface = "bold") +
     ggplot2::labs(title = dplyr::first(plot_df$outcome_label), x = "Cycle Phase", y = NULL) +
     ggplot2::scale_x_continuous(
       limits = c(-1, 1),
@@ -438,12 +444,17 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     ) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
-      plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
+      plot.title = ggplot2::element_text(size = 9, face = "bold", hjust = 0.5),
+      plot.margin = ggplot2::margin(t = 10, r = 5, b = 5, l = 5, unit = "pt"),
+      axis.text = ggplot2::element_text(size = 7)
     )
 
-  # Apply y-axis limits only when defined (NULL → ggplot auto-scales)
+  # Always disable clipping so top annotations (y = Inf) are never cut off.
+  # When y_limits is defined, also lock the y-axis range.
   if (!is.null(y_limits)) {
-    p <- p + ggplot2::coord_cartesian(ylim = y_limits)
+    p <- p + ggplot2::coord_cartesian(ylim = y_limits, clip = "off")
+  } else {
+    p <- p + ggplot2::coord_cartesian(clip = "off")
   }
 
   border_col <- dplyr::case_when(
@@ -506,46 +517,15 @@ all_ids_signif <- list()
 # fixed layout controls
 max_plots_per_page <- plots_per_col * plots_per_row
 table_theme <- gridExtra::ttheme_default(
-  base_size = 9,
-  core   = list(fg_params = list(hjust = 0, x = 0.05)),
-  colhead = list(fg_params = list(hjust = 0, x = 0.05))
+  base_size = 7,
+  core    = list(fg_params = list(hjust = 0, x = 0.05)),
+  colhead = list(fg_params = list(hjust = 0, x = 0.05)),
+  padding = grid::unit(c(3, 2), "mm")
 )
 
 for (current_id in ids_to_run) {
   message(sprintf("--- Processing ID: %s ---", current_id))
   datSX_id <- subset(cycle_df_scaled, id == current_id)
-
-  # Pass 1: fit & collect
-  preds_by_tv <- list()
-  sig_by_tv   <- list()
-
-  for (tv in time_vars) {
-    message(sprintf("  ... time variable: %s", tv))
-    all_preds <- list()
-    sig_list  <- list()
-
-    for (outcome_var in names(outcomes)) {
-      res <- fit_outcome(datSX_id, outcome_var, tv, outcomes)
-      if (is.null(res)) next
-      all_preds[[length(all_preds) + 1]] <- res$pred
-      sig_list[[length(sig_list) + 1]]  <- res$sig
-    }
-
-    if (length(all_preds) > 0) {
-      preds_by_tv[[tv]] <- dplyr::bind_rows(all_preds)
-      sig_by_tv[[tv]]   <- dplyr::bind_rows(sig_list)
-    }
-  }
-
-  if (!length(preds_by_tv)) {
-    message("    -> No successful models for this ID; skipping.")
-    next
-  }
-
-  # Build per-ID significance object for CSV
-  sig_all <- dplyr::bind_rows(sig_by_tv)
-  sig_all$id <- current_id
-  all_ids_signif[[as.character(current_id)]] <- sig_all
 
   # ---- Open a single LANDSCAPE PDF per participant ----
   pdf_filename <- file.path(report_folder, sprintf("Report_ID_%s.pdf", current_id))
@@ -558,6 +538,7 @@ for (current_id in ids_to_run) {
   # ---- Page 0: Raw data coverage (P4 + CSS Inattention Severity) ----
   # Shows raw data points across the cycle variable so the reader can quickly
   # judge whether there is enough data across phases for interpretation.
+  # This page is always produced, even if GAMs cannot be run.
   if (length(time_vars) > 0) {
     tv0 <- time_vars[1]
     meta0 <- axis_meta[[tv0]]
@@ -573,8 +554,9 @@ for (current_id in ids_to_run) {
         return(p)
       }
       vals <- dat[[var]]
+      # Count observations where both the outcome and cycle predictor are non-missing
       has_data <- !all(is.na(vals))
-      n_obs <- sum(!is.na(vals))
+      n_obs <- sum(!is.na(vals) & !is.na(dat[[tv]]))
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
                             linewidth = 0.6, linetype = "dashed") +
@@ -601,16 +583,101 @@ for (current_id in ids_to_run) {
     p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
                             "CSS Inattention Severity", "#D95F02")
 
+    # Count observations in each cycle-half for the primary time variable.
+    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that border
+    # both halves, so they are allowed to count toward both.
+    tv0_vals <- datSX_id[[tv0]]
+    tv0_vals <- tv0_vals[!is.na(tv0_vals)]
+    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # ov-to-menses half (includes wrap)
+    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # menses-to-ov half (includes wrap)
+    insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
+
+    # Build coverage subtitle — include per-half counts and a warning if insufficient
+    coverage_subtitle <- paste0(
+      "Time variable: ", tv0,
+      "  |  n (half 1) = ", n_half_pre,
+      ", n (half 2) = ", n_half_post
+    )
+    if (insufficient_coverage) {
+      coverage_subtitle <- paste0(
+        coverage_subtitle,
+        "\n\u26A0 Fewer than ", min_obs_per_half,
+        " observations in one or both cycle-halves — GAMs not run for this participant"
+      )
+    }
+
     p_cover <- p_p4 / p_css +
       patchwork::plot_annotation(
         title    = paste0("Raw Data Coverage \u2014 ID: ", current_id),
-        subtitle = paste0("Time variable: ", tv0),
+        subtitle = coverage_subtitle,
         theme    = ggplot2::theme(
-          plot.title = ggplot2::element_text(face = "bold", size = 14)
+          plot.title    = ggplot2::element_text(face = "bold", size = 12),
+          plot.subtitle = ggplot2::element_text(
+            size = if (insufficient_coverage) 10 else 9,
+            color = if (insufficient_coverage) "red" else "grey30"
+          )
         )
       )
     print(p_cover)
-  } # end Page 0 guard
+  } else {
+    insufficient_coverage <- TRUE
+    n_half_pre  <- 0L
+    n_half_post <- 0L
+
+    # Emit an explicit placeholder coverage page so the PDF is not blank
+    # when no eligible time variables are available for this participant.
+    grid::grid.newpage()
+    grid::grid.text(
+      label = paste0(
+        "Raw Data Coverage \u2014 ID: ", current_id,
+        "\n\nNo eligible time variables were available for GAM fitting.",
+        "\nA coverage-only placeholder report was generated."
+      ),
+      x = 0.5, y = 0.55,
+      gp = grid::gpar(fontsize = 12, fontface = "bold")
+    )
+  } # end Page 0
+
+  # ---- Gate: skip GAMs if cycle-half coverage is too sparse ----
+  if (insufficient_coverage) {
+    grDevices::dev.off()
+    message(sprintf("    -> Insufficient cycle-half coverage (n_pre=%d, n_post=%d, min=%d); saved coverage-only report: %s",
+                    n_half_pre, n_half_post, min_obs_per_half, pdf_filename))
+    next
+  }
+
+  # ---- Pass 1: fit GAMs & collect predictions ----
+  preds_by_tv <- list()
+  sig_by_tv   <- list()
+
+  for (tv in time_vars) {
+    message(sprintf("  ... time variable: %s", tv))
+    all_preds <- list()
+    sig_list  <- list()
+
+    for (outcome_var in names(outcomes)) {
+      res <- fit_outcome(datSX_id, outcome_var, tv, outcomes)
+      if (is.null(res)) next
+      all_preds[[length(all_preds) + 1]] <- res$pred
+      sig_list[[length(sig_list) + 1]]  <- res$sig
+    }
+
+    if (length(all_preds) > 0) {
+      preds_by_tv[[tv]] <- dplyr::bind_rows(all_preds)
+      sig_by_tv[[tv]]   <- dplyr::bind_rows(sig_list)
+    }
+  }
+
+  if (!length(preds_by_tv)) {
+    message("    -> No successful models for this ID; skipping.")
+    grDevices::dev.off()
+    next
+  }
+
+  # Build per-ID significance object for CSV
+  sig_all <- dplyr::bind_rows(sig_by_tv)
+  sig_all$id <- current_id
+  all_ids_signif[[as.character(current_id)]] <- sig_all
 
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
@@ -677,19 +744,27 @@ for (current_id in ids_to_run) {
       ov_labels <- outcomes[ov_vars]
     }
 
-    # Optionally normalize predictions to 0-1 per outcome (min-max)
+    # Optionally normalize predictions to 0-1 per outcome using scale min/max
+    # so that 1 represents the maximum possible value on the outcome's scale,
+    # not the max of the GAM curve.
     if (normalize_01) {
       ov_data <- ov_data %>%
+        dplyr::left_join(
+          dplyr::select(outcome_plot_settings, variable, y_min, y_max),
+          by = c("outcome_var" = "variable")
+        ) %>%
         dplyr::group_by(outcome_var) %>%
         dplyr::mutate(
-          est_min   = min(estimate, na.rm = TRUE),
-          est_max   = max(estimate, na.rm = TRUE),
-          est_range = est_max - est_min,
-          estimate  = ifelse(est_range > 0, (estimate  - est_min) / est_range, 0.5),
-          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0.5),
-          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 0.5)
+          # Use scale min/max from outcome_plot_settings when available;
+          # fall back to GAM-predicted min/max for data-mode outcomes (e.g., hormones)
+          scale_min = dplyr::coalesce(y_min, min(estimate, na.rm = TRUE)),
+          scale_max = dplyr::coalesce(y_max, max(estimate, na.rm = TRUE)),
+          scale_range = scale_max - scale_min,
+          estimate  = ifelse(scale_range > 0, (estimate  - scale_min) / scale_range, 0.5),
+          conf.low  = ifelse(scale_range > 0, (conf.low  - scale_min) / scale_range, 0.5),
+          conf.high = ifelse(scale_range > 0, (conf.high - scale_min) / scale_range, 0.5)
         ) %>%
-        dplyr::select(-est_min, -est_max, -est_range) %>%
+        dplyr::select(-y_min, -y_max, -scale_min, -scale_max, -scale_range) %>%
         dplyr::ungroup()
       # Force Y limits to 0-1 for normalized data
       ylim_strategy <- "fixed"
@@ -731,7 +806,7 @@ for (current_id in ids_to_run) {
           if (is.null(ref_col) || is.na(ref_col)) ref_col <- "#0072B2"
           p <- p + ggplot2::geom_hline(
             yintercept = ref_lines_per_var[[rv]],
-            color = ref_col, linewidth = 0.5, linetype = "dotted", alpha = 0.6
+            color = ref_col, linewidth = 0.5, linetype = "solid", alpha = 0.7
           )
         }
       }
@@ -764,11 +839,13 @@ for (current_id in ids_to_run) {
         y = y_axis_label,
         color = "Outcome"
       ) +
-      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme_minimal(base_size = 10) +
       ggplot2::theme(
         legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
+        legend.text = ggplot2::element_text(size = 6),
+        plot.title = ggplot2::element_text(face = "bold", size = 12),
+        plot.subtitle = ggplot2::element_text(size = 8),
+        plot.margin = ggplot2::margin(t = 8, r = 8, b = 8, l = 8, unit = "pt")
       ) +
       ggplot2::guides(
         color = ggplot2::guide_legend(ncol = legend_ncol)
@@ -871,7 +948,7 @@ for (current_id in ids_to_run) {
       var_list       = CSS_COUNT_VARS,
       range_thresh   = Inf,
       title_prefix   = "Overlaid GAM Curves (CSS Symptom Counts)",
-      subtitle_label = "CSS count items (dotted lines = max possible count)",
+      subtitle_label = "CSS count items (solid lines = max possible count)",
       ylim_strategy  = "fixed", fixed_ylim = c(0, 9),
       show_hline = FALSE,
       legend_ncol = 2,
@@ -946,7 +1023,7 @@ for (current_id in ids_to_run) {
     # summary_df <- dplyr::filter(summary_df, Sig != "")
 
     tv_title <- grid::textGrob(paste("Significance — ID:", current_id, "| Time Variable:", tv),
-                               gp = grid::gpar(fontsize = 14, fontface = "bold"))
+                               gp = grid::gpar(fontsize = 12, fontface = "bold"))
     tv_table <- gridExtra::tableGrob(summary_df, rows = NULL, theme = table_theme)
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
@@ -976,7 +1053,7 @@ for (current_id in ids_to_run) {
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
-            theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 14, face = "bold"))
+            theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 12, face = "bold"))
           )
         print(final_page)
       }
@@ -1103,8 +1180,8 @@ for (current_id in ids_to_run) {
             title = page_title_shared,
             subtitle = page_subtitle_shared,
             theme = ggplot2::theme(
-              plot.title = ggplot2::element_text(size = 14, face = "bold"),
-              plot.subtitle = ggplot2::element_text(size = 11)
+              plot.title = ggplot2::element_text(size = 12, face = "bold"),
+              plot.subtitle = ggplot2::element_text(size = 9)
             )
           )
 
@@ -1752,8 +1829,8 @@ if (length(all_ids_signif) > 0) {
                 title    = paste(grp$label, ":", outcome_label),
                 subtitle = paste("Time variable:", tv),
                 theme    = ggplot2::theme(
-                  plot.title    = ggplot2::element_text(size = 14, face = "bold"),
-                  plot.subtitle = ggplot2::element_text(size = 11)
+                  plot.title    = ggplot2::element_text(size = 12, face = "bold"),
+                  plot.subtitle = ggplot2::element_text(size = 9)
                 )
               )
             print(final_page)
