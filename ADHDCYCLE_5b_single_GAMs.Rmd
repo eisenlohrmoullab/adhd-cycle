@@ -130,6 +130,20 @@ n_physical_max <- length(intersect(all_raw_drsp, physical_symptoms))
 n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
 n_adhd_max     <- length(all_raw_css)
 
+# --- CSS count vs. severity variable classification ---
+CSS_COUNT_VARS    <- c("CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count")
+CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
+
+# --- Task outcome variables (cognitive scores + executive function) ---
+TASK_VARS <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
+
+# --- Max possible values for CSS count variables (for 0-1 normalization) ---
+# Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
+CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4)
+
+# --- Variables for combined symptom overlay (DRSP + CSS severity + tasks) ---
+COMBINED_SYMPTOM_VARS <- c(all_raw_drsp, CSS_SEVERITY_VARS, TASK_VARS)
+
 # --- Pre-calculate log-transformations ---
 for (var in names(outcomes)) {
   if (var %in% names(cycle_df_scaled)) {
@@ -659,134 +673,10 @@ if (nrow(sig_ranked) == 0) {
   )
 }
 
-  # ---- Person-Specific Peak & Trough Timing Distribution ----
-  # Separate density plots for Physical vs Affect DRSP symptoms AND ADHD (CSS) symptoms
-  # Only items with p < .05 or range >= 1.5
-  for (tv in names(sig_by_tv)) {
-    sig_tv <- sig_by_tv[[tv]]
-    if (nrow(sig_tv) == 0) next
-
-    # Keep only raw DRSP items (drsp_1, drsp_2, …), exclude composites;
-    # further restrict to items that are significant (p < .05) OR have range >= 1.5
-    sig_tv_raw <- sig_tv %>%
-      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
-      dplyr::filter(
-        (is.finite(p.value) & p.value < 0.05) |
-        (is.finite(range) & range >= 1.5)
-      )
-
-    # Keep CSS (ADHD symptom) items that are significant or have range >= 1.5
-    sig_tv_adhd <- sig_tv %>%
-      dplyr::filter(grepl(ADHD_VAR_PATTERN, variable)) %>%
-      dplyr::filter(
-        (is.finite(p.value) & p.value < 0.05) |
-        (is.finite(range) & range >= 1.5)
-      )
-
-    # Skip entirely if neither DRSP nor ADHD items qualify
-    if (nrow(sig_tv_raw) == 0 && nrow(sig_tv_adhd) == 0) next
-
-    meta <- axis_meta[[tv]]
-
-  # Helper to build a peak/trough timing plot for one symptom category.
-# Uses a histogram-style count (binwidth = 0.1 on the [-1,1] scale) so the
-# y-axis literally = number of qualifying items whose peak/trough falls in
-# that bin. max_n fixes the axis ceiling = total possible qualifying items,
-# making plots comparable across participants.
-make_timing_density <- function(sig_subset, category_label, max_n) {
-  tl <- dplyr::bind_rows(
-    sig_subset %>% dplyr::filter(!is.na(peak_time)) %>%
-      dplyr::transmute(time = peak_time,   type = "Peak (Max)",   outcome = outcome_label),
-    sig_subset %>% dplyr::filter(!is.na(trough_time)) %>%
-      dplyr::transmute(time = trough_time, type = "Trough (Min)", outcome = outcome_label)
-  )
-  if (nrow(tl) < 2) return(NULL)
-
-  tl_peak   <- dplyr::filter(tl, type == "Peak (Max)")
-  tl_trough <- dplyr::filter(tl, type == "Trough (Min)")
-
-  # Need at least 1 in each group to plot
-  if (nrow(tl_peak) < 1 || nrow(tl_trough) < 1) return(NULL)
-
-  # --- Bin the peak/trough times into counts on a fixed grid ---
-  bins   <- seq(-1, 1, by = 0.1)
-  bin_mid <- bins[-length(bins)] + 0.05  # midpoints
-
-  count_bins <- function(times) {
-    counts <- hist(times, breaks = bins, plot = FALSE)$counts
-    data.frame(x = bin_mid, count = counts)
-  }
-
-  df_peak   <- count_bins(tl_peak$time)
-  df_trough <- count_bins(tl_trough$time)
-  df_trough$count <- -df_trough$count  # mirror downward for troughs
-
-  ggplot2::ggplot() +
-    # Peaks upward (orange)
-    ggplot2::geom_col(data = df_peak,
-                      ggplot2::aes(x = x, y = count),
-                      width = 0.09, fill = "#D55E00", color = "#D55E00", alpha = 0.6) +
-    # Troughs downward (blue, already negative)
-    ggplot2::geom_col(data = df_trough,
-                      ggplot2::aes(x = x, y = count),
-                      width = 0.09, fill = "#0072B2", color = "#0072B2", alpha = 0.6) +
-    # Rug marks showing exact peak/trough locations
-    ggplot2::geom_rug(data = tl_peak,
-                      ggplot2::aes(x = time), color = "#D55E00",
-                      alpha = 0.7, length = grid::unit(0.03, "npc"), sides = "b") +
-    ggplot2::geom_rug(data = tl_trough,
-                      ggplot2::aes(x = time), color = "#0072B2",
-                      alpha = 0.7, length = grid::unit(0.03, "npc"), sides = "t") +
-    ggplot2::geom_hline(yintercept = 0, linewidth = 0.5, color = "grey40") +
-    ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                        linewidth = 0.8, linetype = "dashed") +
-    ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                        linewidth = 0.8, linetype = "dashed") +
-    ggplot2::scale_x_continuous(limits = c(-1, 1),
-                                breaks = seq(-1, 1, by = 0.5),
-                                labels = meta$labels) +
-    ggplot2::scale_y_continuous(limits = c(-max_n, max_n),
-                                breaks = seq(-max_n, max_n, by = 1),
-                                labels = abs) +
-    ggplot2::annotate("text", x = -0.95, y =  max_n * 0.9,
-                      label = paste0("Peaks (orange): n = ", nrow(tl_peak)),
-                      hjust = 0, size = 3.5, color = "#D55E00", fontface = "bold") +
-    ggplot2::annotate("text", x = -0.95, y = -max_n * 0.9,
-                      label = paste0("Troughs (blue): n = ", nrow(tl_trough)),
-                      hjust = 0, size = 3.5, color = "#0072B2", fontface = "bold") +
-    ggplot2::labs(
-      title    = paste0(category_label, " Symptoms \u2014 ID: ", current_id),
-      subtitle = paste0("Items with p < .05 or range \u2265 1.5  |  ",
-                        "N qualifying = ", nrow(sig_subset), " / ", max_n,
-                        "  |  Time variable: ", tv,
-                        "\nBars = count of items peaking/troughing in each 0.1-unit bin"),
-      x = "Cycle Phase",
-      y = paste0("N items: Peaks \u2191 / Troughs \u2193 (max = ", max_n, ")")
-    ) +
-    ggplot2::theme_minimal(base_size = 12)
-}
-
-    p_physical <- make_timing_density(
-      sig_tv_raw %>% dplyr::filter(variable %in% physical_symptoms), "Physical",
-      n_physical_max
-    )
-    p_affect <- make_timing_density(
-      sig_tv_raw %>% dplyr::filter(!variable %in% physical_symptoms), "Affect",
-      n_affect_max
-    )
-    p_adhd <- make_timing_density(
-      sig_tv_adhd, "ADHD (CSS)",
-      n_adhd_max
-    )
-
-    # Print each plot on its own page
-    if (!is.null(p_physical)) print(p_physical)
-    if (!is.null(p_affect))   print(p_affect)
-    if (!is.null(p_adhd))     print(p_adhd)
-  }
 
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
-  # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN, ADHD_VAR_PATTERN)
+  # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
+  # @param var_list       character vector of variable names to include; overrides var_pattern if provided
   # @param range_thresh   minimum range for inclusion alongside p < .05
   # @param title_prefix   text before " — ID: ..." in plot title
   # @param subtitle_label description of items shown (e.g. "Individual items", "CSS items")
@@ -796,13 +686,21 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
   # @param hline_y        y-intercept for the reference line
   # @param legend_ncol    number of columns in the legend
   plot_overlay_page <- function(sig_tv, pred_tv, tv, meta,
-                                var_pattern, range_thresh,
-                                title_prefix, subtitle_label,
+                                range_thresh, title_prefix, subtitle_label,
+                                var_pattern = NULL, var_list = NULL,
                                 ylim_strategy = "fixed", fixed_ylim = c(1, 6),
                                 show_hline = TRUE, hline_y = 4,
                                 legend_ncol = 3) {
-    qualifying <- sig_tv %>%
-      dplyr::filter(grepl(var_pattern, variable)) %>%
+    if (!is.null(var_list)) {
+      qualifying <- sig_tv %>%
+        dplyr::filter(variable %in% var_list)
+    } else if (!is.null(var_pattern)) {
+      qualifying <- sig_tv %>%
+        dplyr::filter(grepl(var_pattern, variable))
+    } else {
+      return(invisible(NULL))
+    }
+    qualifying <- qualifying %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= range_thresh)
@@ -878,36 +776,95 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
     print(p)
   }
 
-  # ---- DRSP overlay pages at multiple range thresholds ----
+  # ---- Combined symptom overlay pages (DRSP + CSS severity + Task) at multiple range thresholds ----
   for (tv in names(preds_by_tv)) {
     for (thresh in c(1.5, 1.0, 0.5)) {
       plot_overlay_page(
         sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
         tv = tv, meta = axis_meta[[tv]],
-        var_pattern    = DRSP_VAR_PATTERN,
+        var_list       = COMBINED_SYMPTOM_VARS,
         range_thresh   = thresh,
-        title_prefix   = "Overlaid GAM Curves",
-        subtitle_label = "Individual items",
-        ylim_strategy  = "fixed", fixed_ylim = c(1, 6),
-        show_hline = TRUE, hline_y = 4,
-        legend_ncol = 3
+        title_prefix   = "Overlaid GAM Curves (All Symptoms)",
+        subtitle_label = "DRSP + CSS severity + Task items",
+        ylim_strategy  = "data",
+        show_hline = FALSE,
+        legend_ncol = 4
       )
     }
   }
 
-  # ---- ADHD (CSS) overlay page ----
+  # ---- CSS Count outcomes (normalized 0-1 overlay) ----
   for (tv in names(preds_by_tv)) {
-    plot_overlay_page(
-      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
-      tv = tv, meta = axis_meta[[tv]],
-      var_pattern    = ADHD_VAR_PATTERN,
-      range_thresh   = 0.5,
-      title_prefix   = "ADHD Symptom (CSS) Overlaid GAM Curves",
-      subtitle_label = "CSS items",
-      ylim_strategy  = "data",
-      show_hline = FALSE,
-      legend_ncol = 2
-    )
+    sig_tv <- sig_by_tv[[tv]]
+    pred_tv <- preds_by_tv[[tv]]
+    meta <- axis_meta[[tv]]
+
+    qualifying <- sig_tv %>%
+      dplyr::filter(variable %in% CSS_COUNT_VARS) %>%
+      dplyr::filter(
+        (is.finite(p.value) & p.value < 0.05) |
+        (is.finite(range) & range >= 0.5)
+      )
+    if (nrow(qualifying) == 0) next
+
+    ov_vars <- unique(qualifying$variable)
+    ov_data <- pred_tv %>% dplyr::filter(outcome_var %in% ov_vars)
+    if (nrow(ov_data) == 0) next
+
+    # Normalize predictions to 0-1 scale using max possible values, then clamp to [0, 1]
+    ov_data <- ov_data %>%
+      dplyr::mutate(
+        max_possible = CSS_COUNT_MAX[outcome_var],
+        estimate  = pmin(pmax(estimate  / max_possible, 0), 1),
+        conf.low  = pmin(pmax(conf.low  / max_possible, 0), 1),
+        conf.high = pmin(pmax(conf.high / max_possible, 0), 1)
+      )
+
+    n_curves <- length(ov_vars)
+    ov_colors <- drsp_color_map[ov_vars]
+    ov_colors[is.na(ov_colors)] <- "#0072B2"
+    names(ov_colors) <- ov_vars
+
+    p <- ggplot2::ggplot(ov_data,
+           ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)) +
+      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_line(linewidth = 0.9) +
+      ggplot2::scale_color_manual(
+        values = ov_colors,
+        breaks = ov_vars,
+        labels = outcomes[ov_vars]
+      ) +
+      ggplot2::scale_x_continuous(
+        limits = c(-1, 1),
+        breaks = seq(-1, 1, by = 0.5),
+        labels = meta$labels
+      ) +
+      ggplot2::coord_cartesian(ylim = c(0, 1)) +
+      ggplot2::labs(
+        title = paste0("CSS Count Symptoms (Normalized 0\u20131) \u2014 ID: ", current_id),
+        subtitle = paste0(
+          "Count items with p < .05 or range \u2265 0.5  |  N curves = ", n_curves,
+          "  |  Time variable: ", tv,
+          "\nEach variable divided by its maximum possible value"
+        ),
+        x = "Cycle Phase",
+        y = "Normalized Score (0\u20131)",
+        color = "Outcome"
+      ) +
+      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme(
+        legend.position = "bottom",
+        legend.text = ggplot2::element_text(size = 7),
+        plot.title = ggplot2::element_text(face = "bold", size = 14)
+      ) +
+      ggplot2::guides(
+        color = ggplot2::guide_legend(ncol = 2)
+      )
+
+    print(p)
   }
 
   # ---- Sections per time variable: compact table + pages of plots ----
@@ -936,10 +893,21 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
 
-    # Plots by predefined pages
+    # Plots ordered by range (descending)
     combined_plot_data <- preds_by_tv[[tv]]
-    for (page_name in names(page_definitions)) {
-      page_outcomes <- page_definitions[[page_name]]
+
+    # Compute range per outcome and sort descending
+    outcome_order <- combined_plot_data %>%
+      dplyr::group_by(outcome_label) %>%
+      dplyr::summarise(raw_range = max(estimate, na.rm = TRUE) - min(estimate, na.rm = TRUE),
+                       .groups = "drop") %>%
+      dplyr::arrange(dplyr::desc(raw_range)) %>%
+      dplyr::pull(outcome_label)
+
+    outcome_pages <- split(outcome_order,
+                           ceiling(seq_along(outcome_order) / max_plots_per_page))
+
+    for (page_outcomes in outcome_pages) {
       page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
       if (nrow(page_data) == 0) next
 
@@ -954,7 +922,7 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
           plot_list <- c(plot_list,
                          rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
         }
-        page_title <- paste("Symptom & Hormone Trajectories — ID:", current_id, "| Time Variable:", tv)
+        page_title <- paste("Symptom & Hormone Trajectories (by Range) — ID:", current_id, "| Time Variable:", tv)
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
@@ -1018,7 +986,9 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
         )
       )
 
-    all_outcome_labels <- unique(combined_plot_data$outcome_label)
+    all_outcome_labels <- id_range_df %>%
+      dplyr::arrange(dplyr::desc(yrange)) %>%
+      dplyr::pull(outcome_label)
     outcome_pages_shared <- split(
       all_outcome_labels,
       ceiling(seq_along(all_outcome_labels) / max_plots_per_page)
