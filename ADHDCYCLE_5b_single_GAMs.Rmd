@@ -551,6 +551,54 @@ for (current_id in ids_to_run) {
   }
   grDevices::pdf(pdf_filename, width = 11, height = 8.5)   # LANDSCAPE
 
+  # ---- Page 0: Raw data coverage (P4 + CSS Inattention Severity) ----
+  # Shows raw data points across the cycle variable so the reader can quickly
+  # judge whether there is enough data across phases for interpretation.
+  {
+    tv0 <- time_vars[1]
+    meta0 <- axis_meta[[tv0]]
+
+    make_raw_panel <- function(dat, tv, meta, var, y_lab, color) {
+      vals <- dat[[var]]
+      has_data <- !all(is.na(vals))
+      n_obs <- sum(!is.na(vals))
+      p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
+        ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                            linewidth = 0.6, linetype = "dashed") +
+        ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                            linewidth = 0.6, linetype = "dashed") +
+        ggplot2::scale_x_continuous(
+          limits = c(-1, 1), breaks = seq(-1, 1, by = 0.5),
+          labels = meta$labels
+        ) +
+        ggplot2::labs(x = "Cycle Phase", y = y_lab,
+                      subtitle = paste0("n = ", n_obs, " daily observations")) +
+        ggplot2::theme_minimal(base_size = 12)
+      if (has_data) {
+        p <- p + ggplot2::geom_point(color = color, alpha = 0.45, size = 1.8)
+      } else {
+        p <- p + ggplot2::annotate("text", x = 0, y = 0, label = "No data",
+                                   size = 5, color = "grey50")
+      }
+      p
+    }
+
+    p_p4 <- make_raw_panel(datSX_id, tv0, meta0, "P4",
+                           "Progesterone (P4)", "#7570B3")
+    p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
+                            "CSS Inattention Severity", "#D95F02")
+
+    p_cover <- p_p4 / p_css +
+      patchwork::plot_annotation(
+        title    = paste0("Raw Data Coverage \u2014 ID: ", current_id),
+        subtitle = paste0("Time variable: ", tv0),
+        theme    = ggplot2::theme(
+          plot.title = ggplot2::element_text(face = "bold", size = 14)
+        )
+      )
+    print(p_cover)
+  }
+
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
   # @param var_list       character vector of variable names to include; overrides var_pattern if provided
