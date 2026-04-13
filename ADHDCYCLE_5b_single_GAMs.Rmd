@@ -140,6 +140,20 @@ BDEFS_VARS <- c("BDEFS_WM_avg", "BDEFS_RI_avg")
 # --- Cognitive task performance variables ---
 COGNITIVE_TASK_VARS <- c("score_pinball", "score_robot")
 
+# --- Sample-wide IQR-based Y-axis limits for cognitive task variables ---
+# Uses the "boxplot whisker" range: Q1 - 1.5*IQR to Q3 + 1.5*IQR, floored at 0.
+# This provides a principled, context-giving Y scale for individual overlay plots.
+COGNITIVE_TASK_YLIM <- {
+  task_vals <- unlist(lapply(COGNITIVE_TASK_VARS, function(v) {
+    if (v %in% names(cycle_df_scaled)) cycle_df_scaled[[v]] else numeric(0)
+  }))
+  task_vals <- task_vals[!is.na(task_vals)]
+  q1  <- quantile(task_vals, 0.25)
+  q3  <- quantile(task_vals, 0.75)
+  iqr <- q3 - q1
+  c(max(0, q1 - 1.5 * iqr), q3 + 1.5 * iqr)
+}
+
 # --- Task outcome variables (cognitive scores + executive function) ---
 TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
 
@@ -555,7 +569,8 @@ for (current_id in ids_to_run) {
                                 show_hline = TRUE, hline_y = 4,
                                 legend_ncol = 3,
                                 show_range_in_labels = FALSE,
-                                normalize_01 = FALSE) {
+                                normalize_01 = FALSE,
+                                ref_lines_per_var = NULL) {
     if (!is.null(var_list)) {
       qualifying <- sig_tv %>%
         dplyr::filter(variable %in% var_list)
@@ -647,6 +662,20 @@ for (current_id in ids_to_run) {
                                    linewidth = 0.4, alpha = 0.4)
     }
 
+    # Per-variable color-matched reference lines (e.g., max possible counts)
+    if (!is.null(ref_lines_per_var)) {
+      for (rv in names(ref_lines_per_var)) {
+        if (rv %in% ov_vars) {
+          ref_col <- ov_colors[[rv]]
+          if (is.null(ref_col) || is.na(ref_col)) ref_col <- "#0072B2"
+          p <- p + ggplot2::geom_hline(
+            yintercept = ref_lines_per_var[[rv]],
+            color = ref_col, linewidth = 0.5, linetype = "dotted", alpha = 0.6
+          )
+        }
+      }
+    }
+
     p <- p +
       ggplot2::geom_vline(xintercept = meta$menses, color = "red",
                           linewidth = 0.6, linetype = "dashed") +
@@ -718,15 +747,15 @@ for (current_id in ids_to_run) {
       show_range_in_labels = TRUE
     )
 
-    # (3) Cognitive task performance outcomes: sig only, data-driven Y
+    # (3) Cognitive task performance outcomes: sig only, Y scale from sample IQR
     plot_overlay_page(
       sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
       tv = tv, meta = axis_meta[[tv]],
       var_list       = COGNITIVE_TASK_VARS,
       range_thresh   = Inf,
       title_prefix   = "Overlaid GAM Curves (Task Performance)",
-      subtitle_label = "Cognitive task outcomes",
-      ylim_strategy  = "data",
+      subtitle_label = "Cognitive task outcomes (Y = sample IQR whisker range)",
+      ylim_strategy  = "fixed", fixed_ylim = COGNITIVE_TASK_YLIM,
       show_hline = FALSE,
       legend_ncol = 2,
       show_range_in_labels = TRUE
@@ -746,18 +775,19 @@ for (current_id in ids_to_run) {
       show_range_in_labels = TRUE
     )
 
-    # (5) CSS symptom count items: sig only, Y scale 0-9
+    # (5) CSS symptom count items: sig only, Y scale 0-9, with max-possible reference lines
     plot_overlay_page(
       sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
       tv = tv, meta = axis_meta[[tv]],
       var_list       = CSS_COUNT_VARS,
       range_thresh   = Inf,
       title_prefix   = "Overlaid GAM Curves (CSS Symptom Counts)",
-      subtitle_label = "CSS count items",
+      subtitle_label = "CSS count items (dotted lines = max possible count)",
       ylim_strategy  = "fixed", fixed_ylim = c(0, 9),
       show_hline = FALSE,
       legend_ncol = 2,
-      show_range_in_labels = TRUE
+      show_range_in_labels = TRUE,
+      ref_lines_per_var = CSS_COUNT_MAX
     )
 
     # (6) Combined normalized page: all qualifying outcomes on 0-1 scale
