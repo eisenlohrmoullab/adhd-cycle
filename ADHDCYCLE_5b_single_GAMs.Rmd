@@ -531,149 +531,6 @@ for (current_id in ids_to_run) {
   }
   grDevices::pdf(pdf_filename, width = 11, height = 8.5)   # LANDSCAPE
 
-  # ---- COVER: Compact counts by category x time_var ----
-  sig_all_clean <- sig_all %>%
-    dplyr::mutate(
-      stars = dplyr::case_when(
-        is.finite(p.value) & p.value < 0.001 ~ "***",
-        is.finite(p.value) & p.value < 0.01  ~ "**",
-        is.finite(p.value) & p.value < 0.05  ~ "*",
-        TRUE ~ ""
-      )
-    ) %>%
-    dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable")
-
-  cover_cpass <- sig_all_clean %>%
-    dplyr::group_by(category) %>%
-    dplyr::summarise(
-      `Range ≥1.5 sig` = sum(is.finite(range) & range >= 1.5 & stars != "", na.rm = TRUE),
-      .groups = "drop"
-    )
-
-  cover_counts <- sig_all_clean %>%
-    dplyr::group_by(category, time_var) %>%
-    dplyr::summarise(
-      tested = dplyr::n(),
-      n_sig  = sum(stars != "", na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    tidyr::unite("count", n_sig, tested, sep = " / ") %>%
-    tidyr::pivot_wider(names_from = time_var, values_from = count, values_fill = "0 / 0") %>%
-    dplyr::left_join(cover_cpass, by = "category") %>%
-    dplyr::arrange(category)
-
-  cover_theme <- gridExtra::ttheme_default(
-    base_size = 9,
-    core = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"),
-      padding  = grid::unit(c(2, 2), "mm")
-    ),
-    colhead = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
-    )
-  )
-
-  title_grob    <- grid::textGrob(paste("Compact Summary — ID:", current_id),
-                                  gp = grid::gpar(fontsize = 16, fontface = "bold"))
-  subtitle_grob <- grid::textGrob("Cells show: # significant / # tested (p < .05) per category × time variable",
-                                  gp = grid::gpar(fontsize = 9))
-  cover_grob    <- gridExtra::tableGrob(cover_counts, rows = NULL, theme = cover_theme)
-  gridExtra::grid.arrange(title_grob, subtitle_grob, cover_grob,
-                          ncol = 1, heights = grid::unit(c(0.12, 0.08, 0.80), "npc"))
-
-  # ---- OPTIONAL: compact stars matrix for outcomes with any significance ----
-  compact_stars <- sig_all_clean %>%
-    dplyr::group_by(variable) %>%
-    dplyr::mutate(any_sig = any(is.finite(p.value) & p.value < 0.05, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::filter(any_sig) %>%
-    dplyr::mutate(Outcome = dplyr::coalesce(outcome_label, variable)) %>%
-    dplyr::mutate(
-      Outcome = ifelse(nchar(Outcome) > 22, variable, Outcome),
-      stars = dplyr::case_when(
-        is.finite(p.value) & p.value < 0.001 ~ "***",
-        is.finite(p.value) & p.value < 0.01  ~ "**",
-        is.finite(p.value) & p.value < 0.05  ~ "*",
-        TRUE ~ ""
-      )
-    ) %>%
-    dplyr::select(category, Outcome, time_var, stars) %>%
-    tidyr::pivot_wider(names_from = time_var, values_from = stars, values_fill = "") %>%
-    dplyr::arrange(category, Outcome)
-
-  if (nrow(compact_stars) > 0) {
-    compact_theme <- gridExtra::ttheme_default(
-      base_size = 8,
-      core = list(
-        fg_params = list(hjust = 0, x = 0.02),
-        padding = grid::unit(c(1.5, 2), "mm")
-      ),
-      colhead = list(fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"))
-    )
-    header <- grid::textGrob("Significant Outcomes Only (★ = p < .05)",
-                             gp = grid::gpar(fontsize = 12, fontface = "bold"))
-    tbl <- gridExtra::tableGrob(compact_stars, rows = NULL, theme = compact_theme)
-    gridExtra::grid.arrange(header, tbl, ncol = 1, heights = grid::unit(c(0.10, 0.90), "npc"))
-  }
-  
-  # ---- PAGE 2: Significant EDFs ranked by Range (across all time vars) ----
-sig_ranked <- sig_all_clean %>%
-  dplyr::filter(is.finite(p.value) & p.value < 0.05) %>%     # keep significant smooths
-  dplyr::mutate(
-    Outcome = dplyr::coalesce(outcome_label, variable),
-    Outcome = ifelse(nchar(Outcome) > 40, variable, Outcome) # shorten long names
-  ) %>%
-  dplyr::transmute(
-    Category = category,
-    Outcome,
-    TimeVar  = time_var,
-    EDF      = round(edf, 2),
-    Range    = round(range, 2),
-    F        = round(F, 2),
-    N        = n
-  ) %>%
-  dplyr::arrange(dplyr::desc(Range), Category, Outcome, TimeVar)
-
-if (nrow(sig_ranked) == 0) {
-  # show an empty-state page
-  header <- grid::textGrob(
-    paste("Significant Smooths — ID:", current_id, "(none at p < .05)"),
-    gp = grid::gpar(fontsize = 14, fontface = "bold")
-  )
-  sub <- grid::textGrob("No significant cyclic effects detected across any time variable.",
-                        gp = grid::gpar(fontsize = 10, fontface = "italic"))
-  gridExtra::grid.arrange(header, sub, ncol = 1,
-                          heights = grid::unit(c(0.2, 0.8), "npc"))
-} else {
-  # compact table theme to fit on a single landscape page
-  ranked_theme <- gridExtra::ttheme_default(
-    base_size = 8,
-    core = list(
-      fg_params = list(hjust = 0, x = 0.02),
-      padding = grid::unit(c(1.2, 2), "mm")
-    ),
-    colhead = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
-    )
-  )
-  title_grob <- grid::textGrob(
-    paste("Significant Smooths (p < .05), Ranked by Range — ID:", current_id),
-    gp = grid::gpar(fontsize = 14, fontface = "bold")
-  )
-  note_grob <- grid::textGrob(
-    "Columns: EDF = effective degrees of freedom; Range = max(pred) − min(pred) on original scale.",
-    gp = grid::gpar(fontsize = 9, fontface = "italic")
-  )
-  ranked_tbl <- gridExtra::tableGrob(sig_ranked, rows = NULL, theme = ranked_theme)
-
-  gridExtra::grid.arrange(
-    title_grob, note_grob, ranked_tbl,
-    ncol = 1,
-    heights = grid::unit(c(0.12, 0.06, 0.82), "npc")
-  )
-}
-
-
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
   # @param var_list       character vector of variable names to include; overrides var_pattern if provided
@@ -690,7 +547,9 @@ if (nrow(sig_ranked) == 0) {
                                 var_pattern = NULL, var_list = NULL,
                                 ylim_strategy = "fixed", fixed_ylim = c(1, 6),
                                 show_hline = TRUE, hline_y = 4,
-                                legend_ncol = 3) {
+                                legend_ncol = 3,
+                                show_range_in_labels = FALSE,
+                                normalize_01 = FALSE) {
     if (!is.null(var_list)) {
       qualifying <- sig_tv %>%
         dplyr::filter(variable %in% var_list)
@@ -717,6 +576,44 @@ if (nrow(sig_ranked) == 0) {
     ov_colors[is.na(ov_colors)] <- "#0072B2"
     names(ov_colors) <- ov_vars
 
+    # Build range lookup for legend labels
+    range_lookup <- qualifying %>%
+      dplyr::distinct(variable, .keep_all = TRUE) %>%
+      dplyr::select(variable, range)
+
+    # Build legend labels (optionally with range in parentheses)
+    if (show_range_in_labels) {
+      ov_labels <- sapply(ov_vars, function(v) {
+        r <- range_lookup$range[range_lookup$variable == v]
+        if (length(r) > 0 && is.finite(r)) {
+          paste0(outcomes[v], " (", sprintf("%.2f", r), ")")
+        } else {
+          outcomes[v]
+        }
+      })
+    } else {
+      ov_labels <- outcomes[ov_vars]
+    }
+
+    # Optionally normalize predictions to 0-1 per outcome (min-max)
+    if (normalize_01) {
+      ov_data <- ov_data %>%
+        dplyr::group_by(outcome_var) %>%
+        dplyr::mutate(
+          est_min   = min(estimate, na.rm = TRUE),
+          est_max   = max(estimate, na.rm = TRUE),
+          est_range = est_max - est_min,
+          estimate  = ifelse(est_range > 0, (estimate  - est_min) / est_range, 0.5),
+          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0),
+          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 1)
+        ) %>%
+        dplyr::select(-est_min, -est_max, -est_range) %>%
+        dplyr::ungroup()
+      # Force Y limits to 0-1 for normalized data
+      ylim_strategy <- "fixed"
+      fixed_ylim <- c(0, 1)
+    }
+
     if (ylim_strategy == "data") {
       y_min <- min(ov_data$conf.low, na.rm = TRUE)
       y_max <- max(ov_data$conf.high, na.rm = TRUE)
@@ -727,6 +624,7 @@ if (nrow(sig_ranked) == 0) {
     }
 
     range_label <- format(range_thresh, nsmall = 1)
+    y_axis_label <- if (normalize_01) "Normalized Score (0\u20131)" else "Predicted Score"
 
     p <- ggplot2::ggplot(ov_data,
            ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var))
