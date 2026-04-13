@@ -134,8 +134,32 @@ n_adhd_max     <- length(all_raw_css)
 CSS_COUNT_VARS    <- c("CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count")
 CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
 
+# --- BDEFS executive function variables (separate from cognitive task scores) ---
+BDEFS_VARS <- c("BDEFS_WM_avg", "BDEFS_RI_avg")
+
+# --- Cognitive task performance variables ---
+COGNITIVE_TASK_VARS <- c("score_pinball", "score_robot")
+
+# --- Sample-wide IQR-based Y-axis limits for cognitive task variables ---
+# Uses the "boxplot whisker" range: Q1 - 1.5*IQR to Q3 + 1.5*IQR, floored at 0.
+# This provides a principled, context-giving Y scale for individual overlay plots.
+COGNITIVE_TASK_YLIM <- {
+  task_vals <- unlist(lapply(COGNITIVE_TASK_VARS, function(v) {
+    if (v %in% names(cycle_df_scaled)) cycle_df_scaled[[v]] else numeric(0)
+  }))
+  task_vals <- task_vals[!is.na(task_vals)]
+  if (length(task_vals) == 0) {
+    c(0, 1)
+  } else {
+    q1  <- quantile(task_vals, 0.25)
+    q3  <- quantile(task_vals, 0.75)
+    iqr <- q3 - q1
+    c(max(0, q1 - 1.5 * iqr), q3 + 1.5 * iqr)
+  }
+}
+
 # --- Task outcome variables (cognitive scores + executive function) ---
-TASK_VARS <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
+TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
 # Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
@@ -531,148 +555,62 @@ for (current_id in ids_to_run) {
   }
   grDevices::pdf(pdf_filename, width = 11, height = 8.5)   # LANDSCAPE
 
-  # ---- COVER: Compact counts by category x time_var ----
-  sig_all_clean <- sig_all %>%
-    dplyr::mutate(
-      stars = dplyr::case_when(
-        is.finite(p.value) & p.value < 0.001 ~ "***",
-        is.finite(p.value) & p.value < 0.01  ~ "**",
-        is.finite(p.value) & p.value < 0.05  ~ "*",
-        TRUE ~ ""
+  # ---- Page 0: Raw data coverage (P4 + CSS Inattention Severity) ----
+  # Shows raw data points across the cycle variable so the reader can quickly
+  # judge whether there is enough data across phases for interpretation.
+  if (length(time_vars) > 0) {
+    tv0 <- time_vars[1]
+    meta0 <- axis_meta[[tv0]]
+
+    make_raw_panel <- function(dat, tv, meta, var, y_lab, color) {
+      if (!var %in% names(dat)) {
+        # Column missing — render an empty "No data" panel
+        p <- ggplot2::ggplot() +
+          ggplot2::annotate("text", x = 0, y = 0, label = paste0(var, " not in data"),
+                            size = 5, color = "grey50") +
+          ggplot2::labs(x = "Cycle Phase", y = y_lab, subtitle = "n = 0 daily observations") +
+          ggplot2::theme_minimal(base_size = 12)
+        return(p)
+      }
+      vals <- dat[[var]]
+      has_data <- !all(is.na(vals))
+      n_obs <- sum(!is.na(vals))
+      p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
+        ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                            linewidth = 0.6, linetype = "dashed") +
+        ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                            linewidth = 0.6, linetype = "dashed") +
+        ggplot2::scale_x_continuous(
+          limits = c(-1, 1), breaks = seq(-1, 1, by = 0.5),
+          labels = meta$labels
+        ) +
+        ggplot2::labs(x = "Cycle Phase", y = y_lab,
+                      subtitle = paste0("n = ", n_obs, " daily observations")) +
+        ggplot2::theme_minimal(base_size = 12)
+      if (has_data) {
+        p <- p + ggplot2::geom_point(color = color, alpha = 0.45, size = 1.8)
+      } else {
+        p <- p + ggplot2::annotate("text", x = 0, y = 0, label = "No data",
+                                   size = 5, color = "grey50")
+      }
+      p
+    }
+
+    p_p4 <- make_raw_panel(datSX_id, tv0, meta0, "P4",
+                           "Progesterone (P4)", "#7570B3")
+    p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
+                            "CSS Inattention Severity", "#D95F02")
+
+    p_cover <- p_p4 / p_css +
+      patchwork::plot_annotation(
+        title    = paste0("Raw Data Coverage \u2014 ID: ", current_id),
+        subtitle = paste0("Time variable: ", tv0),
+        theme    = ggplot2::theme(
+          plot.title = ggplot2::element_text(face = "bold", size = 14)
+        )
       )
-    ) %>%
-    dplyr::left_join(dplyr::select(outcome_categories, variable, category), by = "variable")
-
-  cover_cpass <- sig_all_clean %>%
-    dplyr::group_by(category) %>%
-    dplyr::summarise(
-      `Range ≥1.5 sig` = sum(is.finite(range) & range >= 1.5 & stars != "", na.rm = TRUE),
-      .groups = "drop"
-    )
-
-  cover_counts <- sig_all_clean %>%
-    dplyr::group_by(category, time_var) %>%
-    dplyr::summarise(
-      tested = dplyr::n(),
-      n_sig  = sum(stars != "", na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    tidyr::unite("count", n_sig, tested, sep = " / ") %>%
-    tidyr::pivot_wider(names_from = time_var, values_from = count, values_fill = "0 / 0") %>%
-    dplyr::left_join(cover_cpass, by = "category") %>%
-    dplyr::arrange(category)
-
-  cover_theme <- gridExtra::ttheme_default(
-    base_size = 9,
-    core = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"),
-      padding  = grid::unit(c(2, 2), "mm")
-    ),
-    colhead = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
-    )
-  )
-
-  title_grob    <- grid::textGrob(paste("Compact Summary — ID:", current_id),
-                                  gp = grid::gpar(fontsize = 16, fontface = "bold"))
-  subtitle_grob <- grid::textGrob("Cells show: # significant / # tested (p < .05) per category × time variable",
-                                  gp = grid::gpar(fontsize = 9))
-  cover_grob    <- gridExtra::tableGrob(cover_counts, rows = NULL, theme = cover_theme)
-  gridExtra::grid.arrange(title_grob, subtitle_grob, cover_grob,
-                          ncol = 1, heights = grid::unit(c(0.12, 0.08, 0.80), "npc"))
-
-  # ---- OPTIONAL: compact stars matrix for outcomes with any significance ----
-  compact_stars <- sig_all_clean %>%
-    dplyr::group_by(variable) %>%
-    dplyr::mutate(any_sig = any(is.finite(p.value) & p.value < 0.05, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::filter(any_sig) %>%
-    dplyr::mutate(Outcome = dplyr::coalesce(outcome_label, variable)) %>%
-    dplyr::mutate(
-      Outcome = ifelse(nchar(Outcome) > 22, variable, Outcome),
-      stars = dplyr::case_when(
-        is.finite(p.value) & p.value < 0.001 ~ "***",
-        is.finite(p.value) & p.value < 0.01  ~ "**",
-        is.finite(p.value) & p.value < 0.05  ~ "*",
-        TRUE ~ ""
-      )
-    ) %>%
-    dplyr::select(category, Outcome, time_var, stars) %>%
-    tidyr::pivot_wider(names_from = time_var, values_from = stars, values_fill = "") %>%
-    dplyr::arrange(category, Outcome)
-
-  if (nrow(compact_stars) > 0) {
-    compact_theme <- gridExtra::ttheme_default(
-      base_size = 8,
-      core = list(
-        fg_params = list(hjust = 0, x = 0.02),
-        padding = grid::unit(c(1.5, 2), "mm")
-      ),
-      colhead = list(fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"))
-    )
-    header <- grid::textGrob("Significant Outcomes Only (★ = p < .05)",
-                             gp = grid::gpar(fontsize = 12, fontface = "bold"))
-    tbl <- gridExtra::tableGrob(compact_stars, rows = NULL, theme = compact_theme)
-    gridExtra::grid.arrange(header, tbl, ncol = 1, heights = grid::unit(c(0.10, 0.90), "npc"))
-  }
-  
-  # ---- PAGE 2: Significant EDFs ranked by Range (across all time vars) ----
-sig_ranked <- sig_all_clean %>%
-  dplyr::filter(is.finite(p.value) & p.value < 0.05) %>%     # keep significant smooths
-  dplyr::mutate(
-    Outcome = dplyr::coalesce(outcome_label, variable),
-    Outcome = ifelse(nchar(Outcome) > 40, variable, Outcome) # shorten long names
-  ) %>%
-  dplyr::transmute(
-    Category = category,
-    Outcome,
-    TimeVar  = time_var,
-    EDF      = round(edf, 2),
-    Range    = round(range, 2),
-    F        = round(F, 2),
-    N        = n
-  ) %>%
-  dplyr::arrange(dplyr::desc(Range), Category, Outcome, TimeVar)
-
-if (nrow(sig_ranked) == 0) {
-  # show an empty-state page
-  header <- grid::textGrob(
-    paste("Significant Smooths — ID:", current_id, "(none at p < .05)"),
-    gp = grid::gpar(fontsize = 14, fontface = "bold")
-  )
-  sub <- grid::textGrob("No significant cyclic effects detected across any time variable.",
-                        gp = grid::gpar(fontsize = 10, fontface = "italic"))
-  gridExtra::grid.arrange(header, sub, ncol = 1,
-                          heights = grid::unit(c(0.2, 0.8), "npc"))
-} else {
-  # compact table theme to fit on a single landscape page
-  ranked_theme <- gridExtra::ttheme_default(
-    base_size = 8,
-    core = list(
-      fg_params = list(hjust = 0, x = 0.02),
-      padding = grid::unit(c(1.2, 2), "mm")
-    ),
-    colhead = list(
-      fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold")
-    )
-  )
-  title_grob <- grid::textGrob(
-    paste("Significant Smooths (p < .05), Ranked by Range — ID:", current_id),
-    gp = grid::gpar(fontsize = 14, fontface = "bold")
-  )
-  note_grob <- grid::textGrob(
-    "Columns: EDF = effective degrees of freedom; Range = max(pred) − min(pred) on original scale.",
-    gp = grid::gpar(fontsize = 9, fontface = "italic")
-  )
-  ranked_tbl <- gridExtra::tableGrob(sig_ranked, rows = NULL, theme = ranked_theme)
-
-  gridExtra::grid.arrange(
-    title_grob, note_grob, ranked_tbl,
-    ncol = 1,
-    heights = grid::unit(c(0.12, 0.06, 0.82), "npc")
-  )
-}
-
+    print(p_cover)
+  } # end Page 0 guard
 
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
@@ -690,7 +628,10 @@ if (nrow(sig_ranked) == 0) {
                                 var_pattern = NULL, var_list = NULL,
                                 ylim_strategy = "fixed", fixed_ylim = c(1, 6),
                                 show_hline = TRUE, hline_y = 4,
-                                legend_ncol = 3) {
+                                legend_ncol = 3,
+                                show_range_in_labels = FALSE,
+                                normalize_01 = FALSE,
+                                ref_lines_per_var = NULL) {
     if (!is.null(var_list)) {
       qualifying <- sig_tv %>%
         dplyr::filter(variable %in% var_list)
@@ -717,6 +658,44 @@ if (nrow(sig_ranked) == 0) {
     ov_colors[is.na(ov_colors)] <- "#0072B2"
     names(ov_colors) <- ov_vars
 
+    # Build range lookup for legend labels
+    range_lookup <- qualifying %>%
+      dplyr::distinct(variable, .keep_all = TRUE) %>%
+      dplyr::select(variable, range)
+
+    # Build legend labels (optionally with range in parentheses)
+    if (show_range_in_labels) {
+      ov_labels <- sapply(ov_vars, function(v) {
+        r <- range_lookup$range[range_lookup$variable == v]
+        if (length(r) > 0 && is.finite(r)) {
+          paste0(outcomes[v], " (", sprintf("%.2f", r), ")")
+        } else {
+          outcomes[v]
+        }
+      })
+    } else {
+      ov_labels <- outcomes[ov_vars]
+    }
+
+    # Optionally normalize predictions to 0-1 per outcome (min-max)
+    if (normalize_01) {
+      ov_data <- ov_data %>%
+        dplyr::group_by(outcome_var) %>%
+        dplyr::mutate(
+          est_min   = min(estimate, na.rm = TRUE),
+          est_max   = max(estimate, na.rm = TRUE),
+          est_range = est_max - est_min,
+          estimate  = ifelse(est_range > 0, (estimate  - est_min) / est_range, 0.5),
+          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0.5),
+          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 0.5)
+        ) %>%
+        dplyr::select(-est_min, -est_max, -est_range) %>%
+        dplyr::ungroup()
+      # Force Y limits to 0-1 for normalized data
+      ylim_strategy <- "fixed"
+      fixed_ylim <- c(0, 1)
+    }
+
     if (ylim_strategy == "data") {
       y_min <- min(ov_data$conf.low, na.rm = TRUE)
       y_max <- max(ov_data$conf.high, na.rm = TRUE)
@@ -727,6 +706,14 @@ if (nrow(sig_ranked) == 0) {
     }
 
     range_label <- format(range_thresh, nsmall = 1)
+    y_axis_label <- if (normalize_01) "Normalized Score (0\u20131)" else "Predicted Score"
+
+    # Build filter description for subtitle
+    if (is.infinite(range_thresh)) {
+      filter_label <- "p < .05"
+    } else {
+      filter_label <- paste0("p < .05 or range \u2265 ", range_label)
+    }
 
     p <- ggplot2::ggplot(ov_data,
            ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var))
@@ -734,6 +721,20 @@ if (nrow(sig_ranked) == 0) {
     if (show_hline) {
       p <- p + ggplot2::geom_hline(yintercept = hline_y, color = "red",
                                    linewidth = 0.4, alpha = 0.4)
+    }
+
+    # Per-variable color-matched reference lines (e.g., max possible counts)
+    if (!is.null(ref_lines_per_var)) {
+      for (rv in names(ref_lines_per_var)) {
+        if (rv %in% ov_vars) {
+          ref_col <- ov_colors[[rv]]
+          if (is.null(ref_col) || is.na(ref_col)) ref_col <- "#0072B2"
+          p <- p + ggplot2::geom_hline(
+            yintercept = ref_lines_per_var[[rv]],
+            color = ref_col, linewidth = 0.5, linetype = "dotted", alpha = 0.6
+          )
+        }
+      }
     }
 
     p <- p +
@@ -745,7 +746,7 @@ if (nrow(sig_ranked) == 0) {
       ggplot2::scale_color_manual(
         values = ov_colors,
         breaks = ov_vars,
-        labels = outcomes[ov_vars]
+        labels = ov_labels
       ) +
       ggplot2::scale_x_continuous(
         limits = c(-1, 1),
@@ -756,11 +757,11 @@ if (nrow(sig_ranked) == 0) {
       ggplot2::labs(
         title = paste0(title_prefix, " \u2014 ID: ", current_id),
         subtitle = paste0(
-          subtitle_label, " with p < .05 or range \u2265 ", range_label,
+          subtitle_label, " with ", filter_label,
           "  |  N curves = ", n_curves, "  |  Time variable: ", tv
         ),
         x = "Cycle Phase",
-        y = "Predicted Score",
+        y = y_axis_label,
         color = "Outcome"
       ) +
       ggplot2::theme_minimal(base_size = 12) +
@@ -776,95 +777,152 @@ if (nrow(sig_ranked) == 0) {
     print(p)
   }
 
-  # ---- Combined symptom overlay pages (DRSP + CSS severity + Task) at multiple range thresholds ----
+  # ---- Overlaid GAM pages by outcome category ----
   for (tv in names(preds_by_tv)) {
-    for (thresh in c(1.5, 1.0, 0.5)) {
-      plot_overlay_page(
-        sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
-        tv = tv, meta = axis_meta[[tv]],
-        var_list       = COMBINED_SYMPTOM_VARS,
-        range_thresh   = thresh,
-        title_prefix   = "Overlaid GAM Curves (All Symptoms)",
-        subtitle_label = "DRSP + CSS severity + Task items",
-        ylim_strategy  = "data",
-        show_hline = FALSE,
-        legend_ncol = 4
-      )
+
+    # (1) DRSP items: sig OR range > 0.5, Y scale 1-6
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = all_raw_drsp,
+      range_thresh   = 0.5,
+      title_prefix   = "Overlaid GAM Curves (DRSP Items)",
+      subtitle_label = "DRSP items",
+      ylim_strategy  = "fixed", fixed_ylim = c(1, 6),
+      show_hline = TRUE, hline_y = 4,
+      legend_ncol = 4,
+      show_range_in_labels = TRUE
+    )
+
+    # (2) BDEFS executive function items: sig only, Y scale 1-4
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = BDEFS_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (BDEFS Executive Function)",
+      subtitle_label = "BDEFS items",
+      ylim_strategy  = "fixed", fixed_ylim = c(1, 4),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # (3) Cognitive task performance outcomes: sig only, Y scale from sample IQR
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = COGNITIVE_TASK_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (Task Performance)",
+      subtitle_label = "Cognitive task outcomes (Y = sample IQR whisker range)",
+      ylim_strategy  = "fixed", fixed_ylim = COGNITIVE_TASK_YLIM,
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # If any qualifying task predictions fall outside the IQR range, add a
+    # second page with a data-driven Y axis so nothing is clipped
+    task_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    if (nrow(task_qualifying) > 0) {
+      task_pred <- preds_by_tv[[tv]] %>%
+        dplyr::filter(outcome_var %in% unique(task_qualifying$variable))
+      if (nrow(task_pred) > 0) {
+        pred_min <- min(task_pred$conf.low, na.rm = TRUE)
+        pred_max <- max(task_pred$conf.high, na.rm = TRUE)
+        if (pred_min < COGNITIVE_TASK_YLIM[1] || pred_max > COGNITIVE_TASK_YLIM[2]) {
+          plot_overlay_page(
+            sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+            tv = tv, meta = axis_meta[[tv]],
+            var_list       = COGNITIVE_TASK_VARS,
+            range_thresh   = Inf,
+            title_prefix   = "Overlaid GAM Curves (Task Performance, Full Range)",
+            subtitle_label = "Cognitive task outcomes (Y = data-driven, exceeds sample IQR)",
+            ylim_strategy  = "data",
+            show_hline = FALSE,
+            legend_ncol = 2,
+            show_range_in_labels = TRUE
+          )
+        }
+      }
     }
-  }
 
-  # ---- CSS Count outcomes (normalized 0-1 overlay) ----
-  for (tv in names(preds_by_tv)) {
-    sig_tv <- sig_by_tv[[tv]]
-    pred_tv <- preds_by_tv[[tv]]
-    meta <- axis_meta[[tv]]
+    # (4) CSS severity items: sig only, Y scale 0-3
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = CSS_SEVERITY_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (CSS Severity)",
+      subtitle_label = "CSS severity items",
+      ylim_strategy  = "fixed", fixed_ylim = c(0, 3),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
 
-    qualifying <- sig_tv %>%
-      dplyr::filter(variable %in% CSS_COUNT_VARS) %>%
+    # (5) CSS symptom count items: sig only, Y scale 0-9, with max-possible reference lines
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = CSS_COUNT_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (CSS Symptom Counts)",
+      subtitle_label = "CSS count items (dotted lines = max possible count)",
+      ylim_strategy  = "fixed", fixed_ylim = c(0, 9),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE,
+      ref_lines_per_var = CSS_COUNT_MAX
+    )
+
+    # (6) Combined normalized page: all qualifying outcomes on 0-1 scale
+    # Collect variables that passed their category-specific selection rules
+    drsp_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% all_raw_drsp) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 0.5)
       )
-    if (nrow(qualifying) == 0) next
+    bdefs_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% BDEFS_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    task_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    css_sev_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% CSS_SEVERITY_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    css_count_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% CSS_COUNT_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
 
-    ov_vars <- unique(qualifying$variable)
-    ov_data <- pred_tv %>% dplyr::filter(outcome_var %in% ov_vars)
-    if (nrow(ov_data) == 0) next
+    all_qualifying_vars <- unique(c(
+      drsp_qualifying$variable, bdefs_qualifying$variable,
+      task_qualifying$variable, css_sev_qualifying$variable,
+      css_count_qualifying$variable
+    ))
 
-    # Normalize predictions to 0-1 scale using max possible values, then clamp to [0, 1]
-    ov_data <- ov_data %>%
-      dplyr::mutate(
-        max_possible = CSS_COUNT_MAX[outcome_var],
-        estimate  = pmin(pmax(estimate  / max_possible, 0), 1),
-        conf.low  = pmin(pmax(conf.low  / max_possible, 0), 1),
-        conf.high = pmin(pmax(conf.high / max_possible, 0), 1)
+    if (length(all_qualifying_vars) > 0) {
+      # Use the meaningful DRSP range criterion here so the auto-generated
+      # filter text matches the actual page selection rules.
+      plot_overlay_page(
+        sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+        tv = tv, meta = axis_meta[[tv]],
+        var_list       = all_qualifying_vars,
+        range_thresh   = 0.5,
+        title_prefix   = "All Qualifying Outcomes (Normalized 0\u20131)",
+        subtitle_label = "Category-specific rules: DRSP p < .05 or range \u2265 0.5; all other outcomes p < .05",
+        ylim_strategy  = "fixed", fixed_ylim = c(0, 1),
+        show_hline = FALSE,
+        legend_ncol = 4,
+        show_range_in_labels = TRUE,
+        normalize_01 = TRUE
       )
-
-    n_curves <- length(ov_vars)
-    ov_colors <- drsp_color_map[ov_vars]
-    ov_colors[is.na(ov_colors)] <- "#0072B2"
-    names(ov_colors) <- ov_vars
-
-    p <- ggplot2::ggplot(ov_data,
-           ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)) +
-      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_line(linewidth = 0.9) +
-      ggplot2::scale_color_manual(
-        values = ov_colors,
-        breaks = ov_vars,
-        labels = outcomes[ov_vars]
-      ) +
-      ggplot2::scale_x_continuous(
-        limits = c(-1, 1),
-        breaks = seq(-1, 1, by = 0.5),
-        labels = meta$labels
-      ) +
-      ggplot2::coord_cartesian(ylim = c(0, 1)) +
-      ggplot2::labs(
-        title = paste0("CSS Count Symptoms (Normalized 0\u20131) \u2014 ID: ", current_id),
-        subtitle = paste0(
-          "Count items with p < .05 or range \u2265 0.5  |  N curves = ", n_curves,
-          "  |  Time variable: ", tv,
-          "\nEach variable divided by its maximum possible value"
-        ),
-        x = "Cycle Phase",
-        y = "Normalized Score (0\u20131)",
-        color = "Outcome"
-      ) +
-      ggplot2::theme_minimal(base_size = 12) +
-      ggplot2::theme(
-        legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(ncol = 2)
-      )
-
-    print(p)
+    }
   }
 
   # ---- Sections per time variable: compact table + pages of plots ----
@@ -893,26 +951,17 @@ if (nrow(sig_ranked) == 0) {
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
 
-    # Plots ordered by range (descending)
+    # Plots organized by outcome category (using page_definitions)
     combined_plot_data <- preds_by_tv[[tv]]
 
-    # Compute range per outcome and sort descending
-    outcome_order <- combined_plot_data %>%
-      dplyr::group_by(outcome_label) %>%
-      dplyr::summarise(raw_range = max(estimate, na.rm = TRUE) - min(estimate, na.rm = TRUE),
-                       .groups = "drop") %>%
-      dplyr::arrange(dplyr::desc(raw_range)) %>%
-      dplyr::pull(outcome_label)
-
-    outcome_pages <- split(outcome_order,
-                           ceiling(seq_along(outcome_order) / max_plots_per_page))
-
-    for (page_outcomes in outcome_pages) {
-      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
+    for (page_name in names(page_definitions)) {
+      page_outcome_labels <- page_definitions[[page_name]]
+      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcome_labels)
       if (nrow(page_data) == 0) next
 
-      plot_list <- lapply(page_outcomes, function(lab) {
+      plot_list <- lapply(page_outcome_labels, function(lab) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
+        if (nrow(plot_df) == 0) return(NULL)
         create_annotated_plot(plot_df, tv, axis_meta)
       })
       plot_list <- Filter(Negate(is.null), plot_list)
@@ -922,7 +971,8 @@ if (nrow(sig_ranked) == 0) {
           plot_list <- c(plot_list,
                          rep(list(patchwork::plot_spacer()), max_plots_per_page - length(plot_list)))
         }
-        page_title <- paste("Symptom & Hormone Trajectories (by Range) — ID:", current_id, "| Time Variable:", tv)
+        page_title_label <- gsub("_", " ", page_name)
+        page_title <- paste(page_title_label, "\u2014 ID:", current_id, "| Time Variable:", tv)
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
