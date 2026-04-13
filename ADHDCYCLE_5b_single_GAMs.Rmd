@@ -449,9 +449,12 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
       axis.text = ggplot2::element_text(size = 7)
     )
 
-  # Apply y-axis limits only when defined (NULL → ggplot auto-scales)
+  # Always disable clipping so top annotations (y = Inf) are never cut off.
+  # When y_limits is defined, also lock the y-axis range.
   if (!is.null(y_limits)) {
     p <- p + ggplot2::coord_cartesian(ylim = y_limits, clip = "off")
+  } else {
+    p <- p + ggplot2::coord_cartesian(clip = "off")
   }
 
   border_col <- dplyr::case_when(
@@ -620,6 +623,19 @@ for (current_id in ids_to_run) {
     insufficient_coverage <- TRUE
     n_half_pre  <- 0L
     n_half_post <- 0L
+
+    # Emit an explicit placeholder coverage page so the PDF is not blank
+    # when no eligible time variables are available for this participant.
+    grid::grid.newpage()
+    grid::grid.text(
+      label = paste0(
+        "Raw Data Coverage \u2014 ID: ", current_id,
+        "\n\nNo eligible time variables were available for GAM fitting.",
+        "\nA coverage-only placeholder report was generated."
+      ),
+      x = 0.5, y = 0.55,
+      gp = grid::gpar(fontsize = 12, fontface = "bold")
+    )
   } # end Page 0
 
   # ---- Gate: skip GAMs if cycle-half coverage is too sparse ----
