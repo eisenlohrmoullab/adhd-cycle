@@ -761,6 +761,34 @@ for (current_id in ids_to_run) {
       show_range_in_labels = TRUE
     )
 
+    # If any qualifying task predictions fall outside the IQR range, add a
+    # second page with a data-driven Y axis so nothing is clipped
+    task_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    if (nrow(task_qualifying) > 0) {
+      task_pred <- preds_by_tv[[tv]] %>%
+        dplyr::filter(outcome_var %in% unique(task_qualifying$variable))
+      if (nrow(task_pred) > 0) {
+        pred_min <- min(task_pred$conf.low, na.rm = TRUE)
+        pred_max <- max(task_pred$conf.high, na.rm = TRUE)
+        if (pred_min < COGNITIVE_TASK_YLIM[1] || pred_max > COGNITIVE_TASK_YLIM[2]) {
+          plot_overlay_page(
+            sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+            tv = tv, meta = axis_meta[[tv]],
+            var_list       = COGNITIVE_TASK_VARS,
+            range_thresh   = Inf,
+            title_prefix   = "Overlaid GAM Curves (Task Performance, Full Range)",
+            subtitle_label = "Cognitive task outcomes (Y = data-driven, exceeds sample IQR)",
+            ylim_strategy  = "data",
+            show_hline = FALSE,
+            legend_ncol = 2,
+            show_range_in_labels = TRUE
+          )
+        }
+      }
+    }
+
     # (4) CSS severity items: sig only, Y scale 0-3
     plot_overlay_page(
       sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
