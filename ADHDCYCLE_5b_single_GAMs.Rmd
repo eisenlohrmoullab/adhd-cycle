@@ -43,7 +43,13 @@ table_cols_per_page <- 6
 
 # --- Plot Layout (grid per page) ---
 plots_per_col <- 3
-plots_per_row <- 3 
+plots_per_row <- 3
+
+# --- Minimum observations per cycle-half to run GAMs ---
+# If a participant has fewer than this many non-missing cycle predictor
+# observations in either half (ovulation-to-menses or menses-to-ovulation),
+# GAMs are skipped and only the raw data coverage page is produced.
+min_obs_per_half <- 3
 ```
 
 # 2 - Create output folders & check time vars
@@ -518,38 +524,6 @@ for (current_id in ids_to_run) {
   message(sprintf("--- Processing ID: %s ---", current_id))
   datSX_id <- subset(cycle_df_scaled, id == current_id)
 
-  # Pass 1: fit & collect
-  preds_by_tv <- list()
-  sig_by_tv   <- list()
-
-  for (tv in time_vars) {
-    message(sprintf("  ... time variable: %s", tv))
-    all_preds <- list()
-    sig_list  <- list()
-
-    for (outcome_var in names(outcomes)) {
-      res <- fit_outcome(datSX_id, outcome_var, tv, outcomes)
-      if (is.null(res)) next
-      all_preds[[length(all_preds) + 1]] <- res$pred
-      sig_list[[length(sig_list) + 1]]  <- res$sig
-    }
-
-    if (length(all_preds) > 0) {
-      preds_by_tv[[tv]] <- dplyr::bind_rows(all_preds)
-      sig_by_tv[[tv]]   <- dplyr::bind_rows(sig_list)
-    }
-  }
-
-  if (!length(preds_by_tv)) {
-    message("    -> No successful models for this ID; skipping.")
-    next
-  }
-
-  # Build per-ID significance object for CSV
-  sig_all <- dplyr::bind_rows(sig_by_tv)
-  sig_all$id <- current_id
-  all_ids_signif[[as.character(current_id)]] <- sig_all
-
   # ---- Open a single LANDSCAPE PDF per participant ----
   pdf_filename <- file.path(report_folder, sprintf("Report_ID_%s.pdf", current_id))
   if (isTRUE(skip_existing) && file.exists(pdf_filename)) {
@@ -561,6 +535,7 @@ for (current_id in ids_to_run) {
   # ---- Page 0: Raw data coverage (P4 + CSS Inattention Severity) ----
   # Shows raw data points across the cycle variable so the reader can quickly
   # judge whether there is enough data across phases for interpretation.
+  # This page is always produced, even if GAMs cannot be run.
   if (length(time_vars) > 0) {
     tv0 <- time_vars[1]
     meta0 <- axis_meta[[tv0]]
@@ -605,16 +580,88 @@ for (current_id in ids_to_run) {
     p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
                             "CSS Inattention Severity", "#D95F02")
 
+    # Count observations in each cycle-half for the primary time variable.
+    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that border
+    # both halves, so they are allowed to count toward both.
+    tv0_vals <- datSX_id[[tv0]]
+    tv0_vals <- tv0_vals[!is.na(tv0_vals)]
+    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # ov-to-menses half (includes wrap)
+    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # menses-to-ov half (includes wrap)
+    insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
+
+    # Build coverage subtitle — include per-half counts and a warning if insufficient
+    coverage_subtitle <- paste0(
+      "Time variable: ", tv0,
+      "  |  n (half 1) = ", n_half_pre,
+      ", n (half 2) = ", n_half_post
+    )
+    if (insufficient_coverage) {
+      coverage_subtitle <- paste0(
+        coverage_subtitle,
+        "\n\u26A0 Fewer than ", min_obs_per_half,
+        " observations in one or both cycle-halves — GAMs not run for this participant"
+      )
+    }
+
     p_cover <- p_p4 / p_css +
       patchwork::plot_annotation(
         title    = paste0("Raw Data Coverage \u2014 ID: ", current_id),
-        subtitle = paste0("Time variable: ", tv0),
+        subtitle = coverage_subtitle,
         theme    = ggplot2::theme(
-          plot.title = ggplot2::element_text(face = "bold", size = 12)
+          plot.title    = ggplot2::element_text(face = "bold", size = 12),
+          plot.subtitle = ggplot2::element_text(
+            size = if (insufficient_coverage) 10 else 9,
+            color = if (insufficient_coverage) "red" else "grey30"
+          )
         )
       )
     print(p_cover)
-  } # end Page 0 guard
+  } else {
+    insufficient_coverage <- TRUE
+    n_half_pre  <- 0L
+    n_half_post <- 0L
+  } # end Page 0
+
+  # ---- Gate: skip GAMs if cycle-half coverage is too sparse ----
+  if (insufficient_coverage) {
+    grDevices::dev.off()
+    message(sprintf("    -> Insufficient cycle-half coverage (n_pre=%d, n_post=%d, min=%d); saved coverage-only report: %s",
+                    n_half_pre, n_half_post, min_obs_per_half, pdf_filename))
+    next
+  }
+
+  # ---- Pass 1: fit GAMs & collect predictions ----
+  preds_by_tv <- list()
+  sig_by_tv   <- list()
+
+  for (tv in time_vars) {
+    message(sprintf("  ... time variable: %s", tv))
+    all_preds <- list()
+    sig_list  <- list()
+
+    for (outcome_var in names(outcomes)) {
+      res <- fit_outcome(datSX_id, outcome_var, tv, outcomes)
+      if (is.null(res)) next
+      all_preds[[length(all_preds) + 1]] <- res$pred
+      sig_list[[length(sig_list) + 1]]  <- res$sig
+    }
+
+    if (length(all_preds) > 0) {
+      preds_by_tv[[tv]] <- dplyr::bind_rows(all_preds)
+      sig_by_tv[[tv]]   <- dplyr::bind_rows(sig_list)
+    }
+  }
+
+  if (!length(preds_by_tv)) {
+    message("    -> No successful models for this ID; skipping.")
+    grDevices::dev.off()
+    next
+  }
+
+  # Build per-ID significance object for CSV
+  sig_all <- dplyr::bind_rows(sig_by_tv)
+  sig_all$id <- current_id
+  all_ids_signif[[as.character(current_id)]] <- sig_all
 
   # ---- Helper: generate an overlay page for qualifying GAM curves ----
   # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN); used if var_list is NULL
