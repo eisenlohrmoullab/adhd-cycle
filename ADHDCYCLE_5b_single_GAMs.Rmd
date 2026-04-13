@@ -117,10 +117,18 @@ names(page_definitions)[4:length(page_definitions)] <- paste0("DRSP_Page_", 1:(l
 # --- Physical vs Affect symptom classification (raw DRSP items only) ---
 physical_symptoms <- c("DRSP_18", "DRSP_19", "DRSP_20", "DRSP_21")
 
+# --- Pattern constants for variable matching ---
+ADHD_VAR_PATTERN <- "^CSS_"
+DRSP_VAR_PATTERN <- "^DRSP_\\d+$"
+
+# --- ADHD symptom variable list (CSS items) ---
+all_raw_css <- names(outcomes)[grepl(ADHD_VAR_PATTERN, names(outcomes))]
+
 # --- Max possible counts per category (for density-plot Y-axis scaling) ---
-all_raw_drsp <- names(outcomes)[grepl("^DRSP_\\d+$", names(outcomes))]
+all_raw_drsp <- names(outcomes)[grepl(DRSP_VAR_PATTERN, names(outcomes))]
 n_physical_max <- length(intersect(all_raw_drsp, physical_symptoms))
 n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
+n_adhd_max     <- length(all_raw_css)
 
 # --- Pre-calculate log-transformations ---
 for (var in names(outcomes)) {
@@ -652,8 +660,8 @@ if (nrow(sig_ranked) == 0) {
 }
 
   # ---- Person-Specific Peak & Trough Timing Distribution ----
-  # Separate density plots for Physical vs Affect symptoms
-  # Only raw DRSP items with p < .05 or range >= 1.5
+  # Separate density plots for Physical vs Affect DRSP symptoms AND ADHD (CSS) symptoms
+  # Only items with p < .05 or range >= 1.5
   for (tv in names(sig_by_tv)) {
     sig_tv <- sig_by_tv[[tv]]
     if (nrow(sig_tv) == 0) next
@@ -661,12 +669,22 @@ if (nrow(sig_ranked) == 0) {
     # Keep only raw DRSP items (drsp_1, drsp_2, …), exclude composites;
     # further restrict to items that are significant (p < .05) OR have range >= 1.5
     sig_tv_raw <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(DRSP_VAR_PATTERN, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 1.5)
       )
-    if (nrow(sig_tv_raw) == 0) next
+
+    # Keep CSS (ADHD symptom) items that are significant or have range >= 1.5
+    sig_tv_adhd <- sig_tv %>%
+      dplyr::filter(grepl(ADHD_VAR_PATTERN, variable)) %>%
+      dplyr::filter(
+        (is.finite(p.value) & p.value < 0.05) |
+        (is.finite(range) & range >= 1.5)
+      )
+
+    # Skip entirely if neither DRSP nor ADHD items qualify
+    if (nrow(sig_tv_raw) == 0 && nrow(sig_tv_adhd) == 0) next
 
     meta <- axis_meta[[tv]]
 
@@ -756,223 +774,142 @@ make_timing_density <- function(sig_subset, category_label, max_n) {
       sig_tv_raw %>% dplyr::filter(!variable %in% physical_symptoms), "Affect",
       n_affect_max
     )
+    p_adhd <- make_timing_density(
+      sig_tv_adhd, "ADHD (CSS)",
+      n_adhd_max
+    )
 
     # Print each plot on its own page
     if (!is.null(p_physical)) print(p_physical)
     if (!is.null(p_affect))   print(p_affect)
+    if (!is.null(p_adhd))     print(p_adhd)
   }
 
-  # ---- Overlay page: all qualifying individual GAM curves on one plot ----
-  # Show individual DRSP items (not composites) that are significant (p < .05) OR have range >= 1.5
-  for (tv in names(preds_by_tv)) {
-    sig_tv   <- sig_by_tv[[tv]]
-    pred_tv  <- preds_by_tv[[tv]]
-    meta     <- axis_meta[[tv]]
-
-    # Identify qualifying outcomes (individual DRSP items only, exclude composites)
+  # ---- Helper: generate an overlay page for qualifying GAM curves ----
+  # @param var_pattern    regex to select variables (e.g. DRSP_VAR_PATTERN, ADHD_VAR_PATTERN)
+  # @param range_thresh   minimum range for inclusion alongside p < .05
+  # @param title_prefix   text before " — ID: ..." in plot title
+  # @param subtitle_label description of items shown (e.g. "Individual items", "CSS items")
+  # @param ylim_strategy  "fixed" uses fixed_ylim arg; "data" derives from conf intervals
+  # @param fixed_ylim     c(lo, hi) used when ylim_strategy == "fixed"
+  # @param show_hline     whether to show the horizontal reference line at hline_y
+  # @param hline_y        y-intercept for the reference line
+  # @param legend_ncol    number of columns in the legend
+  plot_overlay_page <- function(sig_tv, pred_tv, tv, meta,
+                                var_pattern, range_thresh,
+                                title_prefix, subtitle_label,
+                                ylim_strategy = "fixed", fixed_ylim = c(1, 6),
+                                show_hline = TRUE, hline_y = 4,
+                                legend_ncol = 3) {
     qualifying <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
+      dplyr::filter(grepl(var_pattern, variable)) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
-        (is.finite(range) & range >= 1.5)
+        (is.finite(range) & range >= range_thresh)
       )
-    if (nrow(qualifying) == 0) next
- 
-    # AR edits to color mapping 4/4/26
-    
-    overlay_vars <- unique(qualifying$variable)
-    overlay_data <- pred_tv %>%
-    dplyr::filter(outcome_var %in% overlay_vars)
-    if (nrow(overlay_data) == 0) next
+    if (nrow(qualifying) == 0) return(invisible(NULL))
 
-    n_curves <- length(overlay_vars)
+    ov_vars <- unique(qualifying$variable)
+    ov_data <- pred_tv %>% dplyr::filter(outcome_var %in% ov_vars)
+    if (nrow(ov_data) == 0) return(invisible(NULL))
 
-    overlay_colors <- drsp_color_map[overlay_vars]
-    overlay_colors[is.na(overlay_colors)] <- "#0072B2"
-    names(overlay_colors) <- overlay_vars
+    n_curves <- length(ov_vars)
 
-    p_overlay <- ggplot2::ggplot(overlay_data,
-    ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)) +
-    ggplot2::geom_hline(yintercept = 4, color = "red",
-                      linewidth = 0.4, alpha = 0.4) +
-    ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                      linewidth = 0.6, linetype = "dashed") +
-    ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                      linewidth = 0.6, linetype = "dashed") +
-    ggplot2::geom_line(linewidth = 0.9) +
-    ggplot2::scale_color_manual(
-      values = overlay_colors,
-      breaks = overlay_vars,
-      labels = outcomes[overlay_vars]
+    ov_colors <- drsp_color_map[ov_vars]
+    ov_colors[is.na(ov_colors)] <- "#0072B2"
+    names(ov_colors) <- ov_vars
+
+    if (ylim_strategy == "data") {
+      y_min <- min(ov_data$conf.low, na.rm = TRUE)
+      y_max <- max(ov_data$conf.high, na.rm = TRUE)
+      y_pad <- (y_max - y_min) * 0.05
+      plot_ylim <- c(max(0, y_min - y_pad), y_max + y_pad)
+    } else {
+      plot_ylim <- fixed_ylim
+    }
+
+    range_label <- format(range_thresh, nsmall = 1)
+
+    p <- ggplot2::ggplot(ov_data,
+           ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var))
+
+    if (show_hline) {
+      p <- p + ggplot2::geom_hline(yintercept = hline_y, color = "red",
+                                   linewidth = 0.4, alpha = 0.4)
+    }
+
+    p <- p +
+      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                          linewidth = 0.6, linetype = "dashed") +
+      ggplot2::geom_line(linewidth = 0.9) +
+      ggplot2::scale_color_manual(
+        values = ov_colors,
+        breaks = ov_vars,
+        labels = outcomes[ov_vars]
       ) +
-    ggplot2::scale_x_continuous(limits = c(-1, 1),
-                              breaks = seq(-1, 1, by = 0.5),
-                              labels = meta$labels) +
-    ggplot2::coord_cartesian(ylim = c(1, 6)) +
-    ggplot2::labs(
-      title = paste0("Overlaid GAM Curves \u2014 ID: ", current_id),
-      subtitle = paste0("Individual items with p < .05 or range \u2265 1.5  |  ",
-                      "N curves = ", n_curves, "  |  Time variable: ", tv),
-      x = "Cycle Phase", y = "Predicted Score",
-      color = "Outcome"
-    ) +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(
-      legend.position = "bottom",
-      legend.text = ggplot2::element_text(size = 7),
-      plot.title = ggplot2::element_text(face = "bold", size = 14)
-    ) +
-    ggplot2::guides(
-      color = ggplot2::guide_legend(ncol = 3)
+      ggplot2::scale_x_continuous(
+        limits = c(-1, 1),
+        breaks = seq(-1, 1, by = 0.5),
+        labels = meta$labels
+      ) +
+      ggplot2::coord_cartesian(ylim = plot_ylim) +
+      ggplot2::labs(
+        title = paste0(title_prefix, " \u2014 ID: ", current_id),
+        subtitle = paste0(
+          subtitle_label, " with p < .05 or range \u2265 ", range_label,
+          "  |  N curves = ", n_curves, "  |  Time variable: ", tv
+        ),
+        x = "Cycle Phase",
+        y = "Predicted Score",
+        color = "Outcome"
+      ) +
+      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme(
+        legend.position = "bottom",
+        legend.text = ggplot2::element_text(size = 7),
+        plot.title = ggplot2::element_text(face = "bold", size = 14)
+      ) +
+      ggplot2::guides(
+        color = ggplot2::guide_legend(ncol = legend_ncol)
+      )
+
+    print(p)
+  }
+
+  # ---- DRSP overlay pages at multiple range thresholds ----
+  for (tv in names(preds_by_tv)) {
+    for (thresh in c(1.5, 1.0, 0.5)) {
+      plot_overlay_page(
+        sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+        tv = tv, meta = axis_meta[[tv]],
+        var_pattern    = DRSP_VAR_PATTERN,
+        range_thresh   = thresh,
+        title_prefix   = "Overlaid GAM Curves",
+        subtitle_label = "Individual items",
+        ylim_strategy  = "fixed", fixed_ylim = c(1, 6),
+        show_hline = TRUE, hline_y = 4,
+        legend_ncol = 3
+      )
+    }
+  }
+
+  # ---- ADHD (CSS) overlay page ----
+  for (tv in names(preds_by_tv)) {
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_pattern    = ADHD_VAR_PATTERN,
+      range_thresh   = 0.5,
+      title_prefix   = "ADHD Symptom (CSS) Overlaid GAM Curves",
+      subtitle_label = "CSS items",
+      ylim_strategy  = "data",
+      show_hline = FALSE,
+      legend_ncol = 2
     )
-
-  print(p_overlay)
   }
 
-  # ---- Overlay page: all qualifying individual GAM curves on one plot ----
-  # Show individual DRSP items (not composites) that are significant (p < .05) OR have range >= 1.0
-  for (tv in names(preds_by_tv)) {
-    sig_tv   <- sig_by_tv[[tv]]
-    pred_tv  <- preds_by_tv[[tv]]
-    meta     <- axis_meta[[tv]]
-
-    # Identify qualifying outcomes (individual DRSP items only, exclude composites)
-    qualifying_1 <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
-      dplyr::filter(
-        (is.finite(p.value) & p.value < 0.05) |
-        (is.finite(range) & range >= 1.0)
-      )
-    if (nrow(qualifying_1) == 0) next
-
-    overlay_vars_1 <- unique(qualifying_1$variable)
-    overlay_data_1 <- pred_tv %>%
-      dplyr::filter(outcome_var %in% overlay_vars_1)
-    if (nrow(overlay_data_1) == 0) next
-
-    n_curves_1 <- length(overlay_vars_1)
-
-    overlay_colors_1 <- drsp_color_map[overlay_vars_1]
-    overlay_colors_1[is.na(overlay_colors_1)] <- "#0072B2"
-    names(overlay_colors_1) <- overlay_vars_1
-
-    p_overlay_1 <- ggplot2::ggplot(
-      overlay_data_1,
-      ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)
-    ) +
-      ggplot2::geom_hline(yintercept = 4, color = "red",
-                          linewidth = 0.4, alpha = 0.4) +
-      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_line(linewidth = 0.9) +
-      ggplot2::scale_color_manual(
-        values = overlay_colors_1,
-        breaks = overlay_vars_1,
-        labels = outcomes[overlay_vars_1]
-      ) +
-      ggplot2::scale_x_continuous(
-        limits = c(-1, 1),
-        breaks = seq(-1, 1, by = 0.5),
-        labels = meta$labels
-      ) +
-      ggplot2::coord_cartesian(ylim = c(1, 6)) +
-      ggplot2::labs(
-        title = paste0("Overlaid GAM Curves \u2014 ID: ", current_id),
-        subtitle = paste0(
-          "Individual items with p < .05 or range \u2265 1.0  |  ",
-          "N curves = ", n_curves_1, "  |  Time variable: ", tv
-        ),
-        x = "Cycle Phase",
-        y = "Predicted Score",
-        color = "Outcome"
-      ) +
-      ggplot2::theme_minimal(base_size = 12) +
-      ggplot2::theme(
-        legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(ncol = 3)
-      )
-
-    print(p_overlay_1)
-  }
-  
-  # ---- Overlay page: all qualifying individual GAM curves on one plot ----
-  # Show individual DRSP items (not composites) that are significant (p < .05) OR have range >= 0.5
-  for (tv in names(preds_by_tv)) {
-    sig_tv   <- sig_by_tv[[tv]]
-    pred_tv  <- preds_by_tv[[tv]]
-    meta     <- axis_meta[[tv]]
-
-    # Identify qualifying outcomes (individual DRSP items only, exclude composites)
-    qualifying_05 <- sig_tv %>%
-      dplyr::filter(grepl("^DRSP_\\d+$", variable)) %>%
-      dplyr::filter(
-        (is.finite(p.value) & p.value < 0.05) |
-        (is.finite(range) & range >= 0.5)
-      )
-    if (nrow(qualifying_05) == 0) next
-
-    overlay_vars_05 <- unique(qualifying_05$variable)
-    overlay_data_05 <- pred_tv %>%
-      dplyr::filter(outcome_var %in% overlay_vars_05)
-    if (nrow(overlay_data_05) == 0) next
-
-    n_curves_05 <- length(overlay_vars_05)
-
-    overlay_colors_05 <- drsp_color_map[overlay_vars_05]
-    overlay_colors_05[is.na(overlay_colors_05)] <- "#0072B2"
-    names(overlay_colors_05) <- overlay_vars_05
-
-    p_overlay_05 <- ggplot2::ggplot(
-      overlay_data_05,
-      ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)
-    ) +
-      ggplot2::geom_hline(yintercept = 4, color = "red",
-                          linewidth = 0.4, alpha = 0.4) +
-      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_line(linewidth = 0.9) +
-      ggplot2::scale_color_manual(
-        values = overlay_colors_05,
-        breaks = overlay_vars_05,
-        labels = outcomes[overlay_vars_05]
-      ) +
-      ggplot2::scale_x_continuous(
-        limits = c(-1, 1),
-        breaks = seq(-1, 1, by = 0.5),
-        labels = meta$labels
-      ) +
-      ggplot2::coord_cartesian(ylim = c(1, 6)) +
-      ggplot2::labs(
-        title = paste0("Overlaid GAM Curves \u2014 ID: ", current_id),
-        subtitle = paste0(
-          "Individual items with p < .05 or range \u2265 0.5  |  ",
-          "N curves = ", n_curves_05, "  |  Time variable: ", tv
-        ),
-        x = "Cycle Phase",
-        y = "Predicted Score",
-        color = "Outcome"
-      ) +
-      ggplot2::theme_minimal(base_size = 12) +
-      ggplot2::theme(
-        legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(ncol = 3)
-      )
-
-    print(p_overlay_05)
-  }
-  
   # ---- Sections per time variable: compact table + pages of plots ----
   for (tv in names(preds_by_tv)) {
 
@@ -1411,7 +1348,16 @@ get_drsp_variables <- function(df) {
     clean_gam_summary() %>%
     dplyr::distinct(variable) %>%
     dplyr::pull(variable) %>%
-    .[grepl("^drsp", ., ignore.case = TRUE)]
+    .[grepl(DRSP_VAR_PATTERN, ., ignore.case = TRUE)]
+}
+
+# --- Extract ADHD symptom variable names (CSS items) from the summary data ---
+get_adhd_variables <- function(df) {
+  df %>%
+    clean_gam_summary() %>%
+    dplyr::distinct(variable) %>%
+    dplyr::pull(variable) %>%
+    .[grepl(ADHD_VAR_PATTERN, .)]
 }
 
 # --- Peak and trough timing distribution plot for significant participants ---
@@ -1475,7 +1421,7 @@ plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
 # =========================================================
 # GENERATE PER-OUTCOME EXPLORATION PDF REPORTS
 # =========================================================
-# For each DRSP outcome, generates a landscape PDF containing:
+# For each ADHD symptom (CSS) and DRSP outcome, generates a landscape PDF containing:
 #   1. Summary page: descriptive stats + threshold table + peak/trough timing
 #   2. Significance probability plot (logistic curve)
 #   3. Histogram of range by significance
@@ -1497,7 +1443,10 @@ if (length(all_ids_signif) > 0) {
   dir.create(explore_folder, showWarnings = FALSE, recursive = TRUE)
 
   drsp_vars <- get_drsp_variables(gam_summary_df)
-  cat("Found", length(drsp_vars), "DRSP variables to process\n")
+  adhd_vars <- get_adhd_variables(gam_summary_df)
+  all_outcome_vars <- c(adhd_vars, drsp_vars)
+  cat("Found", length(adhd_vars), "ADHD symptom (CSS) variables and",
+      length(drsp_vars), "DRSP variables to process\n")
 
   # Thresholds for the exploration
   explore_thresholds <- c(0.10, 0.20, 0.25, 0.36, 0.50, 0.75, 1.00)
@@ -1519,7 +1468,7 @@ if (length(all_ids_signif) > 0) {
     colhead = list(fg_params = list(hjust = 0.5, x = 0.5, fontface = "bold"))
   )
 
-  for (target_var in drsp_vars) {
+  for (target_var in all_outcome_vars) {
     cat(sprintf("\n=== Processing: %s ===\n", target_var))
 
     # 1. Run exploration analysis
