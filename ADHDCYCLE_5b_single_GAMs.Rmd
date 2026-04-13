@@ -137,6 +137,12 @@ CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
 # --- Task outcome variables (cognitive scores + executive function) ---
 TASK_VARS <- c("score_pinball", "score_robot", "BDEFS_WM_avg", "BDEFS_RI_avg")
 
+# --- BDEFS executive function variables (separate from cognitive task scores) ---
+BDEFS_VARS <- c("BDEFS_WM_avg", "BDEFS_RI_avg")
+
+# --- Cognitive task performance variables ---
+COGNITIVE_TASK_VARS <- c("score_pinball", "score_robot")
+
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
 # Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
 CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4)
@@ -626,6 +632,13 @@ for (current_id in ids_to_run) {
     range_label <- format(range_thresh, nsmall = 1)
     y_axis_label <- if (normalize_01) "Normalized Score (0\u20131)" else "Predicted Score"
 
+    # Build filter description for subtitle
+    if (is.infinite(range_thresh)) {
+      filter_label <- "p < .05"
+    } else {
+      filter_label <- paste0("p < .05 or range \u2265 ", range_label)
+    }
+
     p <- ggplot2::ggplot(ov_data,
            ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var))
 
@@ -643,7 +656,7 @@ for (current_id in ids_to_run) {
       ggplot2::scale_color_manual(
         values = ov_colors,
         breaks = ov_vars,
-        labels = outcomes[ov_vars]
+        labels = ov_labels
       ) +
       ggplot2::scale_x_continuous(
         limits = c(-1, 1),
@@ -654,11 +667,11 @@ for (current_id in ids_to_run) {
       ggplot2::labs(
         title = paste0(title_prefix, " \u2014 ID: ", current_id),
         subtitle = paste0(
-          subtitle_label, " with p < .05 or range \u2265 ", range_label,
+          subtitle_label, " with ", filter_label,
           "  |  N curves = ", n_curves, "  |  Time variable: ", tv
         ),
         x = "Cycle Phase",
-        y = "Predicted Score",
+        y = y_axis_label,
         color = "Outcome"
       ) +
       ggplot2::theme_minimal(base_size = 12) +
@@ -674,95 +687,121 @@ for (current_id in ids_to_run) {
     print(p)
   }
 
-  # ---- Combined symptom overlay pages (DRSP + CSS severity + Task) at multiple range thresholds ----
+  # ---- Overlaid GAM pages by outcome category ----
   for (tv in names(preds_by_tv)) {
-    for (thresh in c(1.5, 1.0, 0.5)) {
-      plot_overlay_page(
-        sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
-        tv = tv, meta = axis_meta[[tv]],
-        var_list       = COMBINED_SYMPTOM_VARS,
-        range_thresh   = thresh,
-        title_prefix   = "Overlaid GAM Curves (All Symptoms)",
-        subtitle_label = "DRSP + CSS severity + Task items",
-        ylim_strategy  = "data",
-        show_hline = FALSE,
-        legend_ncol = 4
-      )
-    }
-  }
 
-  # ---- CSS Count outcomes (normalized 0-1 overlay) ----
-  for (tv in names(preds_by_tv)) {
-    sig_tv <- sig_by_tv[[tv]]
-    pred_tv <- preds_by_tv[[tv]]
-    meta <- axis_meta[[tv]]
+    # (1) DRSP items: sig OR range > 0.5, Y scale 1-6
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = all_raw_drsp,
+      range_thresh   = 0.5,
+      title_prefix   = "Overlaid GAM Curves (DRSP Items)",
+      subtitle_label = "DRSP items",
+      ylim_strategy  = "fixed", fixed_ylim = c(1, 6),
+      show_hline = TRUE, hline_y = 4,
+      legend_ncol = 4,
+      show_range_in_labels = TRUE
+    )
 
-    qualifying <- sig_tv %>%
-      dplyr::filter(variable %in% CSS_COUNT_VARS) %>%
+    # (2) BDEFS executive function items: sig only, Y scale 1-4
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = BDEFS_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (BDEFS Executive Function)",
+      subtitle_label = "BDEFS items",
+      ylim_strategy  = "fixed", fixed_ylim = c(1, 4),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # (3) Cognitive task performance outcomes: sig only, data-driven Y
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = COGNITIVE_TASK_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (Task Performance)",
+      subtitle_label = "Cognitive task outcomes",
+      ylim_strategy  = "data",
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # (4) CSS severity items: sig only, Y scale 0-3
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = CSS_SEVERITY_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (CSS Severity)",
+      subtitle_label = "CSS severity items",
+      ylim_strategy  = "fixed", fixed_ylim = c(0, 3),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # (5) CSS symptom count items: sig only, Y scale 0-9
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = CSS_COUNT_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (CSS Symptom Counts)",
+      subtitle_label = "CSS count items",
+      ylim_strategy  = "fixed", fixed_ylim = c(0, 9),
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # (6) Combined normalized page: all qualifying outcomes on 0-1 scale
+    # Collect variables that passed their category-specific selection rules
+    drsp_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% all_raw_drsp) %>%
       dplyr::filter(
         (is.finite(p.value) & p.value < 0.05) |
         (is.finite(range) & range >= 0.5)
       )
-    if (nrow(qualifying) == 0) next
+    bdefs_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% BDEFS_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    task_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    css_sev_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% CSS_SEVERITY_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    css_count_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% CSS_COUNT_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
 
-    ov_vars <- unique(qualifying$variable)
-    ov_data <- pred_tv %>% dplyr::filter(outcome_var %in% ov_vars)
-    if (nrow(ov_data) == 0) next
+    all_qualifying_vars <- unique(c(
+      drsp_qualifying$variable, bdefs_qualifying$variable,
+      task_qualifying$variable, css_sev_qualifying$variable,
+      css_count_qualifying$variable
+    ))
 
-    # Normalize predictions to 0-1 scale using max possible values, then clamp to [0, 1]
-    ov_data <- ov_data %>%
-      dplyr::mutate(
-        max_possible = CSS_COUNT_MAX[outcome_var],
-        estimate  = pmin(pmax(estimate  / max_possible, 0), 1),
-        conf.low  = pmin(pmax(conf.low  / max_possible, 0), 1),
-        conf.high = pmin(pmax(conf.high / max_possible, 0), 1)
+    if (length(all_qualifying_vars) > 0) {
+      plot_overlay_page(
+        sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+        tv = tv, meta = axis_meta[[tv]],
+        var_list       = all_qualifying_vars,
+        range_thresh   = 0,
+        title_prefix   = "All Qualifying Outcomes (Normalized 0\u20131)",
+        subtitle_label = "All outcomes passing category-specific selection rules",
+        ylim_strategy  = "fixed", fixed_ylim = c(0, 1),
+        show_hline = FALSE,
+        legend_ncol = 4,
+        show_range_in_labels = TRUE,
+        normalize_01 = TRUE
       )
-
-    n_curves <- length(ov_vars)
-    ov_colors <- drsp_color_map[ov_vars]
-    ov_colors[is.na(ov_colors)] <- "#0072B2"
-    names(ov_colors) <- ov_vars
-
-    p <- ggplot2::ggplot(ov_data,
-           ggplot2::aes(x = .data[[tv]], y = estimate, color = outcome_var)) +
-      ggplot2::geom_vline(xintercept = meta$menses, color = "red",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
-                          linewidth = 0.6, linetype = "dashed") +
-      ggplot2::geom_line(linewidth = 0.9) +
-      ggplot2::scale_color_manual(
-        values = ov_colors,
-        breaks = ov_vars,
-        labels = outcomes[ov_vars]
-      ) +
-      ggplot2::scale_x_continuous(
-        limits = c(-1, 1),
-        breaks = seq(-1, 1, by = 0.5),
-        labels = meta$labels
-      ) +
-      ggplot2::coord_cartesian(ylim = c(0, 1)) +
-      ggplot2::labs(
-        title = paste0("CSS Count Symptoms (Normalized 0\u20131) \u2014 ID: ", current_id),
-        subtitle = paste0(
-          "Count items with p < .05 or range \u2265 0.5  |  N curves = ", n_curves,
-          "  |  Time variable: ", tv,
-          "\nEach variable divided by its maximum possible value"
-        ),
-        x = "Cycle Phase",
-        y = "Normalized Score (0\u20131)",
-        color = "Outcome"
-      ) +
-      ggplot2::theme_minimal(base_size = 12) +
-      ggplot2::theme(
-        legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(ncol = 2)
-      )
-
-    print(p)
+    }
   }
 
   # ---- Sections per time variable: compact table + pages of plots ----
