@@ -429,7 +429,7 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     ggplot2::geom_point(data = max_pt, size = 2.5, color = line_col) +
     ggplot2::geom_point(data = min_pt, size = 2.5, color = line_col) +
     ggplot2::annotate("text", x = -1, y = Inf, label = ann,
-                      hjust = -0.1, vjust = 1.5, size = 3, fontface = "bold") +
+                      hjust = -0.05, vjust = 1.5, size = 2.5, fontface = "bold") +
     ggplot2::labs(title = dplyr::first(plot_df$outcome_label), x = "Cycle Phase", y = NULL) +
     ggplot2::scale_x_continuous(
       limits = c(-1, 1),
@@ -438,12 +438,14 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     ) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
-      plot.title = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
+      plot.title = ggplot2::element_text(size = 9, face = "bold", hjust = 0.5),
+      plot.margin = ggplot2::margin(t = 10, r = 5, b = 5, l = 5, unit = "pt"),
+      axis.text = ggplot2::element_text(size = 7)
     )
 
   # Apply y-axis limits only when defined (NULL → ggplot auto-scales)
   if (!is.null(y_limits)) {
-    p <- p + ggplot2::coord_cartesian(ylim = y_limits)
+    p <- p + ggplot2::coord_cartesian(ylim = y_limits, clip = "off")
   }
 
   border_col <- dplyr::case_when(
@@ -506,9 +508,10 @@ all_ids_signif <- list()
 # fixed layout controls
 max_plots_per_page <- plots_per_col * plots_per_row
 table_theme <- gridExtra::ttheme_default(
-  base_size = 9,
-  core   = list(fg_params = list(hjust = 0, x = 0.05)),
-  colhead = list(fg_params = list(hjust = 0, x = 0.05))
+  base_size = 7,
+  core    = list(fg_params = list(hjust = 0, x = 0.05)),
+  colhead = list(fg_params = list(hjust = 0, x = 0.05)),
+  padding = grid::unit(c(3, 2), "mm")
 )
 
 for (current_id in ids_to_run) {
@@ -573,8 +576,9 @@ for (current_id in ids_to_run) {
         return(p)
       }
       vals <- dat[[var]]
+      # Count observations where both the outcome and cycle predictor are non-missing
       has_data <- !all(is.na(vals))
-      n_obs <- sum(!is.na(vals))
+      n_obs <- sum(!is.na(vals) & !is.na(dat[[tv]]))
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
                             linewidth = 0.6, linetype = "dashed") +
@@ -606,7 +610,7 @@ for (current_id in ids_to_run) {
         title    = paste0("Raw Data Coverage \u2014 ID: ", current_id),
         subtitle = paste0("Time variable: ", tv0),
         theme    = ggplot2::theme(
-          plot.title = ggplot2::element_text(face = "bold", size = 14)
+          plot.title = ggplot2::element_text(face = "bold", size = 12)
         )
       )
     print(p_cover)
@@ -677,19 +681,27 @@ for (current_id in ids_to_run) {
       ov_labels <- outcomes[ov_vars]
     }
 
-    # Optionally normalize predictions to 0-1 per outcome (min-max)
+    # Optionally normalize predictions to 0-1 per outcome using scale min/max
+    # so that 1 represents the maximum possible value on the outcome's scale,
+    # not the max of the GAM curve.
     if (normalize_01) {
       ov_data <- ov_data %>%
+        dplyr::left_join(
+          dplyr::select(outcome_plot_settings, variable, y_min, y_max),
+          by = c("outcome_var" = "variable")
+        ) %>%
         dplyr::group_by(outcome_var) %>%
         dplyr::mutate(
-          est_min   = min(estimate, na.rm = TRUE),
-          est_max   = max(estimate, na.rm = TRUE),
-          est_range = est_max - est_min,
-          estimate  = ifelse(est_range > 0, (estimate  - est_min) / est_range, 0.5),
-          conf.low  = ifelse(est_range > 0, (conf.low  - est_min) / est_range, 0.5),
-          conf.high = ifelse(est_range > 0, (conf.high - est_min) / est_range, 0.5)
+          # Use scale min/max from outcome_plot_settings when available;
+          # fall back to GAM-predicted min/max for data-mode outcomes (e.g., hormones)
+          scale_min = dplyr::coalesce(y_min, min(estimate, na.rm = TRUE)),
+          scale_max = dplyr::coalesce(y_max, max(estimate, na.rm = TRUE)),
+          scale_range = scale_max - scale_min,
+          estimate  = ifelse(scale_range > 0, (estimate  - scale_min) / scale_range, 0.5),
+          conf.low  = ifelse(scale_range > 0, (conf.low  - scale_min) / scale_range, 0.5),
+          conf.high = ifelse(scale_range > 0, (conf.high - scale_min) / scale_range, 0.5)
         ) %>%
-        dplyr::select(-est_min, -est_max, -est_range) %>%
+        dplyr::select(-y_min, -y_max, -scale_min, -scale_max, -scale_range) %>%
         dplyr::ungroup()
       # Force Y limits to 0-1 for normalized data
       ylim_strategy <- "fixed"
@@ -731,7 +743,7 @@ for (current_id in ids_to_run) {
           if (is.null(ref_col) || is.na(ref_col)) ref_col <- "#0072B2"
           p <- p + ggplot2::geom_hline(
             yintercept = ref_lines_per_var[[rv]],
-            color = ref_col, linewidth = 0.5, linetype = "dotted", alpha = 0.6
+            color = ref_col, linewidth = 0.5, linetype = "solid", alpha = 0.7
           )
         }
       }
@@ -764,11 +776,13 @@ for (current_id in ids_to_run) {
         y = y_axis_label,
         color = "Outcome"
       ) +
-      ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme_minimal(base_size = 10) +
       ggplot2::theme(
         legend.position = "bottom",
-        legend.text = ggplot2::element_text(size = 7),
-        plot.title = ggplot2::element_text(face = "bold", size = 14)
+        legend.text = ggplot2::element_text(size = 6),
+        plot.title = ggplot2::element_text(face = "bold", size = 12),
+        plot.subtitle = ggplot2::element_text(size = 8),
+        plot.margin = ggplot2::margin(t = 8, r = 8, b = 8, l = 8, unit = "pt")
       ) +
       ggplot2::guides(
         color = ggplot2::guide_legend(ncol = legend_ncol)
@@ -871,7 +885,7 @@ for (current_id in ids_to_run) {
       var_list       = CSS_COUNT_VARS,
       range_thresh   = Inf,
       title_prefix   = "Overlaid GAM Curves (CSS Symptom Counts)",
-      subtitle_label = "CSS count items (dotted lines = max possible count)",
+      subtitle_label = "CSS count items (solid lines = max possible count)",
       ylim_strategy  = "fixed", fixed_ylim = c(0, 9),
       show_hline = FALSE,
       legend_ncol = 2,
@@ -946,7 +960,7 @@ for (current_id in ids_to_run) {
     # summary_df <- dplyr::filter(summary_df, Sig != "")
 
     tv_title <- grid::textGrob(paste("Significance — ID:", current_id, "| Time Variable:", tv),
-                               gp = grid::gpar(fontsize = 14, fontface = "bold"))
+                               gp = grid::gpar(fontsize = 12, fontface = "bold"))
     tv_table <- gridExtra::tableGrob(summary_df, rows = NULL, theme = table_theme)
     gridExtra::grid.arrange(tv_title, tv_table, ncol = 1,
                             heights = grid::unit(c(0.12, 0.88), "npc"))
@@ -976,7 +990,7 @@ for (current_id in ids_to_run) {
         final_page <- patchwork::wrap_plots(plotlist = plot_list, ncol = plots_per_col) +
           patchwork::plot_annotation(
             title = page_title,
-            theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 14, face = "bold"))
+            theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 12, face = "bold"))
           )
         print(final_page)
       }
@@ -1103,8 +1117,8 @@ for (current_id in ids_to_run) {
             title = page_title_shared,
             subtitle = page_subtitle_shared,
             theme = ggplot2::theme(
-              plot.title = ggplot2::element_text(size = 14, face = "bold"),
-              plot.subtitle = ggplot2::element_text(size = 11)
+              plot.title = ggplot2::element_text(size = 12, face = "bold"),
+              plot.subtitle = ggplot2::element_text(size = 9)
             )
           )
 
@@ -1752,8 +1766,8 @@ if (length(all_ids_signif) > 0) {
                 title    = paste(grp$label, ":", outcome_label),
                 subtitle = paste("Time variable:", tv),
                 theme    = ggplot2::theme(
-                  plot.title    = ggplot2::element_text(size = 14, face = "bold"),
-                  plot.subtitle = ggplot2::element_text(size = 11)
+                  plot.title    = ggplot2::element_text(size = 12, face = "bold"),
+                  plot.subtitle = ggplot2::element_text(size = 9)
                 )
               )
             print(final_page)
