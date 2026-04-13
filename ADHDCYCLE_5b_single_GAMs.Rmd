@@ -346,6 +346,7 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   pred$p.value <- p
   pred$raw_range <- diff(range(est, na.rm = TRUE))
   pred$n <- nrow(dat)
+  pred$edf <- edf
 
   list(
     pred = pred,
@@ -378,6 +379,7 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
   rng   <- dplyr::first(plot_df$raw_range)
   p_val <- dplyr::first(plot_df$p.value)
   n_obs <- dplyr::first(plot_df$n)
+  edf_val <- dplyr::first(plot_df$edf)
   
   outcome_var <- dplyr::first(plot_df$outcome_var)
   line_col <- drsp_color_map[[outcome_var]]
@@ -398,13 +400,6 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     # data mode: leave y_limits = NULL → ggplot auto-scales
   }
   
-  range_band_label <- dplyr::case_when(
-    is.finite(rng) && rng >= 1.5 ~ "Range >= 1.5 | ",
-    is.finite(rng) && rng >= 1.0 ~ "Range 1.0-1.49 | ",
-    is.finite(rng) && rng >= 0.5 ~ "Range 0.5-0.99 | ",
-    TRUE                         ~ ""
-  )
-  
   stars <- dplyr::case_when(
     is.finite(p_val) & p_val < 0.001 ~ "***",
     is.finite(p_val) & p_val < 0.01  ~ "**",
@@ -412,10 +407,11 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     TRUE ~ ""
   )
   
+  edf_str <- if (!is.null(edf_val) && !is.na(edf_val)) sprintf(", EDF = %.2f", edf_val) else ""
   ann <- if (!is.null(n_obs) && !is.na(n_obs)) {
-    sprintf("%s%s Range = %.2f, N = %d", range_band_label, stars, rng, as.integer(n_obs))
+    sprintf("%s Range = %.2f%s, N = %d", stars, rng, edf_str, as.integer(n_obs))
   } else {
-    sprintf("%s%s Range = %.2f", range_band_label, stars, rng)
+    sprintf("%s Range = %.2f%s", stars, rng, edf_str)
   }
   
   meta <- axis_meta_list[[tv]]
@@ -448,6 +444,13 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
       plot.margin = ggplot2::margin(t = 10, r = 5, b = 5, l = 5, unit = "pt"),
       axis.text = ggplot2::element_text(size = 7)
     )
+
+  # For fixed-scale outcomes, show all integer breaks on the y-axis
+  if (mode == "fixed" && !is.na(y_fix_min) && !is.na(y_fix_max)) {
+    p <- p + ggplot2::scale_y_continuous(
+      breaks = seq(y_fix_min, y_fix_max, by = 1)
+    )
+  }
 
   # Always disable clipping so top annotations (y = Inf) are never cut off.
   # When y_limits is defined, also lock the y-axis range.
@@ -1113,9 +1116,9 @@ for (current_id in ids_to_run) {
         )
       )
 
-    all_outcome_labels <- id_range_df %>%
-      dplyr::arrange(dplyr::desc(yrange)) %>%
-      dplyr::pull(outcome_label)
+    all_outcome_labels <- unlist(page_definitions, use.names = FALSE)
+    # Keep only outcomes that exist in this ID's data
+    all_outcome_labels <- all_outcome_labels[all_outcome_labels %in% id_range_df$outcome_label]
     outcome_pages_shared <- split(
       all_outcome_labels,
       ceiling(seq_along(all_outcome_labels) / max_plots_per_page)
