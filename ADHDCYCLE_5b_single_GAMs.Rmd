@@ -686,9 +686,8 @@ if (nrow(sig_ranked) == 0) {
   # @param hline_y        y-intercept for the reference line
   # @param legend_ncol    number of columns in the legend
   plot_overlay_page <- function(sig_tv, pred_tv, tv, meta,
-                                var_pattern = NULL, range_thresh,
-                                title_prefix, subtitle_label,
-                                var_list = NULL,
+                                range_thresh, title_prefix, subtitle_label,
+                                var_pattern = NULL, var_list = NULL,
                                 ylim_strategy = "fixed", fixed_ylim = c(1, 6),
                                 show_hline = TRUE, hline_y = 4,
                                 legend_ncol = 3) {
@@ -812,13 +811,13 @@ if (nrow(sig_ranked) == 0) {
     ov_data <- pred_tv %>% dplyr::filter(outcome_var %in% ov_vars)
     if (nrow(ov_data) == 0) next
 
-    # Normalize predictions to 0-1 scale using max possible values
+    # Normalize predictions to 0-1 scale using max possible values, then clamp to [0, 1]
     ov_data <- ov_data %>%
       dplyr::mutate(
         max_possible = CSS_COUNT_MAX[outcome_var],
-        estimate = estimate / max_possible,
-        conf.low = conf.low / max_possible,
-        conf.high = conf.high / max_possible
+        estimate  = pmin(pmax(estimate  / max_possible, 0), 1),
+        conf.low  = pmin(pmax(conf.low  / max_possible, 0), 1),
+        conf.high = pmin(pmax(conf.high / max_possible, 0), 1)
       )
 
     n_curves <- length(ov_vars)
