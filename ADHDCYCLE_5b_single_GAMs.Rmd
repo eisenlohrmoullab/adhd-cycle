@@ -445,6 +445,13 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
       axis.text = ggplot2::element_text(size = 7)
     )
 
+  # For fixed-scale outcomes, show all integer breaks on the y-axis
+  if (mode == "fixed" && !is.na(y_fix_min) && !is.na(y_fix_max)) {
+    p <- p + ggplot2::scale_y_continuous(
+      breaks = seq(y_fix_min, y_fix_max, by = 1)
+    )
+  }
+
   # Always disable clipping so top annotations (y = Inf) are never cut off.
   # When y_limits is defined, also lock the y-axis range.
   if (!is.null(y_limits)) {
