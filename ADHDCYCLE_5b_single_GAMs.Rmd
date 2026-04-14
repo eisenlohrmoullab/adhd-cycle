@@ -549,6 +549,23 @@ for (current_id in ids_to_run) {
     tv0 <- time_vars[1]
     meta0 <- axis_meta[[tv0]]
 
+    # Shared helper: count observations in each cycle-phase half and label
+    # them as luteal vs follicular, accounting for time-variable orientation.
+    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that
+    # border both halves, so they count toward both.
+    #   non-"ov" vars: -1=Ov, 0=Menses, 1=Ov  → [-1,0]=luteal, [0,1]=follicular
+    #   "ov" vars:     -1=Men, 0=Ov,    1=Men  → [-1,0]=follicular, [0,1]=luteal
+    count_phase_halves <- function(tv_vals, meta) {
+      n_lo <- sum(tv_vals <= 0 | tv_vals == 1)   # [-1,0] half + boundary at 1
+      n_hi <- sum(tv_vals >= 0 | tv_vals == -1)   # [0,1] half + boundary at -1
+      is_ov_centered <- identical(meta$ov, 0)
+      if (is_ov_centered) {
+        list(n_luteal = n_hi, n_follicular = n_lo)
+      } else {
+        list(n_luteal = n_lo, n_follicular = n_hi)
+      }
+    }
+
     make_raw_panel <- function(dat, tv, meta, var, y_lab, color) {
       if (!var %in% names(dat)) {
         # Column missing — render an empty "No data" panel
@@ -562,25 +579,14 @@ for (current_id in ids_to_run) {
       vals <- dat[[var]]
       tv_vals <- dat[[tv]]
       # Count observations where both the outcome and cycle predictor are non-missing
-      has_data <- !all(is.na(vals))
       valid <- !is.na(vals) & !is.na(tv_vals)
       n_obs <- sum(valid)
-      # Per-variable per-half counts (boundary values count toward both halves)
-      valid_tv <- tv_vals[valid]
-      n_lo <- sum(valid_tv <= 0 | valid_tv == 1)   # [-1,0] half + boundary at 1
-      n_hi <- sum(valid_tv >= 0 | valid_tv == -1)   # [0,1] half + boundary at -1
-      # Label halves correctly based on time-variable orientation:
-      #   non-"ov" vars: -1=Ov, 0=Menses, 1=Ov  → [-1,0]=luteal, [0,1]=follicular
-      #   "ov" vars:     -1=Men, 0=Ov,    1=Men  → [-1,0]=follicular, [0,1]=luteal
-      is_ov_centered <- identical(meta$ov, 0)
-      if (is_ov_centered) {
-        lut_n <- n_hi; fol_n <- n_lo
-      } else {
-        lut_n <- n_lo; fol_n <- n_hi
-      }
+      has_data <- n_obs > 0
+      # Per-variable per-half counts
+      halves <- count_phase_halves(tv_vals[valid], meta)
       sub_label <- paste0(
         "n = ", n_obs, " daily observations",
-        "  (luteal: ", lut_n, ", follicular: ", fol_n, ")"
+        "  (luteal: ", halves$n_luteal, ", follicular: ", halves$n_follicular, ")"
       )
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
@@ -608,22 +614,13 @@ for (current_id in ids_to_run) {
     p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
                             "CSS Inattention Severity", "#D95F02")
 
-    # Count observations in each cycle-half for the primary time variable.
-    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that border
-    # both halves, so they are allowed to count toward both.
+    # Count observations in each cycle-half for the primary time variable
+    # using the shared helper.
     tv0_vals <- datSX_id[[tv0]]
     tv0_vals <- tv0_vals[!is.na(tv0_vals)]
-    n_lo  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # [-1,0] half + boundary at 1
-    n_hi  <- sum(tv0_vals >= 0 | tv0_vals == -1)   # [0,1] half + boundary at -1
-    # Label correctly: for "ov" vars the halves are flipped relative to standard
-    is_ov_centered <- identical(meta0$ov, 0)
-    if (is_ov_centered) {
-      n_half_luteal     <- n_hi
-      n_half_follicular <- n_lo
-    } else {
-      n_half_luteal     <- n_lo
-      n_half_follicular <- n_hi
-    }
+    gate_halves       <- count_phase_halves(tv0_vals, meta0)
+    n_half_luteal     <- gate_halves$n_luteal
+    n_half_follicular <- gate_halves$n_follicular
     insufficient_coverage <- (n_half_luteal < min_obs_per_half) || (n_half_follicular < min_obs_per_half)
 
     # Build coverage subtitle — per-half counts now shown per variable in each subplot
