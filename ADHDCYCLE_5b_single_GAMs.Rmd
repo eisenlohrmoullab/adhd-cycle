@@ -564,11 +564,20 @@ for (current_id in ids_to_run) {
       n_obs <- sum(valid)
       # Per-variable per-half counts (boundary values count toward both halves)
       valid_tv <- tv_vals[valid]
-      n_h1 <- sum(valid_tv <= 0 | valid_tv == 1)   # luteal half: ov-to-menses
-      n_h2 <- sum(valid_tv >= 0 | valid_tv == -1)   # follicular half: menses-to-ov
+      n_lo <- sum(valid_tv <= 0 | valid_tv == 1)   # [-1,0] half + boundary at 1
+      n_hi <- sum(valid_tv >= 0 | valid_tv == -1)   # [0,1] half + boundary at -1
+      # Label halves correctly based on time-variable orientation:
+      #   non-"ov" vars: -1=Ov, 0=Menses, 1=Ov  → [-1,0]=luteal, [0,1]=follicular
+      #   "ov" vars:     -1=Men, 0=Ov,    1=Men  → [-1,0]=follicular, [0,1]=luteal
+      is_ov_centered <- (length(meta$ov) == 1)
+      if (is_ov_centered) {
+        lut_n <- n_hi; fol_n <- n_lo
+      } else {
+        lut_n <- n_lo; fol_n <- n_hi
+      }
       sub_label <- paste0(
         "n = ", n_obs, " daily observations",
-        "  (luteal: ", n_h1, ", follicular: ", n_h2, ")"
+        "  (luteal: ", lut_n, ", follicular: ", fol_n, ")"
       )
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
@@ -601,9 +610,18 @@ for (current_id in ids_to_run) {
     # both halves, so they are allowed to count toward both.
     tv0_vals <- datSX_id[[tv0]]
     tv0_vals <- tv0_vals[!is.na(tv0_vals)]
-    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # luteal half: ov-to-menses (includes wrap)
-    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # follicular half: menses-to-ov (includes wrap)
-    insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
+    n_lo  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # [-1,0] half + boundary at 1
+    n_hi  <- sum(tv0_vals >= 0 | tv0_vals == -1)   # [0,1] half + boundary at -1
+    # Label correctly: for "ov" vars the halves are flipped relative to standard
+    is_ov_centered <- (length(meta0$ov) == 1)
+    if (is_ov_centered) {
+      n_half_luteal     <- n_hi
+      n_half_follicular <- n_lo
+    } else {
+      n_half_luteal     <- n_lo
+      n_half_follicular <- n_hi
+    }
+    insufficient_coverage <- (n_half_luteal < min_obs_per_half) || (n_half_follicular < min_obs_per_half)
 
     # Build coverage subtitle — per-half counts now shown per variable in each subplot
     coverage_subtitle <- paste0("Time variable: ", tv0)
@@ -630,8 +648,8 @@ for (current_id in ids_to_run) {
     print(p_cover)
   } else {
     insufficient_coverage <- TRUE
-    n_half_pre  <- 0L
-    n_half_post <- 0L
+    n_half_luteal     <- 0L
+    n_half_follicular <- 0L
 
     # Emit an explicit placeholder coverage page so the PDF is not blank
     # when no eligible time variables are available for this participant.
@@ -650,8 +668,8 @@ for (current_id in ids_to_run) {
   # ---- Gate: skip GAMs if cycle-half coverage is too sparse ----
   if (insufficient_coverage) {
     grDevices::dev.off()
-    message(sprintf("    -> Insufficient cycle-half coverage (n_pre=%d, n_post=%d, min=%d); saved coverage-only report: %s",
-                    n_half_pre, n_half_post, min_obs_per_half, pdf_filename))
+    message(sprintf("    -> Insufficient cycle-half coverage (n_luteal=%d, n_follicular=%d, min=%d); saved coverage-only report: %s",
+                    n_half_luteal, n_half_follicular, min_obs_per_half, pdf_filename))
     next
   }
 
