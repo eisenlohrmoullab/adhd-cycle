@@ -578,10 +578,13 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL,
   
   meta <- axis_meta_list[[tv]]
 
-  # Prepare raw data overlay (complete cases for outcome + time var)
+  # Prepare raw data overlay using the same inclusion rule as fit_outcome:
+  # require non-missing log-transformed outcome and time var, then plot on original scale.
   raw_pts <- NULL
-  if (!is.null(raw_data) && outcome_var %in% names(raw_data) && tv %in% names(raw_data)) {
-    raw_pts <- raw_data[complete.cases(raw_data[, c(outcome_var, tv)]), c(outcome_var, tv), drop = FALSE]
+  log_out <- paste0(outcome_var, "_Log")
+  if (!is.null(raw_data) && outcome_var %in% names(raw_data) &&
+      log_out %in% names(raw_data) && tv %in% names(raw_data)) {
+    raw_pts <- raw_data[complete.cases(raw_data[, c(log_out, tv)]), c(outcome_var, tv), drop = FALSE]
     if (nrow(raw_pts) == 0) raw_pts <- NULL
   }
 
