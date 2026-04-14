@@ -172,7 +172,7 @@ COGNITIVE_TASK_YLIM <- {
 TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
-# Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items
+# Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items, Hyp+Imp combined: 9 items
 CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4, "CSS_HypImp_Sx_Count" = 9)
 
 # --- Variables for combined symptom overlay (DRSP + CSS severity + tasks) ---
