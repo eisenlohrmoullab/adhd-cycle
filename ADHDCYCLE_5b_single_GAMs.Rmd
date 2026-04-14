@@ -308,9 +308,12 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   dat <- dat[complete.cases(dat[, keep]), keep, drop = FALSE]
   if (nrow(dat) < 10 || var(dat[[log_out]], na.rm = TRUE) < 1e-6) return(NULL) #removes outcomes with <10 observations or outcome has 0 variance
 
-  # Count observations in each phase half for adequacy flagging
-  n_pre  <- sum(dat[[tv]] <  0, na.rm = TRUE)
-  n_post <- sum(dat[[tv]] >= 0, na.rm = TRUE)
+  # Count observations in each positional half for adequacy flagging.
+  # These are orientation-neutral: n_neg = values in [-1, 0), n_nonneg = values in [0, 1].
+  # For menses-centered vars (cyclic_time, cyclic_time_impute): neg = luteal, nonneg = follicular.
+  # For ov-centered vars      (cyclic_time_ov, cyclic_time_imp_ov): neg = follicular, nonneg = luteal.
+  n_neg    <- sum(dat[[tv]] <  0, na.rm = TRUE)
+  n_nonneg <- sum(dat[[tv]] >= 0, na.rm = TRUE)
 
   k <- min(k_max, nrow(dat) - 1L); if (k < 3L) return(NULL)
 
@@ -358,8 +361,8 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
       edf = edf,
       F = Fval,
       n = nrow(dat),
-      n_pre = n_pre,
-      n_post = n_post,
+      n_neg = n_neg,
+      n_nonneg = n_nonneg,
       range = diff(range(est, na.rm = TRUE)),
       peak_time = peak_time,
       trough_time = trough_time
@@ -1827,8 +1830,8 @@ if (length(all_ids_signif) > 0) {
             p <- p + ggplot2::labs(
               title = sprintf("ID %s %s (range=%.2f, N=%d)", qid, id_stars, id_range, id_n)
             )
-            # Red title when either phase has fewer than 5 observations
-            if (isTRUE(res$sig$n_pre < 5) || isTRUE(res$sig$n_post < 5)) {
+            # Red title when either positional half has fewer than 5 observations
+            if (isTRUE(res$sig$n_neg < 5) || isTRUE(res$sig$n_nonneg < 5)) {
               p <- p + ggplot2::theme(
                 plot.title = ggplot2::element_text(size = 10, face = "bold",
                                                    hjust = 0.5, color = "red")
