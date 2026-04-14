@@ -46,6 +46,12 @@ table_cols_per_page <- 6
 plots_per_col <- 3
 plots_per_row <- 3 
 
+# --- Minimum observations per cycle-half to run GAMs ---
+# Per-outcome gate: after filtering to complete cases (outcome + time var),
+# if either cycle half has fewer than this many observations,
+# the GAM is skipped for that specific outcome × time-var combination.
+min_obs_per_half <- 3
+
 ```
 
 ```{r}
@@ -228,6 +234,25 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   dat <- dat[complete.cases(dat[, keep]), keep, drop = FALSE]
   if (nrow(dat) < 10 || var(dat[[log_out]], na.rm = TRUE) < 1e-6) return(NULL)
 
+  # Count observations in each positional half for adequacy checking.
+  # These are orientation-neutral: n_neg = values in [-1, 0), n_nonneg = values in [0, 1].
+  # For menses-centered vars (cyclic_time, cyclic_time_impute): neg = luteal, nonneg = follicular.
+  # For ov-centered vars      (cyclic_time_ov, cyclic_time_imp_ov): neg = follicular, nonneg = luteal.
+  n_neg    <- sum(dat[[tv]] <  0, na.rm = TRUE)
+  n_nonneg <- sum(dat[[tv]] >= 0, na.rm = TRUE)
+
+  # Skip if either cycle half has fewer than min_obs_per_half observations.
+  # n_neg and n_nonneg correspond to the two halves of the cycle regardless of
+  # orientation (menses-centered vs ov-centered), so checking the minimum of the
+  # two ensures both halves are adequately represented for this specific outcome.
+  if (min(n_neg, n_nonneg) < min_obs_per_half) {
+    message(glue::glue(
+      "Skipping GAM for {outcome_var}: only {min(n_neg, n_nonneg)} obs in one ",
+      "cycle half (min_obs_per_half={min_obs_per_half})"
+    ))
+    return(NULL)
+  }
+
   # --- Cycle coverage check & adaptive k ---
   coverage <- assess_cycle_coverage(data = dat, cycle_var = tv)
   decision <- decide_gam_spec(coverage)
@@ -282,6 +307,8 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
       edf = edf,
       F = Fval,
       n = nrow(dat),
+      n_neg = n_neg,
+      n_nonneg = n_nonneg,
       range = diff(range(est, na.rm = TRUE)),
       coverage_mode = decision$mode
     )
