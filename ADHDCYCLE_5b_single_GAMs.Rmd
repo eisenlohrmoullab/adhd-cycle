@@ -311,6 +311,28 @@ outcome_plot_settings <- tribble(
   "P4",               "data",        NA,     NA,     NA,
   "LH",               "data",        NA,     NA,     NA
 )
+
+# --- Normalization scale ranges for the combined 0-1 overlay page ---
+# Fixed-scale outcomes use their configured y_min/y_max.
+# Cognitive task outcomes use the sample-wide IQR whisker range
+# (avoids exaggeration that occurs when normalizing by per-individual GAM min/max).
+# Any remaining data-mode outcomes fall back to per-curve GAM min/max at plot time.
+norm_scale_ranges <- outcome_plot_settings %>%
+  dplyr::mutate(
+    norm_min = dplyr::case_when(
+      !is.na(y_min) ~ y_min,
+      variable %in% COGNITIVE_TASK_VARS ~ COGNITIVE_TASK_YLIM[1],
+      variable %in% COGNITIVE_TASK_REV_VARS ~ COGNITIVE_TASK_REV_YLIM[1],
+      TRUE ~ NA_real_
+    ),
+    norm_max = dplyr::case_when(
+      !is.na(y_max) ~ y_max,
+      variable %in% COGNITIVE_TASK_VARS ~ COGNITIVE_TASK_YLIM[2],
+      variable %in% COGNITIVE_TASK_REV_VARS ~ COGNITIVE_TASK_REV_YLIM[2],
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  dplyr::select(variable, norm_min, norm_max)
 ```
 
 # 4 - Per ID outcomes
@@ -586,17 +608,22 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
     p <- p + ggplot2::coord_cartesian(clip = "off")
   }
 
-  border_col <- dplyr::case_when(
-    is.finite(rng) && rng >= 1.5 ~ "red",
-    is.finite(rng) && rng >= 1.0 ~ "salmon",
-    is.finite(rng) && rng >= 0.5 ~ "pink",
-    TRUE                         ~ NA_character_
-  )
-  
-  if (!is.na(border_col)) {
-    p <- p + ggplot2::theme(
-      panel.border = ggplot2::element_rect(color = border_col, linewidth = 1.5, fill = NA)
+  # Colored effect-size borders only for DRSP outcomes
+  is_drsp <- grepl(DRSP_VAR_PATTERN, outcome_var)
+
+  if (is_drsp) {
+    border_col <- dplyr::case_when(
+      is.finite(rng) && rng >= 1.5 ~ "red",
+      is.finite(rng) && rng >= 1.0 ~ "salmon",
+      is.finite(rng) && rng >= 0.5 ~ "pink",
+      TRUE                         ~ NA_character_
     )
+
+    if (!is.na(border_col)) {
+      p <- p + ggplot2::theme(
+        panel.border = ggplot2::element_rect(color = border_col, linewidth = 1.5, fill = NA)
+      )
+    }
   }
 
   p
@@ -900,21 +927,22 @@ for (current_id in ids_to_run) {
     if (normalize_01) {
       ov_data <- ov_data %>%
         dplyr::left_join(
-          dplyr::select(outcome_plot_settings, variable, y_min, y_max),
+          norm_scale_ranges,
           by = c("outcome_var" = "variable")
         ) %>%
         dplyr::group_by(outcome_var) %>%
         dplyr::mutate(
-          # Use scale min/max from outcome_plot_settings when available;
-          # fall back to GAM-predicted min/max for data-mode outcomes (e.g., hormones)
-          scale_min = dplyr::coalesce(y_min, min(estimate, na.rm = TRUE)),
-          scale_max = dplyr::coalesce(y_max, max(estimate, na.rm = TRUE)),
+          # Use normalization scale ranges: fixed bounds for Likert-scale outcomes,
+          # sample-wide IQR whisker bounds for cognitive task outcomes,
+          # GAM-predicted min/max as last resort for any remaining data-mode outcomes.
+          scale_min = dplyr::coalesce(norm_min, min(estimate, na.rm = TRUE)),
+          scale_max = dplyr::coalesce(norm_max, max(estimate, na.rm = TRUE)),
           scale_range = scale_max - scale_min,
           estimate  = ifelse(scale_range > 0, (estimate  - scale_min) / scale_range, 0.5),
           conf.low  = ifelse(scale_range > 0, (conf.low  - scale_min) / scale_range, 0.5),
           conf.high = ifelse(scale_range > 0, (conf.high - scale_min) / scale_range, 0.5)
         ) %>%
-        dplyr::select(-y_min, -y_max, -scale_min, -scale_max, -scale_range) %>%
+        dplyr::select(-norm_min, -norm_max, -scale_min, -scale_max, -scale_range) %>%
         dplyr::ungroup()
       # Force Y limits to 0-1 for normalized data
       ylim_strategy <- "fixed"
