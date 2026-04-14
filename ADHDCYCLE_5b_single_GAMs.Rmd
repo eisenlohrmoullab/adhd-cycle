@@ -308,9 +308,12 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   dat <- dat[complete.cases(dat[, keep]), keep, drop = FALSE]
   if (nrow(dat) < 10 || var(dat[[log_out]], na.rm = TRUE) < 1e-6) return(NULL) #removes outcomes with <10 observations or outcome has 0 variance
 
-  # Count observations in each phase half for adequacy flagging
-  n_pre  <- sum(dat[[tv]] <  0, na.rm = TRUE)
-  n_post <- sum(dat[[tv]] >= 0, na.rm = TRUE)
+  # Count observations in each positional half for adequacy flagging.
+  # These are orientation-neutral: n_neg = values in [-1, 0), n_nonneg = values in [0, 1].
+  # For menses-centered vars (cyclic_time, cyclic_time_impute): neg = luteal, nonneg = follicular.
+  # For ov-centered vars      (cyclic_time_ov, cyclic_time_imp_ov): neg = follicular, nonneg = luteal.
+  n_neg    <- sum(dat[[tv]] <  0, na.rm = TRUE)
+  n_nonneg <- sum(dat[[tv]] >= 0, na.rm = TRUE)
 
   k <- min(k_max, nrow(dat) - 1L); if (k < 3L) return(NULL)
 
@@ -358,8 +361,8 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
       edf = edf,
       F = Fval,
       n = nrow(dat),
-      n_pre = n_pre,
-      n_post = n_post,
+      n_neg = n_neg,
+      n_nonneg = n_nonneg,
       range = diff(range(est, na.rm = TRUE)),
       peak_time = peak_time,
       trough_time = trough_time
@@ -546,6 +549,23 @@ for (current_id in ids_to_run) {
     tv0 <- time_vars[1]
     meta0 <- axis_meta[[tv0]]
 
+    # Shared helper: count observations in each cycle-phase half and label
+    # them as luteal vs follicular, accounting for time-variable orientation.
+    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that
+    # border both halves, so they count toward both.
+    #   non-"ov" vars: -1=Ov, 0=Menses, 1=Ov  → [-1,0]=luteal, [0,1]=follicular
+    #   "ov" vars:     -1=Men, 0=Ov,    1=Men  → [-1,0]=follicular, [0,1]=luteal
+    count_phase_halves <- function(tv_vals, meta) {
+      n_lo <- sum(tv_vals <= 0 | tv_vals == 1)   # [-1,0] half + boundary at 1
+      n_hi <- sum(tv_vals >= 0 | tv_vals == -1)   # [0,1] half + boundary at -1
+      is_ov_centered <- identical(meta$ov, 0)
+      if (is_ov_centered) {
+        list(n_luteal = n_hi, n_follicular = n_lo)
+      } else {
+        list(n_luteal = n_lo, n_follicular = n_hi)
+      }
+    }
+
     make_raw_panel <- function(dat, tv, meta, var, y_lab, color) {
       if (!var %in% names(dat)) {
         # Column missing — render an empty "No data" panel
@@ -557,9 +577,17 @@ for (current_id in ids_to_run) {
         return(p)
       }
       vals <- dat[[var]]
+      tv_vals <- dat[[tv]]
       # Count observations where both the outcome and cycle predictor are non-missing
-      has_data <- !all(is.na(vals))
-      n_obs <- sum(!is.na(vals) & !is.na(dat[[tv]]))
+      valid <- !is.na(vals) & !is.na(tv_vals)
+      n_obs <- sum(valid)
+      has_data <- n_obs > 0
+      # Per-variable per-half counts
+      halves <- count_phase_halves(tv_vals[valid], meta)
+      sub_label <- paste0(
+        "n = ", n_obs, " daily observations",
+        "  (luteal: ", halves$n_luteal, ", follicular: ", halves$n_follicular, ")"
+      )
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
                             linewidth = 0.6, linetype = "dashed") +
@@ -570,7 +598,7 @@ for (current_id in ids_to_run) {
           labels = meta$labels
         ) +
         ggplot2::labs(x = "Cycle Phase", y = y_lab,
-                      subtitle = paste0("n = ", n_obs, " daily observations")) +
+                      subtitle = sub_label) +
         ggplot2::theme_minimal(base_size = 12)
       if (has_data) {
         p <- p + ggplot2::geom_point(color = color, alpha = 0.45, size = 1.8)
@@ -586,21 +614,17 @@ for (current_id in ids_to_run) {
     p_css <- make_raw_panel(datSX_id, tv0, meta0, "CSS_Inatt",
                             "CSS Inattention Severity", "#D95F02")
 
-    # Count observations in each cycle-half for the primary time variable.
-    # Boundary values (-1, 0, 1) are landmarks (ovulation / menses) that border
-    # both halves, so they are allowed to count toward both.
+    # Count observations in each cycle-half for the primary time variable
+    # using the shared helper.
     tv0_vals <- datSX_id[[tv0]]
     tv0_vals <- tv0_vals[!is.na(tv0_vals)]
-    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # ov-to-menses half (includes wrap)
-    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # menses-to-ov half (includes wrap)
-    insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
+    gate_halves       <- count_phase_halves(tv0_vals, meta0)
+    n_half_luteal     <- gate_halves$n_luteal
+    n_half_follicular <- gate_halves$n_follicular
+    insufficient_coverage <- (n_half_luteal < min_obs_per_half) || (n_half_follicular < min_obs_per_half)
 
-    # Build coverage subtitle — include per-half counts and a warning if insufficient
-    coverage_subtitle <- paste0(
-      "Time variable: ", tv0,
-      "  |  n (half 1) = ", n_half_pre,
-      ", n (half 2) = ", n_half_post
-    )
+    # Build coverage subtitle — per-half counts now shown per variable in each subplot
+    coverage_subtitle <- paste0("Time variable: ", tv0)
     if (insufficient_coverage) {
       coverage_subtitle <- paste0(
         coverage_subtitle,
@@ -624,8 +648,8 @@ for (current_id in ids_to_run) {
     print(p_cover)
   } else {
     insufficient_coverage <- TRUE
-    n_half_pre  <- 0L
-    n_half_post <- 0L
+    n_half_luteal     <- 0L
+    n_half_follicular <- 0L
 
     # Emit an explicit placeholder coverage page so the PDF is not blank
     # when no eligible time variables are available for this participant.
@@ -644,8 +668,8 @@ for (current_id in ids_to_run) {
   # ---- Gate: skip GAMs if cycle-half coverage is too sparse ----
   if (insufficient_coverage) {
     grDevices::dev.off()
-    message(sprintf("    -> Insufficient cycle-half coverage (n_pre=%d, n_post=%d, min=%d); saved coverage-only report: %s",
-                    n_half_pre, n_half_post, min_obs_per_half, pdf_filename))
+    message(sprintf("    -> Insufficient cycle-half coverage (n_luteal=%d, n_follicular=%d, min=%d); saved coverage-only report: %s",
+                    n_half_luteal, n_half_follicular, min_obs_per_half, pdf_filename))
     next
   }
 
@@ -1116,19 +1140,16 @@ for (current_id in ids_to_run) {
         )
       )
 
-    all_outcome_labels <- unlist(page_definitions, use.names = FALSE)
-    # Keep only outcomes that exist in this ID's data
-    all_outcome_labels <- all_outcome_labels[all_outcome_labels %in% id_range_df$outcome_label]
-    outcome_pages_shared <- split(
-      all_outcome_labels,
-      ceiling(seq_along(all_outcome_labels) / max_plots_per_page)
-    )
+    for (page_name in names(page_definitions)) {
+      page_outcome_labels <- page_definitions[[page_name]]
+      # Keep only outcomes that exist in this ID's data
+      page_outcome_labels <- page_outcome_labels[page_outcome_labels %in% id_range_df$outcome_label]
+      if (length(page_outcome_labels) == 0) next
 
-    for (page_outcomes in outcome_pages_shared) {
-      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
+      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcome_labels)
       if (nrow(page_data) == 0) next
 
-      plot_list_shared <- lapply(page_outcomes, function(lab) {
+      plot_list_shared <- lapply(page_outcome_labels, function(lab) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
         if (nrow(plot_df) == 0) return(NULL)
 
@@ -1165,9 +1186,10 @@ for (current_id in ids_to_run) {
           )
         }
 
+        page_title_label <- gsub("_", " ", page_name)
         page_title_shared <- paste(
-          "Symptom Trajectories (ID-Scaled Y Axis) — ID:", current_id,
-          "| Time Variable:", tv
+          "Symptom Trajectories (ID-Scaled Y Axis) \u2014", page_title_label,
+          "\u2014 ID:", current_id, "| Time Variable:", tv
         )
 
         page_subtitle_shared <- paste0(
@@ -1805,8 +1827,8 @@ if (length(all_ids_signif) > 0) {
             p <- p + ggplot2::labs(
               title = sprintf("ID %s %s (range=%.2f, N=%d)", qid, id_stars, id_range, id_n)
             )
-            # Red title when either phase has fewer than 5 observations
-            if (isTRUE(res$sig$n_pre < 5) || isTRUE(res$sig$n_post < 5)) {
+            # Red title when either positional half has fewer than 5 observations
+            if (isTRUE(res$sig$n_neg < 5) || isTRUE(res$sig$n_nonneg < 5)) {
               p <- p + ggplot2::theme(
                 plot.title = ggplot2::element_text(size = 10, face = "bold",
                                                    hjust = 0.5, color = "red")
