@@ -569,7 +569,7 @@ for (current_id in ids_to_run) {
       # Label halves correctly based on time-variable orientation:
       #   non-"ov" vars: -1=Ov, 0=Menses, 1=Ov  → [-1,0]=luteal, [0,1]=follicular
       #   "ov" vars:     -1=Men, 0=Ov,    1=Men  → [-1,0]=follicular, [0,1]=luteal
-      is_ov_centered <- (length(meta$ov) == 1)
+      is_ov_centered <- identical(meta$ov, 0)
       if (is_ov_centered) {
         lut_n <- n_hi; fol_n <- n_lo
       } else {
@@ -613,7 +613,7 @@ for (current_id in ids_to_run) {
     n_lo  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # [-1,0] half + boundary at 1
     n_hi  <- sum(tv0_vals >= 0 | tv0_vals == -1)   # [0,1] half + boundary at -1
     # Label correctly: for "ov" vars the halves are flipped relative to standard
-    is_ov_centered <- (length(meta0$ov) == 1)
+    is_ov_centered <- identical(meta0$ov, 0)
     if (is_ov_centered) {
       n_half_luteal     <- n_hi
       n_half_follicular <- n_lo
