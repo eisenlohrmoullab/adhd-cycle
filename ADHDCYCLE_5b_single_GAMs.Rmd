@@ -557,9 +557,19 @@ for (current_id in ids_to_run) {
         return(p)
       }
       vals <- dat[[var]]
+      tv_vals <- dat[[tv]]
       # Count observations where both the outcome and cycle predictor are non-missing
       has_data <- !all(is.na(vals))
-      n_obs <- sum(!is.na(vals) & !is.na(dat[[tv]]))
+      valid <- !is.na(vals) & !is.na(tv_vals)
+      n_obs <- sum(valid)
+      # Per-variable per-half counts (boundary values count toward both halves)
+      valid_tv <- tv_vals[valid]
+      n_h1 <- sum(valid_tv <= 0 | valid_tv == 1)   # ov-to-menses half
+      n_h2 <- sum(valid_tv >= 0 | valid_tv == -1)   # menses-to-ov half
+      sub_label <- paste0(
+        "n = ", n_obs, " daily observations",
+        "  (half 1: ", n_h1, ", half 2: ", n_h2, ")"
+      )
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
                             linewidth = 0.6, linetype = "dashed") +
@@ -570,7 +580,7 @@ for (current_id in ids_to_run) {
           labels = meta$labels
         ) +
         ggplot2::labs(x = "Cycle Phase", y = y_lab,
-                      subtitle = paste0("n = ", n_obs, " daily observations")) +
+                      subtitle = sub_label) +
         ggplot2::theme_minimal(base_size = 12)
       if (has_data) {
         p <- p + ggplot2::geom_point(color = color, alpha = 0.45, size = 1.8)
@@ -595,12 +605,8 @@ for (current_id in ids_to_run) {
     n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # menses-to-ov half (includes wrap)
     insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
 
-    # Build coverage subtitle — include per-half counts and a warning if insufficient
-    coverage_subtitle <- paste0(
-      "Time variable: ", tv0,
-      "  |  n (half 1) = ", n_half_pre,
-      ", n (half 2) = ", n_half_post
-    )
+    # Build coverage subtitle — per-half counts now shown per variable in each subplot
+    coverage_subtitle <- paste0("Time variable: ", tv0)
     if (insufficient_coverage) {
       coverage_subtitle <- paste0(
         coverage_subtitle,
