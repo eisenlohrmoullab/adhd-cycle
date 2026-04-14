@@ -1162,7 +1162,7 @@ for (current_id in ids_to_run) {
     task_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
-    task_rev_qualifying2 <- sig_by_tv[[tv]] %>%
+    task_rev_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% COGNITIVE_TASK_REV_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
     css_sev_qualifying <- sig_by_tv[[tv]] %>%
@@ -1174,7 +1174,7 @@ for (current_id in ids_to_run) {
 
     all_qualifying_vars <- unique(c(
       drsp_qualifying$variable, bdefs_qualifying$variable,
-      task_qualifying$variable, task_rev_qualifying2$variable,
+      task_qualifying$variable, task_rev_qualifying$variable,
       css_sev_qualifying$variable,
       css_count_qualifying$variable
     ))
@@ -1784,10 +1784,7 @@ plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
 #   6. Empirical + modeled probability plot
 #   Per time variable:
 #   7. Peak & trough timing density (significant participants)
-#   8+. Individual GAM trajectory pages (fixed Y axes across people):
-#       - Significant with range > 0.33 first, then
-#       - Significant with range <= 0.33, then
-#       - Not significant with range > 0.33
+#   8+. Individual GAM trajectory pages (all IDs, sorted by descending range)
 # =========================================================
 
 # --- Build the exploration summary from in-memory results ---
@@ -1841,33 +1838,20 @@ if (length(all_ids_signif) > 0) {
     )
     if (is.null(result)) next
 
-    # 2. Identify qualifying IDs in four groups, each sorted by range descending:
-    #    (a) Significant & range > 0.33
-    #    (b) Significant & range <= 0.33
-    #    (c) Not significant & range > 0.33
-    #    (d) Not significant & range <= 0.33
-    sig_above_cutoff <- result$data %>%
-      dplyr::filter(significant_num == 1 & range > 0.33) %>%
+    # 2. Identify all IDs sorted by range descending, plus sig/nonsig splits for overlay pages
+    sig_ids <- result$data %>%
+      dplyr::filter(significant_num == 1) %>%
       dplyr::arrange(dplyr::desc(range)) %>%
       dplyr::pull(id)
 
-    sig_below_cutoff <- result$data %>%
-      dplyr::filter(significant_num == 1 & range <= 0.33) %>%
+    nonsig_ids <- result$data %>%
+      dplyr::filter(significant_num == 0) %>%
       dplyr::arrange(dplyr::desc(range)) %>%
       dplyr::pull(id)
 
-    nonsig_above_cutoff <- result$data %>%
-      dplyr::filter(significant_num == 0 & range > 0.33) %>%
+    qualifying_ids <- result$data %>%
       dplyr::arrange(dplyr::desc(range)) %>%
       dplyr::pull(id)
-
-    nonsig_below_cutoff <- result$data %>%
-      dplyr::filter(significant_num == 0 & range <= 0.33) %>%
-      dplyr::arrange(dplyr::desc(range)) %>%
-      dplyr::pull(id)
-
-    qualifying_ids <- c(sig_above_cutoff, sig_below_cutoff,
-                        nonsig_above_cutoff, nonsig_below_cutoff)
 
     # 3. Get outcome label
     outcome_label <- if (target_var %in% names(outcomes)) {
@@ -1989,7 +1973,7 @@ if (length(all_ids_signif) > 0) {
     )
     note_grob <- if (length(qualifying_ids) > 0) {
       grid::textGrob(
-        sprintf("Individual GAM pages follow for %d IDs (sig range>0.33, sig range\u22640.33, non-sig range>0.33, non-sig range\u22640.33)",
+        sprintf("Individual GAM pages follow for %d IDs (sorted by descending range)",
                 length(qualifying_ids)),
         gp = grid::gpar(fontsize = 11, fontface = "italic")
       )
@@ -2008,7 +1992,6 @@ if (length(all_ids_signif) > 0) {
     )
 
     # ---- PAGE 2: Combined Overlay GAM - Significant Participants ----
-    sig_ids <- c(sig_above_cutoff, sig_below_cutoff)
     for (tv in time_vars) {
       p_sig_overlay <- plot_overlay_gam(
         fit_results_list = all_fit_results_by_tv[[tv]],
@@ -2022,7 +2005,6 @@ if (length(all_ids_signif) > 0) {
     }
 
     # ---- PAGE 3: Combined Overlay GAM - Non-Significant Participants ----
-    nonsig_ids <- c(nonsig_above_cutoff, nonsig_below_cutoff)
     for (tv in time_vars) {
       p_nonsig_overlay <- plot_overlay_gam(
         fit_results_list = all_fit_results_by_tv[[tv]],
@@ -2058,28 +2040,14 @@ if (length(all_ids_signif) > 0) {
     }
 
     # ---- Individual GAM trajectory plots for all IDs (per time variable) ----
-    # Reuse pre-computed fit results; groups: sig>0.33, sig<=0.33, nonsig>0.33, nonsig<=0.33
+    # All IDs sorted by descending range (no grouping by significance/cutoff)
     for (tv in time_vars) {
       if (length(qualifying_ids) == 0) next
 
       all_fit_results <- all_fit_results_by_tv[[tv]]
 
-      groups <- list(
-        list(ids = sig_above_cutoff,
-             label = "Significant, Range > 0.33"),
-        list(ids = sig_below_cutoff,
-             label = "Significant, Range \u2264 0.33"),
-        list(ids = nonsig_above_cutoff,
-             label = "Not Significant, Range > 0.33"),
-        list(ids = nonsig_below_cutoff,
-             label = "Not Significant, Range \u2264 0.33")
-      )
-
-      for (grp in groups) {
-        if (length(grp$ids) == 0) next
-
-        id_plots <- list()
-        for (qid in grp$ids) {
+      id_plots <- list()
+      for (qid in qualifying_ids) {
           res <- all_fit_results[[as.character(qid)]]
           if (is.null(res)) next
 
@@ -2121,8 +2089,8 @@ if (length(all_ids_signif) > 0) {
             final_page <- patchwork::wrap_plots(plotlist = page_plots,
                                                 ncol = plots_per_col_exp) +
               patchwork::plot_annotation(
-                title    = paste(grp$label, ":", outcome_label),
-                subtitle = paste("Time variable:", tv),
+                title    = paste("Individual GAMs:", outcome_label),
+                subtitle = paste("Sorted by descending range | Time variable:", tv),
                 theme    = ggplot2::theme(
                   plot.title    = ggplot2::element_text(size = 12, face = "bold"),
                   plot.subtitle = ggplot2::element_text(size = 9)
@@ -2131,7 +2099,6 @@ if (length(all_ids_signif) > 0) {
             print(final_page)
           }
         }
-      }
     }
 
     grDevices::dev.off()
