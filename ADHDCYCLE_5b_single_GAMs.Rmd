@@ -47,9 +47,9 @@ plots_per_col <- 3
 plots_per_row <- 3
 
 # --- Minimum observations per cycle-half to run GAMs ---
-# If a participant has fewer than this many non-missing cycle predictor
-# observations in either half (ovulation-to-menses or menses-to-ovulation),
-# GAMs are skipped and only the raw data coverage page is produced.
+# Per-outcome gate: after filtering to complete cases (outcome + time var),
+# if either cycle half has fewer than this many observations,
+# the GAM is skipped for that specific outcome × time-var combination.
 min_obs_per_half <- 3
 ```
 
