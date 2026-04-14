@@ -157,8 +157,10 @@ assess_cycle_coverage <- function(data, cycle_var, n_bins = 6) {
   vals <- data[[cycle_var]]
   vals <- vals[!is.na(vals)]
 
+  # Use fixed breakpoints across the full theoretical cycle range [-1, 1]
+  # so that bins are comparable across participants and outcomes
   cycle_bin <- cut(vals,
-                   breaks = n_bins,
+                   breaks = seq(-1, 1, length.out = n_bins + 1),
                    labels = FALSE,
                    include.lowest = TRUE)
 
@@ -232,7 +234,7 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
 
   message(glue::glue(
     "[{outcome_var}] Total N: {coverage$total_n}, Bins present: {coverage$bins_present}, ",
-    "Bins with \u22652: {coverage$bins_with_2plus}, Empty bins: {coverage$empty_bins}, ",
+    "Bins with >=2: {coverage$bins_with_2plus}, Empty bins: {coverage$empty_bins}, ",
     "Mode: {decision$mode}"
   ))
 

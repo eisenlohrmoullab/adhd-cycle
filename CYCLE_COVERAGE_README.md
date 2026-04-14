@@ -26,7 +26,7 @@ This system prevents those failure modes.
 
 ### 1. Quantifies cycle coverage
 
-Cycle time is divided into equal-width bins (default: 6 bins across the full cycle).
+Cycle time (scaled to [-1, 1]) is divided into equal-width bins using fixed breakpoints (default: 6 bins across the full cycle range).
 
 For each participant × outcome combination, the system computes:
 
