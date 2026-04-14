@@ -532,7 +532,8 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
 # y_limits = NULL means: use per-outcome defaults from outcome_plot_settings
 #   (fixed outcomes → c(y_min, y_max); data-mode outcomes → data-driven, no clamp)
 # y_limits = c(lo, hi) means: use those limits as-is (e.g. from shared-y section)
-create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) {
+create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL,
+                                  raw_data = NULL) {
   if (is.null(plot_df) || nrow(plot_df) == 0) return(NULL)
   
   max_pt <- dplyr::slice_max(plot_df, order_by = estimate, n = 1, with_ties = FALSE)
@@ -577,12 +578,29 @@ create_annotated_plot <- function(plot_df, tv, axis_meta_list, y_limits = NULL) 
   
   meta <- axis_meta_list[[tv]]
 
+  # Prepare raw data overlay (complete cases for outcome + time var)
+  raw_pts <- NULL
+  if (!is.null(raw_data) && outcome_var %in% names(raw_data) && tv %in% names(raw_data)) {
+    raw_pts <- raw_data[complete.cases(raw_data[, c(outcome_var, tv)]), c(outcome_var, tv), drop = FALSE]
+    if (nrow(raw_pts) == 0) raw_pts <- NULL
+  }
+
   p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data[[tv]], y = estimate))
 
   # Reference line only for outcomes that define one (Likert-scale outcomes)
   if (!is.na(ref_line)) {
     p <- p + ggplot2::geom_hline(yintercept = ref_line, color = "red",
                                  linewidth = 0.4, alpha = 0.4)
+  }
+
+  # Overlay raw data points behind the GAM curve
+  if (!is.null(raw_pts)) {
+    p <- p + ggplot2::geom_point(
+      data = raw_pts,
+      ggplot2::aes(x = .data[[tv]], y = .data[[outcome_var]]),
+      color = line_col, alpha = 0.25, size = 1.2, shape = 16,
+      inherit.aes = FALSE
+    )
   }
 
   p <- p +
@@ -1270,7 +1288,7 @@ for (current_id in ids_to_run) {
       plot_list <- lapply(page_outcome_labels, function(lab) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
         if (nrow(plot_df) == 0) return(NULL)
-        create_annotated_plot(plot_df, tv, axis_meta)
+        create_annotated_plot(plot_df, tv, axis_meta, raw_data = datSX_id)
       })
       plot_list <- Filter(Negate(is.null), plot_list)
 
@@ -1376,7 +1394,8 @@ for (current_id in ids_to_run) {
           plot_df = plot_df,
           tv = tv,
           axis_meta_list = axis_meta,
-          y_limits = shared_y_limits
+          y_limits = shared_y_limits,
+          raw_data = datSX_id
         )
       })
 
@@ -2086,7 +2105,8 @@ if (length(all_ids_signif) > 0) {
           res <- all_fit_results[[as.character(qid)]]
           if (is.null(res)) next
 
-          p <- create_annotated_plot(res$pred, tv, axis_meta)
+          datSX_qid <- subset(cycle_df_scaled, as.character(id) == qid)
+          p <- create_annotated_plot(res$pred, tv, axis_meta, raw_data = datSX_qid)
           if (!is.null(p)) {
             id_range <- round(res$sig$range, 2)
             id_n     <- res$sig$n
