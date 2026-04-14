@@ -1577,6 +1577,58 @@ get_adhd_variables <- function(df) {
 }
 
 # --- Peak and trough timing distribution plot for significant participants ---
+# --- Combined overlay GAM plot for a group of participants ---
+# Overlays individual GAM fitted curves on a single plot.
+# fit_results_list: named list (keyed by id) of fit_outcome() results
+# ids: character vector of participant IDs to include
+# tv: time variable name
+# axis_meta_list: axis metadata (labels, reference lines)
+# outcome_label: display label for the outcome
+# title_prefix: e.g., "Significant GAMs" or "Non-Significant GAMs"
+plot_overlay_gam <- function(fit_results_list, ids, tv, axis_meta_list,
+                             outcome_label, title_prefix) {
+  meta <- axis_meta_list[[tv]]
+
+  # Collect predictions for specified IDs
+  overlay_data <- do.call(rbind, lapply(ids, function(qid) {
+    res <- fit_results_list[[as.character(qid)]]
+    if (is.null(res)) return(NULL)
+    pred_df <- res$pred
+    pred_df$id <- qid
+    pred_df
+  }))
+
+  if (is.null(overlay_data) || nrow(overlay_data) == 0) return(NULL)
+
+  n_people <- length(unique(overlay_data$id))
+
+  p <- ggplot2::ggplot(overlay_data,
+                       ggplot2::aes(x = .data[[tv]], y = estimate, group = id)) +
+    ggplot2::geom_vline(xintercept = meta$menses, color = "red",
+                        linewidth = 0.8) +
+    ggplot2::geom_vline(xintercept = meta$ov, color = "forestgreen",
+                        linewidth = 0.8) +
+    ggplot2::geom_line(alpha = 0.4, linewidth = 0.6, color = "#0072B2") +
+    ggplot2::scale_x_continuous(
+      limits = c(-1, 1),
+      breaks = seq(-1, 1, by = 0.5),
+      labels = meta$labels
+    ) +
+    ggplot2::labs(
+      title    = paste0(title_prefix, ": ", outcome_label),
+      subtitle = paste0("N = ", n_people, " participants | Time variable: ", tv),
+      x        = "Cycle Phase",
+      y        = outcome_label
+    ) +
+    ggplot2::theme_minimal(base_size = 14) +
+    ggplot2::theme(
+      plot.title    = ggplot2::element_text(size = 16, face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 12)
+    )
+
+  p
+}
+
 plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
   meta <- axis_meta_list[[tv]]
 
@@ -1639,12 +1691,14 @@ plot_peak_trough_timing <- function(df_sig, tv, axis_meta_list, outcome_label) {
 # =========================================================
 # For each ADHD symptom (CSS) and DRSP outcome, generates a landscape PDF containing:
 #   1. Summary page: descriptive stats + threshold table + peak/trough timing
-#   2. Significance probability plot (logistic curve)
-#   3. Histogram of range by significance
-#   4. Empirical + modeled probability plot
+#   2. Combined overlay GAM plot (significant participants only)
+#   3. Combined overlay GAM plot (non-significant participants only)
+#   4. Significance probability plot (logistic curve)
+#   5. Histogram of range by significance
+#   6. Empirical + modeled probability plot
 #   Per time variable:
-#   5. Peak & trough timing density (significant participants)
-#   6+. Individual GAM trajectory pages (fixed Y axes across people):
+#   7. Peak & trough timing density (significant participants)
+#   8+. Individual GAM trajectory pages (fixed Y axes across people):
 #       - Significant with range > 0.33 first, then
 #       - Significant with range <= 0.33, then
 #       - Not significant with range > 0.33
@@ -1739,7 +1793,24 @@ if (length(all_ids_signif) > 0) {
                 result$descriptives_overall$n_significant,
                 length(qualifying_ids)))
 
-    # 4. Open PDF
+    # 4. Pre-compute GAM fit results for all qualifying IDs (all time variables)
+    #    Used for combined overlay plots and individual trajectory pages.
+    all_fit_results_by_tv <- list()
+    for (tv in time_vars) {
+      tv_fits <- list()
+      for (qid in qualifying_ids) {
+        dat_id <- subset(cycle_df_scaled, as.character(id) == qid)
+        if (nrow(dat_id) == 0) next
+        res <- tryCatch(
+          fit_outcome(dat_id, target_var, tv, outcomes),
+          error = function(e) NULL
+        )
+        if (!is.null(res)) tv_fits[[as.character(qid)]] <- res
+      }
+      all_fit_results_by_tv[[tv]] <- tv_fits
+    }
+
+    # 5. Open PDF
     pdf_path <- file.path(explore_folder, paste0("Explore_", target_var, ".pdf"))
     grDevices::pdf(pdf_path, width = 11, height = 8.5)
 
@@ -1848,16 +1919,44 @@ if (length(all_ids_signif) > 0) {
       heights = grid::unit(c(0.10, 0.05, 0.25, 0.08, 0.38, 0.08), "npc")
     )
 
-    # ---- PAGE 2: Significance Probability Plot ----
+    # ---- PAGE 2: Combined Overlay GAM - Significant Participants ----
+    sig_ids <- c(sig_above_cutoff, sig_below_cutoff)
+    for (tv in time_vars) {
+      p_sig_overlay <- plot_overlay_gam(
+        fit_results_list = all_fit_results_by_tv[[tv]],
+        ids              = sig_ids,
+        tv               = tv,
+        axis_meta_list   = axis_meta,
+        outcome_label    = outcome_label,
+        title_prefix     = "Significant GAMs (p < .05)"
+      )
+      if (!is.null(p_sig_overlay)) print(p_sig_overlay)
+    }
+
+    # ---- PAGE 3: Combined Overlay GAM - Non-Significant Participants ----
+    nonsig_ids <- c(nonsig_above_cutoff, nonsig_below_cutoff)
+    for (tv in time_vars) {
+      p_nonsig_overlay <- plot_overlay_gam(
+        fit_results_list = all_fit_results_by_tv[[tv]],
+        ids              = nonsig_ids,
+        tv               = tv,
+        axis_meta_list   = axis_meta,
+        outcome_label    = outcome_label,
+        title_prefix     = "Non-Significant GAMs (p \u2265 .05)"
+      )
+      if (!is.null(p_nonsig_overlay)) print(p_nonsig_overlay)
+    }
+
+    # ---- PAGE 4: Significance Probability Plot ----
     print(result$plot_probability)
 
-    # ---- PAGE 3: Histogram ----
+    # ---- PAGE 5: Histogram ----
     print(result$plot_histogram)
 
-    # ---- PAGE 4: Empirical + Model ----
+    # ---- PAGE 6: Empirical + Model ----
     print(result$plot_empirical)
 
-    # ---- PAGE 5+: Peak & Trough Timing Summary (per time variable) ----
+    # ---- PAGE 7+: Peak & Trough Timing Summary (per time variable) ----
     for (tv in time_vars) {
       sig_timing_data <- result$data %>%
         dplyr::filter(significant_num == 1, best_time_var == tv,
@@ -1871,22 +1970,11 @@ if (length(all_ids_signif) > 0) {
     }
 
     # ---- Individual GAM trajectory plots for all IDs (per time variable) ----
-    # Pre-compute predictions for global y-axis; groups: sig>0.33, sig<=0.33, nonsig>0.33, nonsig<=0.33
+    # Reuse pre-computed fit results; groups: sig>0.33, sig<=0.33, nonsig>0.33, nonsig<=0.33
     for (tv in time_vars) {
       if (length(qualifying_ids) == 0) next
 
-      # Pre-compute all predictions for global y-axis range
-      all_fit_results <- list()
-      for (qid in qualifying_ids) {
-        dat_id <- subset(cycle_df_scaled, as.character(id) == qid)
-        if (nrow(dat_id) == 0) next
-
-        res <- tryCatch(
-          fit_outcome(dat_id, target_var, tv, outcomes),
-          error = function(e) NULL
-        )
-        if (!is.null(res)) all_fit_results[[as.character(qid)]] <- res
-      }
+      all_fit_results <- all_fit_results_by_tv[[tv]]
 
       groups <- list(
         list(ids = sig_above_cutoff,
