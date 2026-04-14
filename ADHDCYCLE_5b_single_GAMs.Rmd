@@ -19,6 +19,7 @@ library(tidyr)
 library(knitr)
 library(broom)
 library(scales)
+library(glue)
 
 options(scipen = 999)
 set.seed(12345)
@@ -300,6 +301,74 @@ axis_meta <- lapply(time_vars, function(tv) {
 })
 names(axis_meta) <- time_vars
 
+# --- Assess cycle coverage for a given time variable ---
+# Divides the cycle variable range into bins and counts observations per bin.
+# Returns a list with total_n, bins_present, bins_with_2plus, empty_bins, and bin_counts.
+assess_cycle_coverage <- function(data, cycle_var, n_bins = 6) {
+  vals <- data[[cycle_var]]
+  vals <- vals[!is.na(vals)]
+
+  cycle_bin <- cut(vals,
+                   breaks = n_bins,
+                   labels = FALSE,
+                   include.lowest = TRUE)
+
+  bin_counts <- as.data.frame(table(cycle_bin = factor(cycle_bin, levels = seq_len(n_bins))),
+                              stringsAsFactors = FALSE)
+  names(bin_counts) <- c("cycle_bin", "n_per_bin")
+  bin_counts$n_per_bin <- as.integer(bin_counts$n_per_bin)
+
+  total_n <- length(vals)
+  bins_present <- sum(bin_counts$n_per_bin > 0)
+  bins_with_2plus <- sum(bin_counts$n_per_bin >= 2)
+  empty_bins <- n_bins - bins_present
+
+  list(
+    total_n = total_n,
+    bins_present = bins_present,
+    bins_with_2plus = bins_with_2plus,
+    empty_bins = empty_bins,
+    bin_counts = bin_counts
+  )
+}
+
+# --- Decide GAM specification based on cycle coverage ---
+# Returns a list with run_gam (logical), k (integer or NA), and mode (character).
+decide_gam_spec <- function(coverage) {
+  # Good coverage → full model
+  if (
+    coverage$total_n >= 15 &&
+    coverage$bins_present >= 5 &&
+    coverage$bins_with_2plus >= 4 &&
+    coverage$empty_bins <= 1
+  ) {
+    return(list(
+      run_gam = TRUE,
+      k = 6L,
+      mode = "full_cycle"
+    ))
+  }
+
+  # Moderate coverage → reduced complexity
+  if (
+    coverage$total_n >= 12 &&
+    coverage$bins_present >= 4
+  ) {
+    return(list(
+      run_gam = TRUE,
+      k = 4L,
+      mode = "reduced_k"
+    ))
+  }
+
+  # Poor coverage → do not run GAM
+  list(
+    run_gam = FALSE,
+    k = NA,
+    mode = "insufficient_coverage"
+  )
+}
+
 # --- Fit + predict one outcome for one time var (bam + predict) ---
 fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   log_out <- paste0(outcome_var, "_Log")
@@ -315,7 +384,24 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
   n_neg    <- sum(dat[[tv]] <  0, na.rm = TRUE)
   n_nonneg <- sum(dat[[tv]] >= 0, na.rm = TRUE)
 
-  k <- min(k_max, nrow(dat) - 1L); if (k < 3L) return(NULL)
+  # --- Cycle coverage check & adaptive k ---
+  coverage <- assess_cycle_coverage(data = dat, cycle_var = tv)
+  decision <- decide_gam_spec(coverage)
+
+  message(glue::glue(
+    "[{outcome_var}] Total N: {coverage$total_n}, Bins present: {coverage$bins_present}, ",
+    "Bins with \u22652: {coverage$bins_with_2plus}, Empty bins: {coverage$empty_bins}, ",
+    "Mode: {decision$mode}"
+  ))
+
+  if (!decision$run_gam) {
+    message(glue::glue("Skipping GAM for {outcome_var}: insufficient cycle coverage"))
+    return(NULL)
+  }
+
+  # Use the coverage-based k, but still respect k_max and data-size constraints
+  k <- min(decision$k, k_max, nrow(dat) - 1L)
+  if (k < 3L) return(NULL)
 
   fml <- as.formula(paste0(log_out, " ~ s(", tv, ", bs = 'cc', k = ", k, ")"))
   knots <- setNames(list(c(-1, 1)), tv)
@@ -365,7 +451,8 @@ fit_outcome <- function(dat, outcome_var, tv, outcomes_map, k_max = 10L) {
       n_nonneg = n_nonneg,
       range = diff(range(est, na.rm = TRUE)),
       peak_time = peak_time,
-      trough_time = trough_time
+      trough_time = trough_time,
+      coverage_mode = decision$mode
     )
   )
 }
