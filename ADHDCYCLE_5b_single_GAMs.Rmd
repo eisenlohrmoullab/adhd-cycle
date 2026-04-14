@@ -28,8 +28,7 @@ set.seed(12345)
 ```{r}
 cycle_df_scaled <- get(load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_dataedits_output/0_dataprep_output/00_cleaned_datasets/adhd_daily_scaled_20250929.RData"))
 
-# --- Create combined Hyperactivity/Impulsivity Sx Count ---
-cycle_df_scaled$CSS_HypImp_Sx_Count <- cycle_df_scaled$CSS_Hyp_Count + cycle_df_scaled$CSS_Imp_Count
+# Note: CSS_HypImp_Count (= CSS_Hyp_Count + CSS_Imp_Count) is created in ADHDCYCLE_0_daily_dataprep.Rmd
 ```
 
 # 1 - Set output folder & time vars to use
@@ -73,7 +72,7 @@ if (length(time_vars) < length(time_vars_to_run)) {
 ```{r}
 outcomes <- c(
   "CSS_Inatt_Count" = "CSS Inattention Sx Count", "CSS_Hyp_Count" = "CSS Hyperactivity Sx Count",
-  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_HypImp_Sx_Count" = "CSS Hyperactivity/Impulsivity Sx Count",
+  "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_HypImp_Count" = "CSS Hyperactivity/Impulsivity Sx Count",
   "CSS_Inatt" = "CSS Inattention Sx Severity",
   "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity", "score_pinball" = "Working Memory Score (Pinball)",
   "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
@@ -92,7 +91,7 @@ outcomes <- c(
 outcome_categories <- tribble(
   ~category, ~variable,
   "ADHD Symptoms (CSS)", "CSS_Inatt_Count", "ADHD Symptoms (CSS)", "CSS_Hyp_Count",
-  "ADHD Symptoms (CSS)", "CSS_Imp_Count", "ADHD Symptoms (CSS)", "CSS_HypImp_Sx_Count",
+  "ADHD Symptoms (CSS)", "CSS_Imp_Count", "ADHD Symptoms (CSS)", "CSS_HypImp_Count",
   "ADHD Symptoms (CSS)", "CSS_Inatt",
   "ADHD Symptoms (CSS)", "CSS_HypImp",
   "Cognitive Score", "score_pinball", "Cognitive Score", "score_robot",
@@ -141,7 +140,7 @@ n_affect_max   <- length(setdiff(all_raw_drsp, physical_symptoms))
 n_adhd_max     <- length(all_raw_css)
 
 # --- CSS count vs. severity variable classification ---
-CSS_COUNT_VARS    <- c("CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Sx_Count")
+CSS_COUNT_VARS    <- c("CSS_Inatt_Count", "CSS_Hyp_Count", "CSS_Imp_Count", "CSS_HypImp_Count")
 CSS_SEVERITY_VARS <- setdiff(all_raw_css, CSS_COUNT_VARS)
 
 # --- BDEFS executive function variables (separate from cognitive task scores) ---
@@ -173,7 +172,7 @@ TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
 # Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items, Hyp+Imp combined: 9 items
-CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4, "CSS_HypImp_Sx_Count" = 9)
+CSS_COUNT_MAX <- c("CSS_Inatt_Count" = 9, "CSS_Hyp_Count" = 5, "CSS_Imp_Count" = 4, "CSS_HypImp_Count" = 9)
 
 # --- Variables for combined symptom overlay (DRSP + CSS severity + tasks) ---
 COMBINED_SYMPTOM_VARS <- c(all_raw_drsp, CSS_SEVERITY_VARS, TASK_VARS)
@@ -219,7 +218,7 @@ drsp_color_map <- c(
   "CSS_Inatt_Count" = "#1B9E77",
   "CSS_Hyp_Count"   = "#D95F02",
   "CSS_Imp_Count"   = "#7570B3",
-  "CSS_HypImp_Sx_Count" = "#A65628",
+  "CSS_HypImp_Count" = "#A65628",
   "CSS_Inatt"       = "#E7298A",
   "CSS_HypImp"      = "#66A61E",
   # Cognitive scores
@@ -249,7 +248,7 @@ outcome_plot_settings <- tribble(
   "CSS_Inatt_Count",  "fixed",       0,      9,      6,
   "CSS_Hyp_Count",    "fixed",       0,      5,      NA,
   "CSS_Imp_Count",    "fixed",       0,      4,      NA,
-  "CSS_HypImp_Sx_Count", "fixed",    0,      9,      6,
+  "CSS_HypImp_Count", "fixed",       0,      9,      6,
   "CSS_Inatt",        "fixed",       0,      3,      NA,
   "CSS_HypImp",       "fixed",       0,      3,      NA,
   "score_pinball",    "data",        NA,     NA,     NA,
