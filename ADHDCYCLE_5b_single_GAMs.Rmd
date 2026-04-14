@@ -315,7 +315,8 @@ outcome_plot_settings <- tribble(
 # --- Normalization scale ranges for the combined 0-1 overlay page ---
 # Fixed-scale outcomes use their configured y_min/y_max.
 # Cognitive task outcomes use the sample-wide IQR whisker range
-# (avoids exaggeration that occurs when normalizing by per-individual GAM min/max).
+# (COGNITIVE_TASK_YLIM / COGNITIVE_TASK_REV_YLIM, defined above)
+# to avoid exaggeration that occurs when normalizing by per-individual GAM min/max.
 # Any remaining data-mode outcomes fall back to per-curve GAM min/max at plot time.
 norm_scale_ranges <- outcome_plot_settings %>%
   dplyr::mutate(
