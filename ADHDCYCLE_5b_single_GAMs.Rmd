@@ -564,11 +564,11 @@ for (current_id in ids_to_run) {
       n_obs <- sum(valid)
       # Per-variable per-half counts (boundary values count toward both halves)
       valid_tv <- tv_vals[valid]
-      n_h1 <- sum(valid_tv <= 0 | valid_tv == 1)   # ov-to-menses half
-      n_h2 <- sum(valid_tv >= 0 | valid_tv == -1)   # menses-to-ov half
+      n_h1 <- sum(valid_tv <= 0 | valid_tv == 1)   # luteal half: ov-to-menses
+      n_h2 <- sum(valid_tv >= 0 | valid_tv == -1)   # follicular half: menses-to-ov
       sub_label <- paste0(
         "n = ", n_obs, " daily observations",
-        "  (half 1: ", n_h1, ", half 2: ", n_h2, ")"
+        "  (luteal: ", n_h1, ", follicular: ", n_h2, ")"
       )
       p <- ggplot2::ggplot(dat, ggplot2::aes(x = .data[[tv]], y = .data[[var]])) +
         ggplot2::geom_vline(xintercept = meta$menses, color = "red",
@@ -601,8 +601,8 @@ for (current_id in ids_to_run) {
     # both halves, so they are allowed to count toward both.
     tv0_vals <- datSX_id[[tv0]]
     tv0_vals <- tv0_vals[!is.na(tv0_vals)]
-    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # ov-to-menses half (includes wrap)
-    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # menses-to-ov half (includes wrap)
+    n_half_pre  <- sum(tv0_vals <= 0 | tv0_vals == 1)   # luteal half: ov-to-menses (includes wrap)
+    n_half_post <- sum(tv0_vals >= 0 | tv0_vals == -1)   # follicular half: menses-to-ov (includes wrap)
     insufficient_coverage <- (n_half_pre < min_obs_per_half) || (n_half_post < min_obs_per_half)
 
     # Build coverage subtitle — per-half counts now shown per variable in each subplot
