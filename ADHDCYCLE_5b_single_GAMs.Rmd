@@ -1178,6 +1178,7 @@ for (current_id in ids_to_run) {
     )
 
     # (6) Combined normalized page: all qualifying outcomes on 0-1 scale
+    #     (excludes cognitive task outcomes — those are shown on their own pages)
     # Collect variables that passed their category-specific selection rules
     drsp_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% all_raw_drsp) %>%
@@ -1188,12 +1189,6 @@ for (current_id in ids_to_run) {
     bdefs_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% BDEFS_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
-    task_qualifying <- sig_by_tv[[tv]] %>%
-      dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
-      dplyr::filter(is.finite(p.value) & p.value < 0.05)
-    task_rev_qualifying <- sig_by_tv[[tv]] %>%
-      dplyr::filter(variable %in% COGNITIVE_TASK_REV_VARS) %>%
-      dplyr::filter(is.finite(p.value) & p.value < 0.05)
     css_sev_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% CSS_SEVERITY_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
@@ -1203,7 +1198,6 @@ for (current_id in ids_to_run) {
 
     all_qualifying_vars <- unique(c(
       drsp_qualifying$variable, bdefs_qualifying$variable,
-      task_qualifying$variable, task_rev_qualifying$variable,
       css_sev_qualifying$variable,
       css_count_qualifying$variable
     ))
@@ -1217,7 +1211,7 @@ for (current_id in ids_to_run) {
         var_list       = all_qualifying_vars,
         range_thresh   = 0.5,
         title_prefix   = "All Qualifying Outcomes (Normalized 0\u20131)",
-        subtitle_label = "Category-specific rules: DRSP p < .05 or range \u2265 0.5; all other outcomes p < .05",
+        subtitle_label = "Category-specific rules: DRSP p < .05 or range \u2265 0.5; all other outcomes p < .05 (excludes task outcomes)",
         ylim_strategy  = "fixed", fixed_ylim = c(0, 1),
         show_hline = FALSE,
         legend_ncol = 4,
