@@ -75,7 +75,10 @@ outcomes <- c(
   "CSS_Imp_Count" = "CSS Impulsivity Sx Count", "CSS_HypImp_Count" = "CSS Hyperactivity/Impulsivity Sx Count",
   "CSS_Inatt" = "CSS Inattention Sx Severity",
   "CSS_HypImp" = "CSS Hyperactivity/Impulsivity Sx Severity", "score_pinball" = "Working Memory Score (Pinball)",
-  "score_robot" = "Response Inhibition (Robot Factory)", "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
+  "score_robot" = "Response Inhibition (Robot Factory)",
+  "score_pinball_rev" = "Working Memory Deficit (Reversed Pinball)",
+  "score_robot_rev" = "Response Disinhibition (Reversed Robot)",
+  "BDEFS_WM_avg" = "Working Memory Sx (BDEFS)",
   "BDEFS_RI_avg" = "Response Inhibition Sx (BDEFS)", "DRSP_1" = "Depressed Mood", "DRSP_2" = "Hopelessness",
   "DRSP_3" = "Worthlessness/Guilt", "DRSP_4" = "Anxiety", "DRSP_5" = "Mood Swings",
   "DRSP_6" = "Rejection Sensitivity", "DRSP_7" = "Irritability", "DRSP_8" = "Interpersonal Conflicts",
@@ -95,6 +98,7 @@ outcome_categories <- tribble(
   "ADHD Symptoms (CSS)", "CSS_Inatt",
   "ADHD Symptoms (CSS)", "CSS_HypImp",
   "Cognitive Score", "score_pinball", "Cognitive Score", "score_robot",
+  "Cognitive Task (Reversed)", "score_pinball_rev", "Cognitive Task (Reversed)", "score_robot_rev",
   "Executive Function (BDEFS)", "BDEFS_WM_avg", "Executive Function (BDEFS)", "BDEFS_RI_avg",
   "Hormone", "E2", "Hormone", "P4", "Hormone", "LH",
   "Mood & Physical (DRSP)", "DRSP_1", "Mood & Physical (DRSP)", "DRSP_2", "Mood & Physical (DRSP)", "DRSP_3",
@@ -114,7 +118,8 @@ page_definitions <- c(
     CSS_Page = outcome_categories %>% filter(category == "ADHD Symptoms (CSS)") %>% pull(outcome_label),
     Hormone_Page = outcome_categories %>% filter(category == "Hormone") %>% pull(outcome_label),
     Cog_EF_Page = c("Response Inhibition (Robot Factory)", "Response Inhibition Sx (BDEFS)",
-                    "Working Memory Score (Pinball)", "Working Memory Sx (BDEFS)")
+                    "Working Memory Score (Pinball)", "Working Memory Sx (BDEFS)",
+                    "Working Memory Deficit (Reversed Pinball)", "Response Disinhibition (Reversed Robot)")
   ),
   split(
     outcome_categories %>% filter(grepl("DRSP", category)) %>% pull(outcome_label),
@@ -149,6 +154,9 @@ BDEFS_VARS <- c("BDEFS_WM_avg", "BDEFS_RI_avg")
 # --- Cognitive task performance variables ---
 COGNITIVE_TASK_VARS <- c("score_pinball", "score_robot")
 
+# --- Reversed cognitive task performance variables (higher = worse) ---
+COGNITIVE_TASK_REV_VARS <- c("score_pinball_rev", "score_robot_rev")
+
 # --- Sample-wide IQR-based Y-axis limits for cognitive task variables ---
 # Uses the "boxplot whisker" range: Q1 - 1.5*IQR to Q3 + 1.5*IQR, floored at 0.
 # This provides a principled, context-giving Y scale for individual overlay plots.
@@ -167,8 +175,24 @@ COGNITIVE_TASK_YLIM <- {
   }
 }
 
-# --- Task outcome variables (cognitive scores + executive function) ---
-TASK_VARS <- c(COGNITIVE_TASK_VARS, BDEFS_VARS)
+# --- Sample-wide IQR-based Y-axis limits for reversed cognitive task variables ---
+COGNITIVE_TASK_REV_YLIM <- {
+  task_vals <- unlist(lapply(COGNITIVE_TASK_REV_VARS, function(v) {
+    if (v %in% names(cycle_df_scaled)) cycle_df_scaled[[v]] else numeric(0)
+  }))
+  task_vals <- task_vals[!is.na(task_vals)]
+  if (length(task_vals) == 0) {
+    c(0, 1)
+  } else {
+    q1  <- quantile(task_vals, 0.25)
+    q3  <- quantile(task_vals, 0.75)
+    iqr <- q3 - q1
+    c(max(0, q1 - 1.5 * iqr), q3 + 1.5 * iqr)
+  }
+}
+
+# --- Task outcome variables (cognitive scores + reversed + executive function) ---
+TASK_VARS <- c(COGNITIVE_TASK_VARS, COGNITIVE_TASK_REV_VARS, BDEFS_VARS)
 
 # --- Max possible values for CSS count variables (for 0-1 normalization) ---
 # Inattention: 9 items, Hyperactivity: 5 items, Impulsivity: 4 items, Hyp+Imp combined: 9 items
@@ -224,6 +248,9 @@ drsp_color_map <- c(
   # Cognitive scores
   "score_pinball" = "#E6AB02",
   "score_robot"   = "#A6761D",
+  # Reversed cognitive scores (higher = worse)
+  "score_pinball_rev" = "#DDAA33",
+  "score_robot_rev"   = "#885511",
   # BDEFS executive function
   "BDEFS_WM_avg" = "#666666",
   "BDEFS_RI_avg" = "#1F78B4",
@@ -253,6 +280,8 @@ outcome_plot_settings <- tribble(
   "CSS_HypImp",       "fixed",       0,      3,      NA,
   "score_pinball",    "data",        NA,     NA,     NA,
   "score_robot",      "data",        NA,     NA,     NA,
+  "score_pinball_rev","data",        NA,     NA,     NA,
+  "score_robot_rev",  "data",        NA,     NA,     NA,
   "BDEFS_WM_avg",     "fixed",        1,     4,     NA,
   "BDEFS_RI_avg",     "fixed",        1,     4,     NA,
   "DRSP_1",           "fixed",       1,      6,      4,
@@ -1048,6 +1077,48 @@ for (current_id in ids_to_run) {
       }
     }
 
+    # (3b) Reversed cognitive task performance outcomes: sig only, Y scale from sample IQR
+    plot_overlay_page(
+      sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+      tv = tv, meta = axis_meta[[tv]],
+      var_list       = COGNITIVE_TASK_REV_VARS,
+      range_thresh   = Inf,
+      title_prefix   = "Overlaid GAM Curves (Reversed Task Performance)",
+      subtitle_label = "Reversed cognitive task outcomes (Y = sample IQR whisker range)",
+      ylim_strategy  = "fixed", fixed_ylim = COGNITIVE_TASK_REV_YLIM,
+      show_hline = FALSE,
+      legend_ncol = 2,
+      show_range_in_labels = TRUE
+    )
+
+    # If any qualifying reversed task predictions fall outside the IQR range, add a
+    # second page with a data-driven Y axis so nothing is clipped
+    task_rev_qualifying <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_REV_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    if (nrow(task_rev_qualifying) > 0) {
+      task_rev_pred <- preds_by_tv[[tv]] %>%
+        dplyr::filter(outcome_var %in% unique(task_rev_qualifying$variable))
+      if (nrow(task_rev_pred) > 0) {
+        pred_min <- min(task_rev_pred$conf.low, na.rm = TRUE)
+        pred_max <- max(task_rev_pred$conf.high, na.rm = TRUE)
+        if (pred_min < COGNITIVE_TASK_REV_YLIM[1] || pred_max > COGNITIVE_TASK_REV_YLIM[2]) {
+          plot_overlay_page(
+            sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
+            tv = tv, meta = axis_meta[[tv]],
+            var_list       = COGNITIVE_TASK_REV_VARS,
+            range_thresh   = Inf,
+            title_prefix   = "Overlaid GAM Curves (Reversed Task Performance, Full Range)",
+            subtitle_label = "Reversed cognitive task outcomes (Y = data-driven, exceeds sample IQR)",
+            ylim_strategy  = "data",
+            show_hline = FALSE,
+            legend_ncol = 2,
+            show_range_in_labels = TRUE
+          )
+        }
+      }
+    }
+
     # (4) CSS severity items: sig only, Y scale 0-3
     plot_overlay_page(
       sig_tv = sig_by_tv[[tv]], pred_tv = preds_by_tv[[tv]],
@@ -1091,6 +1162,9 @@ for (current_id in ids_to_run) {
     task_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% COGNITIVE_TASK_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
+    task_rev_qualifying2 <- sig_by_tv[[tv]] %>%
+      dplyr::filter(variable %in% COGNITIVE_TASK_REV_VARS) %>%
+      dplyr::filter(is.finite(p.value) & p.value < 0.05)
     css_sev_qualifying <- sig_by_tv[[tv]] %>%
       dplyr::filter(variable %in% CSS_SEVERITY_VARS) %>%
       dplyr::filter(is.finite(p.value) & p.value < 0.05)
@@ -1100,7 +1174,8 @@ for (current_id in ids_to_run) {
 
     all_qualifying_vars <- unique(c(
       drsp_qualifying$variable, bdefs_qualifying$variable,
-      task_qualifying$variable, css_sev_qualifying$variable,
+      task_qualifying$variable, task_rev_qualifying2$variable,
+      css_sev_qualifying$variable,
       css_count_qualifying$variable
     ))
 
@@ -1576,6 +1651,17 @@ get_adhd_variables <- function(df) {
     .[grepl(ADHD_VAR_PATTERN, .)]
 }
 
+# --- Extract cognitive task variable names from the summary data ---
+# Matches score_pinball, score_robot, score_pinball_rev, score_robot_rev, BDEFS_*
+TASK_VAR_PATTERN <- "^(score_|BDEFS_)"
+get_task_variables <- function(df) {
+  df %>%
+    clean_gam_summary() %>%
+    dplyr::distinct(variable) %>%
+    dplyr::pull(variable) %>%
+    .[grepl(TASK_VAR_PATTERN, .)]
+}
+
 # --- Peak and trough timing distribution plot for significant participants ---
 # --- Combined overlay GAM plot for a group of participants ---
 # Overlays individual GAM fitted curves on a single plot.
@@ -1714,8 +1800,10 @@ if (length(all_ids_signif) > 0) {
 
   drsp_vars <- get_drsp_variables(gam_summary_df)
   adhd_vars <- get_adhd_variables(gam_summary_df)
-  all_outcome_vars <- c(adhd_vars, drsp_vars)
-  cat("Found", length(adhd_vars), "ADHD symptom (CSS) variables and",
+  task_vars_explore <- get_task_variables(gam_summary_df)
+  all_outcome_vars <- c(adhd_vars, task_vars_explore, drsp_vars)
+  cat("Found", length(adhd_vars), "ADHD symptom (CSS) variables,",
+      length(task_vars_explore), "task/EF variables, and",
       length(drsp_vars), "DRSP variables to process\n")
 
   # Thresholds for the exploration
