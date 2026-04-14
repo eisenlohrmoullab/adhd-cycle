@@ -1116,19 +1116,16 @@ for (current_id in ids_to_run) {
         )
       )
 
-    all_outcome_labels <- unlist(page_definitions, use.names = FALSE)
-    # Keep only outcomes that exist in this ID's data
-    all_outcome_labels <- all_outcome_labels[all_outcome_labels %in% id_range_df$outcome_label]
-    outcome_pages_shared <- split(
-      all_outcome_labels,
-      ceiling(seq_along(all_outcome_labels) / max_plots_per_page)
-    )
+    for (page_name in names(page_definitions)) {
+      page_outcome_labels <- page_definitions[[page_name]]
+      # Keep only outcomes that exist in this ID's data
+      page_outcome_labels <- page_outcome_labels[page_outcome_labels %in% id_range_df$outcome_label]
+      if (length(page_outcome_labels) == 0) next
 
-    for (page_outcomes in outcome_pages_shared) {
-      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcomes)
+      page_data <- dplyr::filter(combined_plot_data, outcome_label %in% page_outcome_labels)
       if (nrow(page_data) == 0) next
 
-      plot_list_shared <- lapply(page_outcomes, function(lab) {
+      plot_list_shared <- lapply(page_outcome_labels, function(lab) {
         plot_df <- dplyr::filter(page_data, outcome_label == lab)
         if (nrow(plot_df) == 0) return(NULL)
 
@@ -1165,9 +1162,10 @@ for (current_id in ids_to_run) {
           )
         }
 
+        page_title_label <- gsub("_", " ", page_name)
         page_title_shared <- paste(
-          "Symptom Trajectories (ID-Scaled Y Axis) — ID:", current_id,
-          "| Time Variable:", tv
+          "Symptom Trajectories (ID-Scaled Y Axis) \u2014", page_title_label,
+          "\u2014 ID:", current_id, "| Time Variable:", tv
         )
 
         page_subtitle_shared <- paste0(
