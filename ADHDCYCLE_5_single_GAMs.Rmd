@@ -27,7 +27,6 @@ library(grid)
 library(tibble)
 library(tidyr)
 library(knitr)
-library(glue)
 
 options(scipen = 999)
 set.seed(12345)
@@ -151,9 +150,10 @@ axis_meta <- lapply(time_vars, function(tv) {
 names(axis_meta) <- time_vars
 
 # --- Assess cycle coverage for a given time variable ---
-# Divides the cycle variable range into bins and counts observations per bin.
+# Divides the cycle variable range into 6 fixed bins and counts observations per bin.
 # Returns a list with total_n, bins_present, bins_with_2plus, empty_bins, and bin_counts.
-assess_cycle_coverage <- function(data, cycle_var, n_bins = 6) {
+assess_cycle_coverage <- function(data, cycle_var) {
+  n_bins <- 6L
   vals <- data[[cycle_var]]
   vals <- vals[!is.na(vals)]
 
@@ -215,7 +215,7 @@ decide_gam_spec <- function(coverage) {
   # Poor coverage → do not run GAM
   list(
     run_gam = FALSE,
-    k = NA,
+    k = NA_integer_,
     mode = "insufficient_coverage"
   )
 }

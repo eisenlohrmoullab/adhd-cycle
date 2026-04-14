@@ -56,7 +56,7 @@ Runs a standard smooth when coverage is sufficient:
 → Model uses:
 
 ```r
-s(cycle_time, bs = "cc", k = 6)
+s(<cycle_var>, bs = "cc", k = 6)
 ```
 
 ---
@@ -71,7 +71,7 @@ Runs a simpler smooth when coverage is moderate:
 → Model uses:
 
 ```r
-s(cycle_time, bs = "cc", k = 4)
+s(<cycle_var>, bs = "cc", k = 4)
 ```
 
 ---
