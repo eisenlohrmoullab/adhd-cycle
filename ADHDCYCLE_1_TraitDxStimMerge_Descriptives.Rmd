@@ -1,0 +1,611 @@
+---
+title: "ADHDCYCLE_1_Descriptives"
+output: html_document
+---
+# --- Output Folder ---
+
+```{r define_box_output}
+
+# Define a base output location and create a unique, timestamped subfolder for this specific run.
+output_folder_base <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_dataedits_output"
+output_folder <- file.path(output_folder_base, format(Sys.Date(), "%Y-%m-%d_Run"))
+if (!dir.exists(output_folder)) {
+  dir.create(output_folder, recursive = TRUE)
+}
+```
+
+```{r}
+#Load final copy of cleaned dataset cycle_df_scaled rdata from the folder here to /data:  /Users/toryeisenlohr-moul/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_code_dataedits_output/interim_datasets/adhd_daily_scaled_20250927.rdata
+
+load("~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/03_analytic_projects/CYCADHD_PRIMARY/03_dataedits_output/0_dataprep_output/00_cleaned_datasets/adhd_daily_scaled_20250929.RData")
+
+# Save a copy of cycle_df_scaled as an rdata file to /data in the repo
+#save(cycle_df_scaled, file = "~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+
+# set wd to repo
+#setwd("~/CLEAR Lab Repositories/adhd-cycle")
+
+# load a copy of cycle_df_scaled from /data in the repo
+#load("~/CLEAR Lab Repositories/adhd-cycle/data/cycle_df_scaled_20250927.rdata")
+
+```
+
+```{r load-trait-data}
+library(readxl)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(ggpubr)
+
+path_trait <- "~/Library/CloudStorage/Box-Box/00 - CLEAR Lab (Locked Folders)/02 - Data Management, Analysis, and Papers/Studies_Projects/CYCLEADHD/02_datasets/01_raw_data/SCID_Meds/20251027_michelle_dx_stimulant.xlsx"
+# NOTE: update this path to wherever you actually store the file in Box.
+
+# ---- 1. Sheet 1: Informant (2ndReporters) + SCID ---------------------------
+trait_informant <- read_excel(path_trait, sheet = "2ndReporters + SCID") %>%
+  # Drop the empty spacer column ("Unnamed: 147" in pandas → "...147" or similar in R;
+  # safest to drop any column that's entirely NA)
+  remove_empty(which = "cols") %>%
+  # Drop the 3 junk rows at the bottom of the sheet (label rows with NA id,
+  # one of which literally says "Second Reporters" in the date field)
+  filter(!is.na(id)) %>%
+  # Coerce id to match the daily dataset (factor with integer-looking levels)
+  mutate(id = as.factor(as.integer(id)))
+
+cat("Informant trait data loaded:",
+    nrow(trait_informant), "rows,",
+    ncol(trait_informant), "cols,",
+    n_distinct(trait_informant$id), "unique ids\n")
+
+# Sanity check: should be 0 duplicate ids now
+stopifnot(sum(duplicated(trait_informant$id)) == 0)
+
+
+# ---- 2. Sheet 2: Self-reports ----------------------------------------------
+trait_self_raw <- read_excel(path_trait, sheet = "self-reports") %>%
+  # Standardize the id column name to match daily dataset
+  rename(id = Participant_ID) %>%
+  mutate(id = as.factor(as.integer(id)))
+
+# Handle the id 348 duplicate:
+# Both rows are 137/137 complete but differ on 72 columns (likely two survey administrations).
+# Defaulting to the LAST row (most recent administration). Flagging so Tory can override.
+dup_ids_self <- trait_self_raw %>%
+  group_by(id) %>%
+  filter(n() > 1) %>%
+  pull(id) %>% unique()
+
+if (length(dup_ids_self) > 0) {
+  cat("WARNING: self-report sheet has duplicated ids:",
+      paste(as.character(dup_ids_self), collapse = ", "),
+      "\n  → Keeping the LAST row for each. Review source if this is wrong.\n")
+}
+
+trait_self <- trait_self_raw %>%
+  group_by(id) %>%
+  slice_tail(n = 1) %>%   # change to slice_head(n=1) for first row, or handle manually
+  ungroup()
+
+cat("Self-report trait data loaded:",
+    nrow(trait_self), "rows,",
+    ncol(trait_self), "cols,",
+    n_distinct(trait_self$id), "unique ids\n")
+
+stopifnot(sum(duplicated(trait_self$id)) == 0)
+```
+
+
+```{r merge-trait-into-daily}
+# ---- 3. Left-join both trait sources onto the daily dataset ----------------
+# We need to resolve column-name collisions BEFORE joining. The trait sheets
+# share some column names with the daily dataset (e.g. `impair_score`, `anger_score`
+# appear in both informant and self sheets; `id` is the join key in all three).
+# Prefix informant cols with `inf_` and self cols with `slf_` (except id).
+
+trait_informant_pref <- trait_informant %>%
+  rename_with(.fn = ~ paste0("inf_", .x), .cols = -id)
+
+trait_self_pref <- trait_self %>%
+  rename_with(.fn = ~ paste0("slf_", .x), .cols = -id)
+
+# id dtype check — must match cycle_df_scaled$id (factor in your daily data)
+cat("id class check:\n")
+cat("  cycle_df_scaled$id:    ", class(cycle_df_scaled$id), "\n")
+cat("  trait_informant_pref$id:", class(trait_informant_pref$id), "\n")
+cat("  trait_self_pref$id:    ", class(trait_self_pref$id), "\n")
+
+# Join
+cycle_df_scaled <- cycle_df_scaled %>%
+  left_join(trait_informant_pref, by = "id") %>%
+  left_join(trait_self_pref,      by = "id")
+
+
+# rename inf_finaldxMM to finaldxMM for easier reference in future code
+cycle_df_scaled <- cycle_df_scaled %>%
+  rename(finaldxMM = inf_finaldxMM)%>%
+    rename(takes_stim = inf_Trait_Stimulant)
+
+
+cat("\nMerge complete. cycle_df_scaled now has",
+    ncol(cycle_df_scaled), "columns and",
+    nrow(cycle_df_scaled), "rows.\n")
+
+
+# ---- 4. Merge diagnostics --------------------------------------------------
+daily_ids    <- unique(as.character(cycle_df_scaled$id))
+inf_ids      <- unique(as.character(trait_informant$id))
+self_ids     <- unique(as.character(trait_self$id))
+
+cat("\n--- Coverage diagnostics ---\n")
+cat("Daily ids:                         ", length(daily_ids), "\n")
+cat("Daily ids with informant trait:    ",
+    sum(daily_ids %in% inf_ids),  "/", length(daily_ids), "\n")
+cat("Daily ids with self trait:         ",
+    sum(daily_ids %in% self_ids), "/", length(daily_ids), "\n")
+cat("Daily ids missing informant trait: ",
+    paste(sort(setdiff(daily_ids, inf_ids)), collapse = ", "), "\n")
+cat("Daily ids missing self trait:      ",
+    paste(sort(setdiff(daily_ids, self_ids)), collapse = ", "), "\n")
+cat("Trait ids (informant) NOT in daily:",
+    paste(sort(setdiff(inf_ids, daily_ids)), collapse = ", "), "\n")
+cat("Trait ids (self) NOT in daily:     ",
+    paste(sort(setdiff(self_ids, daily_ids)), collapse = ", "), "\n")
+
+# Spot-check: verify trait values repeat correctly within a participant
+spot_id <- daily_ids[1]
+n_unique_inf_vals <- cycle_df_scaled %>%
+  filter(id == spot_id) %>%
+  summarise(n = n_distinct(inf_EF_sum_score, na.rm = FALSE)) %>%
+  pull(n)
+cat("\nSpot check for id", spot_id,
+    "— inf_EF_sum_score should have 1 unique value across all their days. Got:",
+    n_unique_inf_vals, "\n")
+```
+
+
+
+# 8. EXPORT FINAL DATASETS
+
+```{r}
+# --- Define File Names ---
+file_base_main <- paste0("adhd_daily_scaled_trait_", format(Sys.Date(), "%Y%m%d"))
+
+# --- Save Main Scaled Dataset ---
+write.csv(cycle_df_scaled, file.path(output_folder, paste0(file_base_main, ".csv")), row.names = FALSE)
+
+save(cycle_df_scaled, file = file.path(output_folder, paste0(file_base_main, ".RData")))
+
+unique_ids <- unique(cycle_df_scaled$id)
+
+cat("Final datasets exported successfully with", length(unique_ids), "unique participants.\n")
+
+```
+
+# Print histogram of all E2 variables to visually inspect for outliers
+```{r histograms}
+
+# Visualize distributions of E2, E2.zd, E2.szd, and log(E2 + 1)
+# Histogram of raw E2 values
+
+e2_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2)) +
+  geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Histogram of E2 Values", x = "E2", y = "Count") +
+  theme_light()
+print(e2_histogram)
+
+ggsave(filename = file.path(output_folder, "e2_histogram.png"), plot = e2_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for person-standardized values
+e2_person_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2.zd)) +
+  geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
+  labs(title = "Histogram of Person-Standardized E2 Values", x = "E2 Person-Standardized (d)", y = "Count") +
+  theme_light() 
+print(e2_person_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_person_standardized_histogram.png"), plot = e2_person_std_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for sample-standardized values
+e2_sample_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = E2.szd)) +
+  geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
+  labs(title = "Histogram of Sample-Standardized E2 Values", x = "E2 Sample-Standardized (szd)", y = "Count") +
+  theme_light()
+print(e2_sample_std_histogram)
+ggsave(filename = file.path(output_folder, "e2_sample_standardized_histogram.png"), plot = e2_sample_std_histogram, width = 8, height = 5, dpi = 300)
+
+# Test whether a log transform improves the distribution
+e2_log_histogram <- cycle_df_scaled %>%
+  mutate(E2_log = log(E2 + 1)) %>% # Add 1
+  ggplot(aes(x = E2_log)) +
+  geom_histogram(bins = 100, fill = "orange", alpha = 0.7)+
+  labs(title
+       = "Histogram of Log-Transformed E2 Values", x = "Log(E2 + 1)", y = "Count") +
+  theme_light()
+print(e2_log_histogram)
+ggsave(filename = file.path(output_folder, "e2_log_transformed_histogram.png"),
+       plot = e2_log_histogram, width = 8, height = 5, dpi = 300)
+
+# Stack the four histograms together for comparison
+combined_e2_histograms <- ggarrange(
+  e2_histogram + rremove("x.text") + rremove("x.title"),
+  e2_person_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_sample_std_histogram + rremove("x.text") + rremove("x.title"),
+  e2_log_histogram,
+  ncol = 1, nrow = 4,
+  labels = c("A", "B", "C", "D"),
+  common.legend = TRUE, legend = "right"
+)
+print(combined_e2_histograms)
+ggsave(filename = file.path(output_folder, "combined_e2_histograms.png"),
+       plot = combined_e2_histograms, width = 8, height = 16,
+       dpi = 300)
+
+```
+# Print histogram of all P4 variables to visually inspect for outliers
+```{r histograms2}
+# Visualize distributions of P4, P4.zd, P4.szd, and
+# log(P4 + 1)
+# Histogram of raw P4 values
+p4_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4)) +
+  geom_histogram(bins = 100, fill = "blue", alpha = 0.7) +
+  labs(title = "Histogram of P4 Values", x = "P4", y = "Count") +
+  theme_light()
+print(p4_histogram)
+ggsave(filename = file.path(output_folder, "p4_histogram.png"), plot = p4_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for person-standardized values
+p4_person_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4.zd)) +
+  geom_histogram(bins = 100, fill = "darkgreen", alpha = 0.7) +
+  labs(title = "Histogram of Person-Standardized P4 Values", x = "P4 Person-Standardized (d)", y = "Count") +
+  theme_light()
+print(p4_person_std_histogram)
+ggsave(filename = file.path(output_folder, "p4_person_standardized_histogram.png"),
+       plot = p4_person_std_histogram, width = 8, height = 5, dpi = 300)
+
+# now do the same for sample-standardized values
+p4_sample_std_histogram <- cycle_df_scaled %>%
+  ggplot(aes(x = P4.szd)) +
+  geom_histogram(bins = 100, fill = "purple", alpha = 0.7) +
+  labs(title = "Histogram of Sample-Standardized P4 Values", x = "P4 Sample-Standardized (szd)", y = "Count") +
+  theme_light()
+print(p4_sample_std_histogram)
+ggsave(filename = file.path(output_folder, "p4_sample_standardized_histogram.png"),
+       plot = p4_sample_std_histogram, width = 8, height = 5
+       , dpi = 300)
+
+# Test whether a log transform improves the distribution
+p4_log_histogram <- cycle_df_scaled %>%
+  mutate(P4_log = log(P4 + 1)) %>% # Add 1
+  ggplot(aes(x = P4_log)) +
+  geom_histogram(bins = 100, fill = "orange", alpha = 0.7) +
+  labs(title  = "Histogram of Log-Transformed P4 Values", x = "Log(P4 + 1)", y = "Count") +
+  theme_light()
+print(p4_log_histogram)
+ggsave(filename = file.path(output_folder, "p4_log_transformed_histogram.png"),
+       plot = p4_log_histogram, width = 8, height = 5,
+       dpi = 300)
+
+# Stack the four histograms together for comparison
+combined_p4_histograms <- ggarrange(
+  p4_histogram + rremove("x.text") + rremove("x.title"),
+  p4_person_std_histogram + rremove("x.text") + rremove("x.title"),
+  p4_sample_std_histogram + rremove("x.text") + rremove("x.title"),
+  p4_log_histogram,
+  ncol = 1, nrow = 4,
+  labels = c("A", "B", "C", "D"),
+  common.legend = TRUE, legend = "right")
+print(combined_p4_histograms)
+ggsave(filename = file.path(output_folder, "combined_p4_histograms.png"),
+       plot = combined_p4_histograms, width = 8, height = 16,
+       dpi = 300)
+
+```
+
+
+# Plot Descriptives for Hormones
+```{r hormone-desc}
+
+library(tidyr)
+# --- Reusable Function Version ---
+
+# 1. Define the function
+plot_distributions <- function(data, var_name) {
+  # Define the column names based on the input variable
+  raw_col <- rlang::sym(var_name)
+  zd_col <- rlang::sym(paste0(var_name, ".zd"))
+  szd_col <- rlang::sym(paste0(var_name, ".szd"))
+  log_col <- rlang::sym(paste0(var_name, "_log"))
+
+  # The same data wrangling logic as before
+  data_long <- data %>%
+    mutate(!!log_col := log1p(!!raw_col)) %>%
+    select(!!raw_col, !!zd_col, !!szd_col, !!log_col) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "Transformation",
+      values_to = "Value"
+    ) %>%
+    mutate(Transformation = factor(Transformation,
+      levels = c(rlang::as_string(raw_col), rlang::as_string(zd_col), rlang::as_string(szd_col), rlang::as_string(log_col)),
+      labels = c("Raw", "Person-Standardized", "Sample-Standardized", "Log-Transformed")
+    ))
+
+  # The same plotting logic
+  p <- ggplot(data_long, aes(x = Value)) +
+    geom_histogram(bins = 50, fill = "#D55E00", alpha = 0.8) +
+    facet_wrap(~Transformation, ncol = 2, scales = "free_x") +
+    labs(
+      title = paste("Distributions of", var_name, "Under Different Transformations"),
+      x = paste(var_name, "Value"),
+      y = "Count"
+    ) +
+    theme_light()
+
+  return(p)
+}
+
+# 2. Use the function to create, print, and save plots for E2
+e2_comparison_plot <- plot_distributions(cycle_df_scaled, "E2")
+print(e2_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "E2_comparison_distributions.png"),
+  plot = e2_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for P4
+p4_comparison_plot <- plot_distributions(cycle_df_scaled, "P4")
+print(p4_comparison_plot)
+ggsave(
+  filename = file.path(output_folder, "P4_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+# 3. Do for LH
+LH_comparison_plot <- plot_distributions(cycle_df_scaled, "LH")
+print(LH_comparison_plot)
+ggsave(filename = file.path(output_folder, "LH_comparison_distributions.png"),
+  plot = p4_comparison_plot, width = 10, height = 8
+)
+
+```
+
+
+```{r}
+hist(cycle_df_scaled$score_pinball_rev)
+hist(cycle_df_scaled$score_robot_rev)
+
+# violin plot of score_pinball_rev
+ggplot(cycle_df_scaled, aes(x = "", y = score_pinball_rev)) +
+  geom_violin(fill = "lightblue", color = "black", alpha = 0.7) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.color = "red", outlier.size = 2) +
+  labs(title = "Violin Plot of Working Memory Deficits (Pinball Task)",
+       y = "Working Memory Deficits (Pinball Task)") +
+  theme_minimal()
+
+# violin plot of score_robot_rev
+ggplot(cycle_df_scaled, aes(x = "", y = score_robot_rev)) +
+  geom_violin(fill = "lightgreen", color = "black", alpha = 0.7) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9), outlier.color = "red", outlier.size = 2) +
+  labs(title = "Violin Plot of Response Disinhibition (Robot Factory Task)",
+       y = "Response Disinhibition (Robot Factory Task)") +
+  theme_minimal()
+
+```
+
+
+
+
+# ICCs, Between- and Within-Person Associations of Study Variables
+```{r f1_corr, echo=TRUE, message=FALSE, warning=FALSE}
+# ===================================================================
+# 1. Load Required Libraries
+# ===================================================================
+library(tidyverse)
+library(rmcorr)
+library(performance)
+library(lme4)
+library(ggplot2)
+
+# ===================================================================
+# 2. Define the Heatmap Generation Function (Final Version)
+# ===================================================================
+generate_correlation_heatmap <- function(
+    data, outcome_vars, id_var, final_labels = NULL, # <-- New argument
+    sig.level = 0.05,
+    highlight_diag = TRUE,
+    show_legend = TRUE,
+    label_size = 4.6,
+    diag_label_size = 6,
+    subtitle_text = "Upper: Within-person (rmcorr); Lower: Between-person (Spearman); Diagonal: ICC"
+) {
+  # (The first part of the function is the same as the last version)
+  n_vars <- length(outcome_vars)
+  results_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                           dimnames = list(outcome_vars, outcome_vars))
+  pval_matrix <- matrix(NA, nrow = n_vars, ncol = n_vars,
+                        dimnames = list(outcome_vars, outcome_vars))
+  
+  summary_expressions <- purrr::map(outcome_vars, ~ rlang::quo(mean(!!rlang::sym(.x), na.rm = TRUE))) %>%
+    rlang::set_names(outcome_vars)
+    
+  person_means <- data %>%
+    group_by(!!rlang::sym(id_var)) %>%
+    summarise(!!!summary_expressions, .groups = "drop")
+
+  between_corr <- suppressWarnings(
+    cor(person_means[, outcome_vars], method = "spearman", use = "pairwise.complete.obs")
+  )
+
+  for (i in 1:(n_vars - 1)) for (j in (i + 1):n_vars) {
+    x <- person_means[[outcome_vars[i]]]
+    y <- person_means[[outcome_vars[j]]]
+    if (sum(!is.na(x) & !is.na(y)) > 2) {
+      test <- suppressWarnings(cor.test(x, y, method = "spearman"))
+      results_matrix[i, j] <- between_corr[i, j]
+      pval_matrix[i, j] <- test$p.value
+    }
+  }
+
+  for (i in 1:n_vars) {
+    var <- outcome_vars[i]
+    fml <- as.formula(paste0("`", var, "` ~ 1 + (1|`", id_var, "`)"))
+    if (sum(!is.na(data[[var]])) > 1) {
+      model_fit <- try(lmer(fml, data = data), silent = TRUE)
+      if (!inherits(model_fit, "try-error")) {
+        icc_val <- performance::icc(model_fit)$ICC_adjusted
+        results_matrix[i, i] <- icc_val
+        pval_matrix[i, i] <- 0
+      }
+    }
+  }
+
+  for (i in 2:n_vars) for (j in 1:(i - 1)) {
+    var1 <- outcome_vars[i]; var2 <- outcome_vars[j]
+    rmcorr_data <- data %>% select(all_of(c(id_var, var1, var2))) %>% drop_na()
+    if (nrow(rmcorr_data) > 2) {
+      rmcorr_result <- rmcorr::rmcorr(participant = id_var, measure1 = var1, measure2 = var2, dataset = rmcorr_data)
+      results_matrix[i, j] <- rmcorr_result$r
+      pval_matrix[i, j] <- rmcorr_result$p
+    }
+  }
+
+  within_corr_matrix <- results_matrix
+  within_corr_matrix[upper.tri(within_corr_matrix, diag = TRUE)] <- 0
+  dist_matrix <- as.dist(1 - abs(within_corr_matrix))
+  hclust_obj <- hclust(dist_matrix, method = "ward.D2")
+  corr_order <- rownames(within_corr_matrix)[hclust_obj$order]
+
+  results_matrix_ordered <- results_matrix[corr_order, corr_order]
+  pval_matrix_ordered    <- pval_matrix[corr_order, corr_order]
+
+  plot_df <- as.data.frame(as.table(results_matrix_ordered))
+  names(plot_df) <- c("Var1", "Var2", "value")
+  plot_df$p.value <- as.vector(pval_matrix_ordered)
+  plot_df$Var1 <- factor(plot_df$Var1, levels = rev(corr_order))
+  plot_df$Var2 <- factor(plot_df$Var2, levels = corr_order)
+
+  no_leading_zero <- function(x) {
+    ifelse(is.na(x), NA_character_, sub("^(-?)0\\.", "\\1.", sprintf("%.2f", x)))
+  }
+
+  plot_df <- plot_df %>%
+    mutate(
+      is_diag = as.character(Var1) == as.character(Var2),
+      is_sig  = p.value < sig.level,
+      label   = no_leading_zero(value)
+    )
+
+  diag_df    <- plot_df %>% filter(is_diag)
+  sig_df     <- plot_df %>% filter(!is_diag & is_sig)
+  nonsig_df  <- plot_df %>% filter(!is_diag & !is_sig)
+
+  p <- ggplot() +
+    geom_tile(data = plot_df %>% filter(!is_diag),
+              aes(x = Var2, y = Var1, fill = value), color = "gray70", linewidth = 0.5) +
+    geom_tile(data = diag_df, aes(x = Var2, y = Var1),
+              fill = "gray92", color = "gray70", linewidth = 0.5) +
+    scale_fill_gradient2(low = "#6D9EC1", mid = "white", high = "#E46726",
+                       midpoint = 0, limits = c(-1, 1), name = "Correlation") +
+    labs(title = "Multilevel Correlation Matrix of Daily Outcomes", subtitle = subtitle_text) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title    = element_text(hjust = 0.5, face = "bold", size = 20),
+      plot.subtitle = element_text(hjust = 0.5, face = "italic", size = 12, margin = margin(b = 6)),
+      axis.text.x   = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text.y   = element_text(face = "bold"),
+      axis.title    = element_blank(),
+      legend.position = if (show_legend) "right" else "none",
+      panel.grid.major = element_blank()
+    )
+
+  p <- p +
+    geom_text(data = sig_df, aes(x = Var2, y = Var1, label = label),
+              fontface = "bold", color = "black", size = label_size, na.rm = TRUE) +
+    geom_text(data = nonsig_df, aes(x = Var2, y = Var1, label = label),
+              color = "gray40", size = label_size, na.rm = TRUE)
+
+  if (highlight_diag && nrow(diag_df) > 0) {
+    p <- p +
+      geom_text(data = diag_df, aes(x = Var2, y = Var1, label = label),
+                fontface = "bold", color = "#4B0082", size = diag_label_size, na.rm = TRUE)
+  }
+  
+  # === NEW CODE TO RELABEL AXES AT THE END ===
+  if (!is.null(final_labels)) {
+    p <- p +
+      scale_x_discrete(labels = final_labels) +
+      scale_y_discrete(labels = final_labels)
+  }
+  # ===========================================
+
+  return(p)
+}
+
+# ===================================================================
+# 3. Define Parameters and Run the Plot
+# ===================================================================
+# Technical names mapped to the desired "pretty" labels
+corrplotlist <- c(
+  "CSS_Inatt" = "Inattentive Sx",
+  "CSS_HypImp" = "Hyperactive/Impulsive Sx",
+  "E2.3roll" = "E2",
+  "P4.3roll" = "P4",
+  "score_pinball_rev" = "Working Memory Deficits (Pinball Task)",
+  "score_robot_rev" = "Response Disinhibition (Robot Task)",
+  "DRSP_1" = "Depression",
+  "DRSP_4" = "Anxiety",
+  "DRSP_7" = "Irritability",
+  "DRSP_21" = "Physical Pain"
+)
+
+# This assumes `cycle_df_scaled` exists in your environment
+if (exists("cycle_df_scaled") && exists("corrplotlist")) {
+
+  # === NEW: Create safe labels for calculation and a lookup table for plotting ===
+  # 1. Create safe labels (e.g., "Hyperactive.Impulsive.Sx") for calculations
+  safe_labels <- make.names(corrplotlist)
+  
+  # 2. Create a lookup table to map safe labels back to pretty labels
+  label_lookup <- setNames(corrplotlist, safe_labels)
+  # ===============================================================================
+
+  # Prepare the data by renaming columns to the SAFE labels
+  original_vars <- names(corrplotlist)
+  plot_data <- cycle_df_scaled[, c("id", original_vars)]
+  names(plot_data)[match(original_vars, names(plot_data))] <- safe_labels # Use safe_labels here
+
+  # Call the function with the safe labels for calculation AND the lookup table for the final plot
+  correlation_heatmap <- generate_correlation_heatmap(
+    data = plot_data,
+    outcome_vars = safe_labels, # Use safe_labels here
+    id_var = "id",
+    final_labels = label_lookup # Pass the lookup table for final relabeling
+  )
+
+  print(correlation_heatmap)
+
+  # Define the final filename, including today's date
+dated_output_file <- file.path(output_folder, 
+                               paste0("Fig1_corr_", 
+                                      format(Sys.Date(), "%Y%m%d"), 
+                                      ".png"))
+
+# Save the plot directly to the final, dated file
+ggsave(filename = dated_output_file, 
+       plot = correlation_heatmap,
+       width = 11,
+       height = 8.5)
+
+} else {
+  
+  stop("Error: 'cycle_df_scaled' or 'corrplotlist' not found in the environment.")
+}
+```
+
+
+
+
+
+
